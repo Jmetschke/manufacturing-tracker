@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Dashboard</title>
+  <style>
+    body { font-family: Arial; padding: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 15px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #eee; }
+    .controls { margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+
+<h2>Admin Dashboard</h2>
+
+<div class="controls">
+  <input type="date" id="from_date">
+  <input type="date" id="to_date">
+  <input type="text" id="employee_filter" placeholder="Employee">
+  <button onclick="loadReport()">Filter</button>
+  <button onclick="exportCSV()">Export CSV</button>
+</div>
+
+<div id="summary"></div>
+<div id="table"></div>
+
+<script src="admin.js"></script>
+
+</body>
+</html>
