@@ -1,5 +1,8 @@
+<<<<<<< HEAD
 let timerInterval = null;
 let startTime = null;
+=======
+>>>>>>> ff5d2f1052c4ff9400c8704aab5a09438c5b8e69
 let currentLogId = null;
 
 async function load() {
@@ -22,6 +25,7 @@ async function load() {
     o.text = t.name;
     taskSel.appendChild(o);
   });
+<<<<<<< HEAD
 
   document.getElementById("work_date").valueAsDate = new Date();
 
@@ -164,6 +168,34 @@ function updateTimer() {
     String(seconds).padStart(2, "0");
 
   document.getElementById("timer").innerText = formatted;
+=======
+}
+
+async function startTimer() {
+  const item_id = document.getElementById("item").value;
+  const task_id = document.getElementById("task").value;
+
+  const res = await fetch("/start", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ item_id, task_id })
+  });
+
+  const data = await res.json();
+  currentLogId = data.log_id;
+}
+
+async function stopTimer() {
+  const quantity = document.getElementById("qty").value;
+
+  await fetch("/stop", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ log_id: currentLogId, quantity })
+  });
+
+  alert("Saved");
+>>>>>>> ff5d2f1052c4ff9400c8704aab5a09438c5b8e69
 }
 
 load();

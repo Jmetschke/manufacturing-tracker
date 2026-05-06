@@ -1,5 +1,8 @@
+<<<<<<< HEAD
 console.log("SERVER ACTIVE - CORRECT FILE");
 
+=======
+>>>>>>> ff5d2f1052c4ff9400c8704aab5a09438c5b8e69
 const express = require("express");
 const db = require("./db");
 const app = express();
@@ -9,6 +12,7 @@ app.use(express.static("public"));
 
 const PORT = process.env.PORT || 3000;
 
+<<<<<<< HEAD
 /* ---------- ENSURE TABLE EXISTS ---------- */
 db.run(`
   CREATE TABLE IF NOT EXISTS time_logs (
@@ -28,18 +32,30 @@ db.run(`
 app.get("/items", (req, res) => {
   db.all("SELECT * FROM items", [], (err, rows) => {
     if (err) return res.status(500).send(err.message);
+=======
+// Get items
+app.get("/items", (req, res) => {
+  db.all("SELECT * FROM items", [], (err, rows) => {
+>>>>>>> ff5d2f1052c4ff9400c8704aab5a09438c5b8e69
     res.json(rows);
   });
 });
 
+<<<<<<< HEAD
 /* ---------- TASKS ---------- */
 app.get("/tasks", (req, res) => {
   db.all("SELECT * FROM tasks", [], (err, rows) => {
     if (err) return res.status(500).send(err.message);
+=======
+// Get tasks
+app.get("/tasks", (req, res) => {
+  db.all("SELECT * FROM tasks", [], (err, rows) => {
+>>>>>>> ff5d2f1052c4ff9400c8704aab5a09438c5b8e69
     res.json(rows);
   });
 });
 
+<<<<<<< HEAD
 /* ---------- START TIMER ---------- */
 app.post("/start", (req, res) => {
   const { item_id, task_id, employee, work_date } = req.body;
@@ -62,11 +78,23 @@ app.post("/start", (req, res) => {
         return res.status(500).send(err.message);
       }
 
+=======
+// Start timer
+app.post("/start", (req, res) => {
+  const { item_id, task_id } = req.body;
+
+  db.run(
+    `INSERT INTO time_logs (item_id, task_id, start_time)
+     VALUES (?, ?, datetime('now'))`,
+    [item_id, task_id],
+    function () {
+>>>>>>> ff5d2f1052c4ff9400c8704aab5a09438c5b8e69
       res.json({ log_id: this.lastID });
     }
   );
 });
 
+<<<<<<< HEAD
 /* ---------- STOP TIMER ---------- */
 app.post("/stop", (req, res) => {
   const { log_id } = req.body;
@@ -74,10 +102,16 @@ app.post("/stop", (req, res) => {
   if (!log_id) {
     return res.status(400).send("Missing log_id");
   }
+=======
+// Stop timer
+app.post("/stop", (req, res) => {
+  const { log_id, quantity } = req.body;
+>>>>>>> ff5d2f1052c4ff9400c8704aab5a09438c5b8e69
 
   db.run(
     `UPDATE time_logs
      SET end_time = datetime('now'),
+<<<<<<< HEAD
          duration_seconds = strftime('%s','now') - strftime('%s', start_time)
      WHERE id = ?
      AND end_time IS NULL`,
@@ -158,11 +192,37 @@ app.get("/report", (req, res) => {
       return res.status(500).send(err.message);
     }
 
+=======
+         quantity = ?,
+         duration_seconds = strftime('%s','now') - strftime('%s', start_time)
+     WHERE id = ?`,
+    [quantity, log_id],
+    () => res.send("Saved")
+  );
+});
+
+// Report
+app.get("/report", (req, res) => {
+  db.all(`
+    SELECT items.name as item, tasks.name as task,
+           SUM(quantity) as total_qty,
+           SUM(duration_seconds) as total_time,
+           SUM(duration_seconds) / SUM(quantity) as sec_per_unit
+    FROM time_logs
+    JOIN items ON items.id = time_logs.item_id
+    JOIN tasks ON tasks.id = time_logs.task_id
+    GROUP BY items.name, tasks.name
+  `, [], (err, rows) => {
+>>>>>>> ff5d2f1052c4ff9400c8704aab5a09438c5b8e69
     res.json(rows);
   });
 });
 
+<<<<<<< HEAD
 /* ---------- START SERVER ---------- */
 app.listen(PORT, () => {
   console.log("Running on port " + PORT);
 });
+=======
+app.listen(PORT, () => console.log("Running on port " + PORT));
+>>>>>>> ff5d2f1052c4ff9400c8704aab5a09438c5b8e69
