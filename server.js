@@ -9,6 +9,80 @@ app.use(express.static("public"));
 
 const PORT = process.env.PORT || 3000;
 
+const itemNames = [
+  "Daytime Focus Micro Pump",
+  "Good Night Sleep Micro Pump",
+  "Main Squeeze Party Pouch",
+  "Micro Dots (50-piece packs)",
+  "RSO Whoopie Hi",
+  "Space Chunk OG 1 chunk (pcs)",
+  "Space Chunk ALPHA OG 2 chunk (units)",
+  "Space Chunk REX OG 1 chunk (units)",
+  "Space Chunk REX OG 2 chunk (units)",
+  "Space Chunk ZUUL OG 1 chunk (units)",
+  "Space Chunk ZUUL OG 2 chunk (units)",
+  "Space Chunk 1 chunk CBD 50mg 1-1 (pcs)",
+  "Space Chunks CBD 2 chunks 1-1 (units)",
+  "Space Chunk CBN 1 chunk (pcs)",
+  "Space Chunk CBN 2 chunk (units)",
+  "Space Chunk Mini 10 chunk (units)",
+  "Space Chunk SUGAR FREE 10pk (units)",
+  "Space Chunk SUGAR FREE 2pk (units)",
+  "Shooters Triple Citrus",
+  "Shooters Sour Watermelon",
+  "Shooters Sour Blu Raz",
+  "Grape 1g",
+  "Mango 1g",
+  "Lemon 1g",
+  "Watermelon 1g",
+  "Big Stick",
+  "Small Stick",
+  "Tiny Stick"
+];
+
+const taskNames = [
+  "FIlling (Slot Machine)",
+  "Filling (Filling Machine)",
+  "Filling (SB Vapes)",
+  "FIlling (Hijnx Vapes)",
+  "Depositing (truffly)",
+  "Depositing (muffly)",
+  "Depositing (Beldos)",
+  "Cooking (kettle)",
+  "Capping (shooters)",
+  "Capping (SB Vapes)",
+  "Capping (Hijnx Vapes)",
+  "Packaging",
+  "Popping",
+  "Sugaring",
+  "Nerding",
+  "Sealing",
+  "Bagging (10's)",
+  "Bagging (20's)",
+  "Bagging (SB 25's)",
+  "Counting (5's)",
+  "Counting (SB 5's)",
+  "Exit Label Stickering",
+  "Packaging Labels Stickering",
+  "Correction Stickering",
+  "Seal-Stickering (shooters)"
+];
+
+function addMissingColumn(table, column, definition) {
+  db.all(`PRAGMA table_info(${table})`, [], (err, columns) => {
+    if (err) return console.error(`SCHEMA CHECK ERROR (${table}):`, err.message);
+
+    const exists = columns.some(c => c.name === column);
+    if (exists) return;
+
+    db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`, alterErr => {
+      if (alterErr) {
+        console.error(`SCHEMA MIGRATION ERROR (${table}.${column}):`, alterErr.message);
+      }
+    });
+  });
+}
+
 /* ---------- ENSURE TABLES EXIST ---------- */
 db.serialize(() => {
   db.run(`
@@ -39,23 +113,36 @@ db.serialize(() => {
     )
   `);
 
-  db.get("SELECT COUNT(*) AS count FROM items", [], (err, row) => {
-    if (err) return console.error("ITEM SEED ERROR:", err.message);
-    if (row.count > 0) return;
+  addMissingColumn("time_logs", "item_id", "INTEGER");
+  addMissingColumn("time_logs", "task_id", "INTEGER");
+  addMissingColumn("time_logs", "employee", "TEXT");
+  addMissingColumn("time_logs", "work_date", "TEXT");
+  addMissingColumn("time_logs", "start_time", "TEXT");
+  addMissingColumn("time_logs", "end_time", "TEXT");
+  addMissingColumn("time_logs", "duration_seconds", "INTEGER");
+  addMissingColumn("time_logs", "quantity", "INTEGER");
 
-    const stmt = db.prepare("INSERT INTO items (name) VALUES (?)");
-    ["Item A", "Item B"].forEach(name => stmt.run(name));
-    stmt.finalize();
-  });
+  const itemStmt = db.prepare(`
+    INSERT INTO items (name)
+    SELECT ?
+    WHERE NOT EXISTS (
+      SELECT 1 FROM items WHERE name = ?
+    )
+  `);
 
-  db.get("SELECT COUNT(*) AS count FROM tasks", [], (err, row) => {
-    if (err) return console.error("TASK SEED ERROR:", err.message);
-    if (row.count > 0) return;
+  itemNames.forEach(name => itemStmt.run(name, name));
+  itemStmt.finalize();
 
-    const stmt = db.prepare("INSERT INTO tasks (name) VALUES (?)");
-    ["Cutting", "Assembly"].forEach(name => stmt.run(name));
-    stmt.finalize();
-  });
+  const taskStmt = db.prepare(`
+    INSERT INTO tasks (name)
+    SELECT ?
+    WHERE NOT EXISTS (
+      SELECT 1 FROM tasks WHERE name = ?
+    )
+  `);
+
+  taskNames.forEach(name => taskStmt.run(name, name));
+  taskStmt.finalize();
 });
 
 /* ---------- ITEMS ---------- */
