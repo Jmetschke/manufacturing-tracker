@@ -68,38 +68,67 @@ const taskNames = [
   "Seal-Stickering (shooters)"
 ];
 
-function addMissingColumn(table, column, definition) {
-  db.all(`PRAGMA table_info(${table})`, [], (err, columns) => {
-    if (err) return console.error(`SCHEMA CHECK ERROR (${table}):`, err.message);
-
-    const exists = columns.some(c => c.name === column);
-    if (exists) return;
-
-    db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`, alterErr => {
-      if (alterErr) {
-        console.error(`SCHEMA MIGRATION ERROR (${table}.${column}):`, alterErr.message);
-      }
+function runSql(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function (err) {
+      if (err) return reject(err);
+      resolve(this);
     });
   });
 }
 
-/* ---------- ENSURE TABLES EXIST ---------- */
-db.serialize(() => {
-  db.run(`
+function allSql(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows);
+    });
+  });
+}
+
+async function addMissingColumn(table, column, definition) {
+  const columns = await allSql(`PRAGMA table_info(${table})`);
+  const exists = columns.some(c => c.name === column);
+  if (exists) return false;
+
+  await runSql(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  console.log(`Added missing column: ${table}.${column}`);
+  return true;
+}
+
+async function seedNames(table, names) {
+  for (const name of names) {
+    await runSql(`
+      INSERT INTO ${table} (name)
+      SELECT ?
+      WHERE NOT EXISTS (
+        SELECT 1 FROM ${table} WHERE name = ?
+      )
+    `, [name, name]);
+  }
+}
+
+async function logLookupCount(table) {
+  const rows = await allSql(`SELECT COUNT(*) AS count FROM ${table}`);
+  console.log(`${table} rows: ${rows[0].count}`);
+}
+
+async function initializeDatabase() {
+  await runSql(`
     CREATE TABLE IF NOT EXISTS items (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL
     )
   `);
 
-  db.run(`
+  await runSql(`
     CREATE TABLE IF NOT EXISTS tasks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL
     )
   `);
 
-  db.run(`
+  await runSql(`
     CREATE TABLE IF NOT EXISTS time_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       item_id INTEGER,
@@ -113,37 +142,20 @@ db.serialize(() => {
     )
   `);
 
-  addMissingColumn("time_logs", "item_id", "INTEGER");
-  addMissingColumn("time_logs", "task_id", "INTEGER");
-  addMissingColumn("time_logs", "employee", "TEXT");
-  addMissingColumn("time_logs", "work_date", "TEXT");
-  addMissingColumn("time_logs", "start_time", "TEXT");
-  addMissingColumn("time_logs", "end_time", "TEXT");
-  addMissingColumn("time_logs", "duration_seconds", "INTEGER");
-  addMissingColumn("time_logs", "quantity", "INTEGER");
+  await addMissingColumn("time_logs", "item_id", "INTEGER");
+  await addMissingColumn("time_logs", "task_id", "INTEGER");
+  await addMissingColumn("time_logs", "employee", "TEXT");
+  await addMissingColumn("time_logs", "work_date", "TEXT");
+  await addMissingColumn("time_logs", "start_time", "TEXT");
+  await addMissingColumn("time_logs", "end_time", "TEXT");
+  await addMissingColumn("time_logs", "duration_seconds", "INTEGER");
+  await addMissingColumn("time_logs", "quantity", "INTEGER");
 
-  const itemStmt = db.prepare(`
-    INSERT INTO items (name)
-    SELECT ?
-    WHERE NOT EXISTS (
-      SELECT 1 FROM items WHERE name = ?
-    )
-  `);
-
-  itemNames.forEach(name => itemStmt.run(name, name));
-  itemStmt.finalize();
-
-  const taskStmt = db.prepare(`
-    INSERT INTO tasks (name)
-    SELECT ?
-    WHERE NOT EXISTS (
-      SELECT 1 FROM tasks WHERE name = ?
-    )
-  `);
-
-  taskNames.forEach(name => taskStmt.run(name, name));
-  taskStmt.finalize();
-});
+  await seedNames("items", itemNames);
+  await seedNames("tasks", taskNames);
+  await logLookupCount("items");
+  await logLookupCount("tasks");
+}
 
 /* ---------- ITEMS ---------- */
 app.get("/items", (req, res) => {
@@ -284,6 +296,13 @@ app.get("/report", (req, res) => {
 });
 
 /* ---------- START SERVER ---------- */
-app.listen(PORT, () => {
-  console.log("Running on port " + PORT);
-});
+initializeDatabase()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log("Running on port " + PORT);
+    });
+  })
+  .catch(err => {
+    console.error("DATABASE INITIALIZATION ERROR:", err.message);
+    process.exit(1);
+  });
