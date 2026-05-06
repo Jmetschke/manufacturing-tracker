@@ -1,10 +1,22 @@
 let timerInterval = null;
 let startTime = null;
 let currentLogId = null;
+let loadedItems = [];
+
+const bulkTypes = [
+  { label: "Speed Rack(20)", value: 80 },
+  { label: "Sheetpan", value: 4 },
+  { label: "Mold(10g)", value: 40 },
+  { label: "Mold(2.4g)", value: 112 },
+  { label: "Band og Bags(100)", value: 100 },
+  { label: "Band of Bags(50)", value: 50 },
+  { label: "Bulk Units(1unit)", value: 1 }
+];
 
 async function load() {
   const items = await fetch("/items").then(r => r.json());
   const tasks = await fetch("/tasks").then(r => r.json());
+  loadedItems = items;
 
   const itemSel = document.getElementById("item");
   const taskSel = document.getElementById("task");
@@ -29,6 +41,130 @@ async function load() {
   document.getElementById("work_date").valueAsDate = new Date();
   document.getElementById("qty").disabled = true;
   document.getElementById("saveBtn").disabled = true;
+
+  addCalcRow();
+}
+
+function showTab(tabName) {
+  const trackerTab = document.getElementById("trackerTab");
+  const calculatorTab = document.getElementById("calculatorTab");
+  const buttons = document.querySelectorAll(".tab-button");
+
+  trackerTab.classList.toggle("active", tabName === "tracker");
+  calculatorTab.classList.toggle("active", tabName === "calculator");
+
+  buttons.forEach(button => {
+    const isActive =
+      (tabName === "tracker" && button.textContent === "Time Entry") ||
+      (tabName === "calculator" && button.textContent === "Qty Calculator");
+
+    button.classList.toggle("active", isActive);
+  });
+}
+
+function createBulkTypeSelect() {
+  const select = document.createElement("select");
+  select.className = "calc-bulk-type";
+
+  bulkTypes.forEach(type => {
+    const option = document.createElement("option");
+    option.value = type.label;
+    option.dataset.bulkValue = String(type.value);
+    option.text = type.label;
+    select.appendChild(option);
+  });
+
+  select.addEventListener("change", updateCalculator);
+  return select;
+}
+
+function addCalcRow() {
+  const rows = document.getElementById("calcRows");
+  const tr = document.createElement("tr");
+
+  const bulkTypeCell = document.createElement("td");
+  bulkTypeCell.appendChild(createBulkTypeSelect());
+
+  const bulkCountCell = document.createElement("td");
+  bulkCountCell.appendChild(createCalcInput("calc-bulk-count"));
+
+  const totalCell = document.createElement("td");
+  const totalInput = document.createElement("input");
+  totalInput.type = "number";
+  totalInput.className = "calc-row-total";
+  totalInput.value = "0";
+  totalInput.readOnly = true;
+  totalCell.appendChild(totalInput);
+
+  const removeCell = document.createElement("td");
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.textContent = "Remove";
+  removeButton.addEventListener("click", () => {
+    tr.remove();
+    updateCalculator();
+  });
+  removeCell.appendChild(removeButton);
+
+  tr.appendChild(bulkTypeCell);
+  tr.appendChild(bulkCountCell);
+  tr.appendChild(totalCell);
+  tr.appendChild(removeCell);
+  rows.appendChild(tr);
+
+  updateCalculator();
+}
+
+function createCalcInput(className) {
+  const input = document.createElement("input");
+  input.type = "number";
+  input.setAttribute("list", "bulkCountOptions");
+  input.min = "0";
+  input.step = "1";
+  input.value = "0";
+  input.className = className;
+  input.addEventListener("input", updateCalculator);
+  return input;
+}
+
+function getNumberFromRow(row, selector) {
+  const value = Number(row.querySelector(selector).value);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function updateCalculator() {
+  const rows = document.querySelectorAll("#calcRows tr");
+  let grandTotal = 0;
+
+  rows.forEach(row => {
+    const bulkTypeSelect = row.querySelector(".calc-bulk-type");
+    const selectedOption = bulkTypeSelect.options[bulkTypeSelect.selectedIndex];
+    const bulkValue = Number(selectedOption.dataset.bulkValue);
+    const bulkCount = getNumberFromRow(row, ".calc-bulk-count");
+    const rowTotal = bulkValue * bulkCount;
+
+    row.querySelector(".calc-row-total").value = String(rowTotal);
+    grandTotal += rowTotal;
+  });
+
+  document.getElementById("calcGrandTotal").textContent = String(grandTotal);
+}
+
+function clearCalculator() {
+  document.getElementById("calcRows").innerHTML = "";
+  addCalcRow();
+}
+
+function copyCalcTotalToQty() {
+  const total = document.getElementById("calcGrandTotal").textContent;
+  const qtyInput = document.getElementById("qty");
+
+  qtyInput.value = total;
+  showTab("tracker");
+
+  if (!qtyInput.disabled) {
+    qtyInput.focus();
+  }
 }
 
 async function startTimer() {

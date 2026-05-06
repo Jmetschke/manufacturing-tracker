@@ -2,24 +2,142 @@
 <html>
 <head>
   <title>Production Tracker</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 24px;
+      color: #202124;
+      background: #f7f7f4;
+    }
+
+    h2 {
+      margin-top: 0;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 18px;
+      border-bottom: 1px solid #d4d4ce;
+    }
+
+    .tab-button {
+      border: 0;
+      border-bottom: 3px solid transparent;
+      padding: 10px 14px;
+      background: transparent;
+      cursor: pointer;
+      font-size: 15px;
+    }
+
+    .tab-button.active {
+      border-bottom-color: #2364aa;
+      color: #123c69;
+      font-weight: bold;
+    }
+
+    .tab-panel {
+      display: none;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    input,
+    select,
+    button {
+      font-size: 15px;
+      margin: 4px;
+      padding: 8px;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      background: #fff;
+    }
+
+    th,
+    td {
+      border: 1px solid #d8d8d2;
+      padding: 8px;
+      text-align: left;
+    }
+
+    th {
+      background: #ecece6;
+    }
+
+    .calc-table input,
+    .calc-table select {
+      box-sizing: border-box;
+      width: 100%;
+      margin: 0;
+    }
+
+    .calc-total {
+      margin-top: 16px;
+      font-size: 22px;
+      font-weight: bold;
+    }
+  </style>
 </head>
 <body>
 
 <h2>Production Tracker</h2>
 
-<input type="text" id="employee" placeholder="Employee Name">
-<input type="date" id="work_date">
-<select id="item"></select>
-<select id="task"></select>
-<input type="number" id="qty" placeholder="Quantity">
+<div class="tabs">
+  <button class="tab-button active" type="button" onclick="showTab('tracker')">Time Entry</button>
+  <button class="tab-button" type="button" onclick="showTab('calculator')">Qty Calculator</button>
+</div>
 
-<br><br>
+<section id="trackerTab" class="tab-panel active">
+  <input type="text" id="employee" placeholder="Employee Name">
+  <input type="date" id="work_date">
+  <select id="item"></select>
+  <select id="task"></select>
+  <input type="number" id="qty" placeholder="Quantity">
 
-<h3>Timer: <span id="timer">00:00:00</span></h3>
+  <br><br>
 
-<button onclick="startTimer()">Start</button>
-<button onclick="stopTimer()">Stop</button>
-<button id="saveBtn" onclick="saveQuantity()">Save Qty</button>
+  <h3>Timer: <span id="timer">00:00:00</span></h3>
+
+  <button onclick="startTimer()">Start</button>
+  <button onclick="stopTimer()">Stop</button>
+  <button id="saveBtn" onclick="saveQuantity()">Save Qty</button>
+</section>
+
+<section id="calculatorTab" class="tab-panel">
+  <button type="button" onclick="addCalcRow()">Add Row</button>
+  <button type="button" onclick="clearCalculator()">Clear</button>
+  <button type="button" onclick="copyCalcTotalToQty()">Fill Time Entry Qty</button>
+
+  <table class="calc-table">
+    <thead>
+      <tr>
+        <th>Bulk Type</th>
+        <th># of Bulk Type</th>
+        <th>Calculated Qty</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="calcRows"></tbody>
+  </table>
+
+  <datalist id="bulkCountOptions">
+    <option value="40">
+    <option value="112">
+  </datalist>
+
+  <div class="calc-total">Total Qty: <span id="calcGrandTotal">0</span></div>
+</section>
 
 <script src="app.js"></script>
 
