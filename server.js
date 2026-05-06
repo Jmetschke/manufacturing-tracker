@@ -9,20 +9,54 @@ app.use(express.static("public"));
 
 const PORT = process.env.PORT || 3000;
 
-/* ---------- ENSURE TABLE EXISTS ---------- */
-db.run(`
-  CREATE TABLE IF NOT EXISTS time_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    item_id INTEGER,
-    task_id INTEGER,
-    employee TEXT,
-    work_date TEXT,
-    start_time TEXT,
-    end_time TEXT,
-    duration_seconds INTEGER,
-    quantity INTEGER
-  )
-`);
+/* ---------- ENSURE TABLES EXIST ---------- */
+db.serialize(() => {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS time_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      item_id INTEGER,
+      task_id INTEGER,
+      employee TEXT,
+      work_date TEXT,
+      start_time TEXT,
+      end_time TEXT,
+      duration_seconds INTEGER,
+      quantity INTEGER
+    )
+  `);
+
+  db.get("SELECT COUNT(*) AS count FROM items", [], (err, row) => {
+    if (err) return console.error("ITEM SEED ERROR:", err.message);
+    if (row.count > 0) return;
+
+    const stmt = db.prepare("INSERT INTO items (name) VALUES (?)");
+    ["Item A", "Item B"].forEach(name => stmt.run(name));
+    stmt.finalize();
+  });
+
+  db.get("SELECT COUNT(*) AS count FROM tasks", [], (err, row) => {
+    if (err) return console.error("TASK SEED ERROR:", err.message);
+    if (row.count > 0) return;
+
+    const stmt = db.prepare("INSERT INTO tasks (name) VALUES (?)");
+    ["Cutting", "Assembly"].forEach(name => stmt.run(name));
+    stmt.finalize();
+  });
+});
 
 /* ---------- ITEMS ---------- */
 app.get("/items", (req, res) => {

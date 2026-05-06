@@ -1,8 +1,5 @@
-<<<<<<< HEAD
 let timerInterval = null;
 let startTime = null;
-=======
->>>>>>> ff5d2f1052c4ff9400c8704aab5a09438c5b8e69
 let currentLogId = null;
 
 async function load() {
@@ -12,29 +9,28 @@ async function load() {
   const itemSel = document.getElementById("item");
   const taskSel = document.getElementById("task");
 
+  itemSel.innerHTML = "";
+  taskSel.innerHTML = "";
+
   items.forEach(i => {
-    let o = document.createElement("option");
+    const o = document.createElement("option");
     o.value = i.id;
     o.text = i.name;
     itemSel.appendChild(o);
   });
 
   tasks.forEach(t => {
-    let o = document.createElement("option");
+    const o = document.createElement("option");
     o.value = t.id;
     o.text = t.name;
     taskSel.appendChild(o);
   });
-<<<<<<< HEAD
 
   document.getElementById("work_date").valueAsDate = new Date();
-
-  // ✅ UX: disable qty + save button on load
   document.getElementById("qty").disabled = true;
   document.getElementById("saveBtn").disabled = true;
 }
 
-// ✅ START TIMER
 async function startTimer() {
   if (currentLogId) {
     alert("Timer already running");
@@ -58,7 +54,7 @@ async function startTimer() {
 
   const res = await fetch("/start", {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ item_id, task_id, employee, work_date })
   });
 
@@ -75,9 +71,9 @@ async function startTimer() {
 
   clearInterval(timerInterval);
   timerInterval = setInterval(updateTimer, 1000);
+  updateTimer();
 }
 
-// ✅ STOP TIMER
 async function stopTimer() {
   if (!currentLogId) {
     alert("No active timer");
@@ -86,7 +82,7 @@ async function stopTimer() {
 
   const res = await fetch("/stop", {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ log_id: currentLogId })
   });
 
@@ -100,19 +96,16 @@ async function stopTimer() {
   timerInterval = null;
   startTime = null;
 
-  // ✅ UX: enable qty + save button + focus
   const qtyInput = document.getElementById("qty");
   const saveBtn = document.getElementById("saveBtn");
 
   qtyInput.disabled = false;
   saveBtn.disabled = false;
-
   qtyInput.focus();
 
   alert("Timer stopped. Enter quantity to finish.");
 }
 
-// ✅ SAVE QUANTITY
 async function saveQuantity() {
   const qtyInput = document.getElementById("qty");
   const saveBtn = document.getElementById("saveBtn");
@@ -130,7 +123,7 @@ async function saveQuantity() {
 
   const res = await fetch("/update-qty", {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       log_id: currentLogId,
       quantity
@@ -143,16 +136,15 @@ async function saveQuantity() {
     return;
   }
 
-  // ✅ reset state
   currentLogId = null;
   qtyInput.value = "";
   qtyInput.disabled = true;
   saveBtn.disabled = true;
+  document.getElementById("timer").innerText = "00:00:00";
 
   alert("Entry completed");
 }
 
-// ✅ TIMER DISPLAY
 function updateTimer() {
   if (!startTime) return;
 
@@ -168,34 +160,6 @@ function updateTimer() {
     String(seconds).padStart(2, "0");
 
   document.getElementById("timer").innerText = formatted;
-=======
-}
-
-async function startTimer() {
-  const item_id = document.getElementById("item").value;
-  const task_id = document.getElementById("task").value;
-
-  const res = await fetch("/start", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ item_id, task_id })
-  });
-
-  const data = await res.json();
-  currentLogId = data.log_id;
-}
-
-async function stopTimer() {
-  const quantity = document.getElementById("qty").value;
-
-  await fetch("/stop", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ log_id: currentLogId, quantity })
-  });
-
-  alert("Saved");
->>>>>>> ff5d2f1052c4ff9400c8704aab5a09438c5b8e69
 }
 
 load();
