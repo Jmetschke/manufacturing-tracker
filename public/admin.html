@@ -4,10 +4,21 @@
   <title>Admin Dashboard</title>
   <style>
     body { font-family: Arial; padding: 20px; }
+    input, select, button { box-sizing: border-box; font-size: 15px; margin: 4px; padding: 8px; }
     table { border-collapse: collapse; width: 100%; margin-top: 15px; }
     th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
     th { background: #eee; }
-    .controls { margin-bottom: 10px; }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .controls input, .controls select { flex: 1 1 180px; min-width: 0; }
+    .controls button { flex: 0 1 auto; }
+    #table { overflow-x: auto; width: 100%; }
+
+    @media (max-width: 640px) {
+      body { padding: 14px; }
+      .controls { flex-direction: column; }
+      .controls input, .controls select, .controls button { width: 100%; margin-left: 0; margin-right: 0; }
+      table { min-width: 720px; }
+    }
   </style>
 </head>
 <body>

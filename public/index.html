@@ -48,6 +48,7 @@
     input,
     select,
     button {
+      box-sizing: border-box;
       font-size: 15px;
       margin: 4px;
       padding: 8px;
@@ -92,6 +93,11 @@
       margin-top: 24px;
     }
 
+    #savedEntries {
+      overflow-x: auto;
+      width: 100%;
+    }
+
     .saved-entries h3 {
       margin-bottom: 8px;
     }
@@ -99,6 +105,58 @@
     .empty-entries {
       color: #666;
       margin: 8px 4px;
+    }
+
+    .entry-fields,
+    .timer-actions,
+    .calculator-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .entry-fields input,
+    .entry-fields select {
+      flex: 1 1 180px;
+      min-width: 0;
+    }
+
+    .timer-actions button,
+    .calculator-actions button {
+      flex: 0 1 auto;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      width: 100%;
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 14px;
+      }
+
+      .tabs,
+      .entry-fields,
+      .timer-actions,
+      .calculator-actions {
+        flex-direction: column;
+      }
+
+      .tab-button,
+      .entry-fields input,
+      .entry-fields select,
+      .timer-actions button,
+      .calculator-actions button {
+        width: 100%;
+        margin-left: 0;
+        margin-right: 0;
+      }
+
+      table {
+        min-width: 640px;
+      }
     }
   </style>
 </head>
@@ -112,21 +170,23 @@
 </div>
 
 <section id="trackerTab" class="tab-panel active">
-  <select id="employee">
-    <option value="">Employee Name</option>
-  </select>
-  <input type="date" id="work_date">
-  <select id="item"></select>
-  <select id="task"></select>
-  <input type="number" id="qty" placeholder="Quantity">
-
-  <br><br>
+  <div class="entry-fields">
+    <select id="employee">
+      <option value="">Employee Name</option>
+    </select>
+    <input type="date" id="work_date">
+    <select id="item"></select>
+    <select id="task"></select>
+    <input type="number" id="qty" placeholder="Quantity">
+  </div>
 
   <h3>Timer: <span id="timer">00:00:00</span></h3>
 
-  <button onclick="startTimer()">Start</button>
-  <button onclick="stopTimer()">Stop</button>
-  <button id="saveBtn" onclick="saveQuantity()">Save Qty</button>
+  <div class="timer-actions">
+    <button onclick="startTimer()">Start</button>
+    <button onclick="stopTimer()">Stop</button>
+    <button id="saveBtn" onclick="saveQuantity()">Save Qty</button>
+  </div>
 
   <div class="saved-entries">
     <h3>Saved Entries</h3>
@@ -135,21 +195,25 @@
 </section>
 
 <section id="calculatorTab" class="tab-panel">
-  <button type="button" onclick="addCalcRow()">Add Row</button>
-  <button type="button" onclick="clearCalculator()">Clear</button>
-  <button type="button" onclick="copyCalcTotalToQty()">Fill Time Entry Qty</button>
+  <div class="calculator-actions">
+    <button type="button" onclick="addCalcRow()">Add Row</button>
+    <button type="button" onclick="clearCalculator()">Clear</button>
+    <button type="button" onclick="copyCalcTotalToQty()">Fill Time Entry Qty</button>
+  </div>
 
-  <table class="calc-table">
-    <thead>
-      <tr>
-        <th>Bulk Type</th>
-        <th># of Bulk Type</th>
-        <th>Calculated Qty</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody id="calcRows"></tbody>
-  </table>
+  <div class="table-wrap">
+    <table class="calc-table">
+      <thead>
+        <tr>
+          <th>Bulk Type</th>
+          <th># of Bulk Type</th>
+          <th>Calculated Qty</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="calcRows"></tbody>
+    </table>
+  </div>
 
   <datalist id="bulkCountOptions">
     <option value="40">
