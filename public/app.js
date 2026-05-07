@@ -2,6 +2,75 @@ let timerInterval = null;
 let startTime = null;
 let currentLogId = null;
 let loadedItems = [];
+let pendingEntry = null;
+let savedEntries = [];
+
+function loadEmployeeOptions() {
+  const employeeSel = document.getElementById("employee");
+
+  window.employeeNames.forEach(employee => {
+    const option = document.createElement("option");
+    option.value = employee;
+    option.text = employee;
+    employeeSel.appendChild(option);
+  });
+}
+
+function formatSeconds(sec) {
+  const hours = Math.floor(sec / 3600);
+  const minutes = Math.floor((sec % 3600) / 60);
+  const seconds = sec % 60;
+
+  return (
+    String(hours).padStart(2, "0") + ":" +
+    String(minutes).padStart(2, "0") + ":" +
+    String(seconds).padStart(2, "0")
+  );
+}
+
+function renderSavedEntries() {
+  const container = document.getElementById("savedEntries");
+  container.innerHTML = "";
+
+  if (!savedEntries.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-entries";
+    empty.textContent = "No entries saved yet.";
+    container.appendChild(empty);
+    return;
+  }
+
+  const table = document.createElement("table");
+  const thead = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+  ["Date", "Employee", "Item", "Task", "Qty", "Time"].forEach(label => {
+    const th = document.createElement("th");
+    th.textContent = label;
+    headerRow.appendChild(th);
+  });
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  savedEntries.forEach(entry => {
+    const row = document.createElement("tr");
+    [
+      entry.workDate,
+      entry.employee,
+      entry.item,
+      entry.task,
+      entry.quantity,
+      formatSeconds(entry.durationSeconds)
+    ].forEach(value => {
+      const td = document.createElement("td");
+      td.textContent = value;
+      row.appendChild(td);
+    });
+    tbody.appendChild(row);
+  });
+  table.appendChild(tbody);
+  container.appendChild(table);
+}
 
 const bulkTypes = [
   { label: "Speed Rack(20)", value: 80 },
@@ -14,6 +83,8 @@ const bulkTypes = [
 ];
 
 async function load() {
+  loadEmployeeOptions();
+
   const items = await fetch("/items").then(r => r.json());
   const tasks = await fetch("/tasks").then(r => r.json());
   loadedItems = items;
@@ -42,6 +113,7 @@ async function load() {
   document.getElementById("qty").disabled = true;
   document.getElementById("saveBtn").disabled = true;
 
+  renderSavedEntries();
   addCalcRow();
 }
 
@@ -175,8 +247,10 @@ async function startTimer() {
 
   const employee = document.getElementById("employee").value;
   const work_date = document.getElementById("work_date").value;
-  const item_id = document.getElementById("item").value;
-  const task_id = document.getElementById("task").value;
+  const itemSel = document.getElementById("item");
+  const taskSel = document.getElementById("task");
+  const item_id = itemSel.value;
+  const task_id = taskSel.value;
 
   if (!employee || !work_date) {
     alert("Employee and date are required");
@@ -204,6 +278,13 @@ async function startTimer() {
   currentLogId = data.log_id;
 
   startTime = Date.now();
+  pendingEntry = {
+    employee,
+    workDate: work_date,
+    item: itemSel.options[itemSel.selectedIndex].text,
+    task: taskSel.options[taskSel.selectedIndex].text,
+    durationSeconds: 0
+  };
 
   clearInterval(timerInterval);
   timerInterval = setInterval(updateTimer, 1000);
@@ -230,6 +311,9 @@ async function stopTimer() {
 
   clearInterval(timerInterval);
   timerInterval = null;
+  if (pendingEntry && startTime) {
+    pendingEntry.durationSeconds = Math.floor((Date.now() - startTime) / 1000);
+  }
   startTime = null;
 
   const qtyInput = document.getElementById("qty");
@@ -272,7 +356,14 @@ async function saveQuantity() {
     return;
   }
 
+  savedEntries.unshift({
+    ...pendingEntry,
+    quantity
+  });
+  renderSavedEntries();
+
   currentLogId = null;
+  pendingEntry = null;
   qtyInput.value = "";
   qtyInput.disabled = true;
   saveBtn.disabled = true;
@@ -286,16 +377,7 @@ function updateTimer() {
 
   const elapsed = Math.floor((Date.now() - startTime) / 1000);
 
-  const hours = Math.floor(elapsed / 3600);
-  const minutes = Math.floor((elapsed % 3600) / 60);
-  const seconds = elapsed % 60;
-
-  const formatted =
-    String(hours).padStart(2, "0") + ":" +
-    String(minutes).padStart(2, "0") + ":" +
-    String(seconds).padStart(2, "0");
-
-  document.getElementById("timer").innerText = formatted;
+  document.getElementById("timer").innerText = formatSeconds(elapsed);
 }
 
 load();

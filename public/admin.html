@@ -17,7 +17,12 @@
 <div class="controls">
   <input type="date" id="from_date">
   <input type="date" id="to_date">
-  <input type="text" id="employee_filter" placeholder="Employee">
+  <select id="employee_filter">
+    <option value="">All Employees</option>
+  </select>
+  <select id="item_filter">
+    <option value="">All Items</option>
+  </select>
   <button onclick="loadReport()">Filter</button>
   <button onclick="exportCSV()">Export CSV</button>
 </div>
@@ -25,6 +30,7 @@
 <div id="summary"></div>
 <div id="table"></div>
 
+<script src="employees.js"></script>
 <script src="admin.js"></script>
 
 </body>

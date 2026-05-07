@@ -1,5 +1,28 @@
 let reportData = [];
 
+async function loadItemFilter() {
+  const items = await fetch("/items").then(r => r.json());
+  const itemFilter = document.getElementById("item_filter");
+
+  items.forEach(item => {
+    const option = document.createElement("option");
+    option.value = item.name;
+    option.text = item.name;
+    itemFilter.appendChild(option);
+  });
+}
+
+function loadEmployeeFilter() {
+  const employeeFilter = document.getElementById("employee_filter");
+
+  window.employeeNames.forEach(employee => {
+    const option = document.createElement("option");
+    option.value = employee;
+    option.text = employee;
+    employeeFilter.appendChild(option);
+  });
+}
+
 function secondsToHMS(sec) {
   if (!sec) return "0:00";
   const h = Math.floor(sec / 3600);
@@ -13,13 +36,15 @@ async function loadReport() {
 
   const from = document.getElementById("from_date").value;
   const to = document.getElementById("to_date").value;
-  const emp = document.getElementById("employee_filter").value.toLowerCase();
+  const emp = document.getElementById("employee_filter").value;
+  const item = document.getElementById("item_filter").value;
 
   // Filter
   reportData = data.filter(r => {
     if (from && r.work_date < from) return false;
     if (to && r.work_date > to) return false;
-    if (emp && !r.employee.toLowerCase().includes(emp)) return false;
+    if (emp && r.employee !== emp) return false;
+    if (item && r.item !== item) return false;
     return true;
   });
 
@@ -82,5 +107,11 @@ function exportCSV() {
   a.click();
 }
 
+async function initAdmin() {
+  loadEmployeeFilter();
+  await loadItemFilter();
+  await loadReport();
+}
+
 // Auto-load on open
-loadReport();
+initAdmin();

@@ -87,6 +87,19 @@
       font-size: 22px;
       font-weight: bold;
     }
+
+    .saved-entries {
+      margin-top: 24px;
+    }
+
+    .saved-entries h3 {
+      margin-bottom: 8px;
+    }
+
+    .empty-entries {
+      color: #666;
+      margin: 8px 4px;
+    }
   </style>
 </head>
 <body>
@@ -99,7 +112,9 @@
 </div>
 
 <section id="trackerTab" class="tab-panel active">
-  <input type="text" id="employee" placeholder="Employee Name">
+  <select id="employee">
+    <option value="">Employee Name</option>
+  </select>
   <input type="date" id="work_date">
   <select id="item"></select>
   <select id="task"></select>
@@ -112,6 +127,11 @@
   <button onclick="startTimer()">Start</button>
   <button onclick="stopTimer()">Stop</button>
   <button id="saveBtn" onclick="saveQuantity()">Save Qty</button>
+
+  <div class="saved-entries">
+    <h3>Saved Entries</h3>
+    <div id="savedEntries"></div>
+  </div>
 </section>
 
 <section id="calculatorTab" class="tab-panel">
@@ -139,6 +159,7 @@
   <div class="calc-total">Total Qty: <span id="calcGrandTotal">0</span></div>
 </section>
 
+<script src="employees.js"></script>
 <script src="app.js"></script>
 
 </body>
