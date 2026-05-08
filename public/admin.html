@@ -8,6 +8,11 @@
     table { border-collapse: collapse; width: 100%; margin-top: 15px; }
     th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
     th { background: #eee; }
+    .admin-tabs { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid #ccc; }
+    .admin-tab-button { border: 0; border-bottom: 3px solid transparent; background: transparent; cursor: pointer; padding: 10px 14px; }
+    .admin-tab-button.active { border-bottom-color: #2364aa; color: #123c69; font-weight: bold; }
+    .admin-panel { display: none; }
+    .admin-panel.active { display: block; }
     .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
     .controls input, .controls select { flex: 1 1 180px; min-width: 0; }
     .controls button { flex: 0 1 auto; }
@@ -25,14 +30,123 @@
     .message { margin: 10px 0; }
     .message.error { color: #a00000; }
     .message.success { color: #176a2c; }
+    .calendar-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+    .admin-calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(120px, 1fr));
+      gap: 1px;
+      border: 1px solid #ccc;
+      background: #ccc;
+      overflow-x: auto;
+    }
+    .admin-day-name,
+    .admin-calendar-day {
+      background: #fff;
+      padding: 8px;
+    }
+    .admin-day-name {
+      background: #eee;
+      font-weight: bold;
+      text-align: center;
+    }
+    .admin-calendar-day {
+      min-height: 120px;
+    }
+    .admin-calendar-day.outside-month {
+      background: #f5f5f5;
+      color: #777;
+    }
+    .admin-calendar-date {
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+    .admin-calendar-tasks {
+      line-height: 1.35;
+      margin-bottom: 8px;
+    }
+    .admin-batch-list {
+      display: grid;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .admin-batch-item {
+      background: #f1f6fb;
+      border-left: 3px solid #2364aa;
+      padding: 5px 6px;
+    }
+    .batch-fields {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+      max-width: 860px;
+    }
+    .batch-field label {
+      display: block;
+      font-weight: bold;
+      margin: 0 4px 3px;
+    }
+    .batch-row {
+      display: grid;
+      grid-template-columns: 34px minmax(180px, 1fr) 110px auto;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .batch-order {
+      font-weight: bold;
+      text-align: right;
+    }
+    .batch-row input,
+    .batch-row select {
+      margin: 0;
+      width: 100%;
+    }
+    .batch-units {
+      max-width: 110px;
+    }
+    .admin-task-list {
+      margin: 0 0 8px 20px;
+      padding: 0;
+    }
+    .admin-task-list li {
+      margin-bottom: 4px;
+    }
+    .schedule-task-section {
+      margin-top: 10px;
+    }
+    .schedule-task-row {
+      display: grid;
+      grid-template-columns: 34px minmax(180px, 1fr) 90px repeat(3, auto);
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 6px;
+      max-width: 860px;
+    }
+    .schedule-task-order {
+      font-weight: bold;
+      text-align: right;
+    }
+    .schedule-task-row input {
+      margin: 0;
+      width: 100%;
+    }
+    .schedule-task-days {
+      max-width: 90px;
+    }
     #table { overflow-x: auto; width: 100%; }
 
     @media (max-width: 640px) {
       body { padding: 14px; }
-      .controls, .edit-grid { flex-direction: column; }
+      .admin-tabs, .controls, .edit-grid, .calendar-tools { flex-direction: column; }
       .controls input, .controls select, .controls button,
-      .edit-grid input, .edit-grid select, .edit-actions button { width: 100%; margin-left: 0; margin-right: 0; }
+      .edit-grid input, .edit-grid select, .edit-actions button,
+      .calendar-tools input, .calendar-tools button { width: 100%; margin-left: 0; margin-right: 0; }
       table { min-width: 860px; }
+      .admin-calendar-grid { grid-template-columns: repeat(7, 140px); }
+      .batch-row,
+      .schedule-task-row { grid-template-columns: 28px 1fr; }
+      .batch-row button,
+      .schedule-task-row button { width: auto; }
     }
   </style>
 </head>
@@ -40,40 +154,84 @@
 
 <h2>Admin Dashboard</h2>
 
-<div class="controls">
-  <input type="date" id="from_date">
-  <input type="date" id="to_date">
-  <select id="employee_filter">
-    <option value="">All Employees</option>
-  </select>
-  <select id="item_filter">
-    <option value="">All Items</option>
-  </select>
-  <button onclick="loadReport()">Filter</button>
-  <button onclick="exportCSV()">Export CSV</button>
+<div class="admin-tabs">
+  <button class="admin-tab-button active" type="button" onclick="showAdminTab('entries')">Entries</button>
+  <button class="admin-tab-button" type="button" onclick="showAdminTab('calendar')">Calendar</button>
 </div>
 
 <div id="message" class="message"></div>
 
-<section id="editPanel" class="edit-panel">
-  <h3>Edit Entry</h3>
-  <input type="hidden" id="edit_log_id">
-  <div class="edit-grid">
-    <input type="date" id="edit_work_date">
-    <select id="edit_employee"></select>
-    <select id="edit_item"></select>
-    <select id="edit_task"></select>
-    <input type="number" id="edit_quantity" min="0" step="1" placeholder="Quantity">
-    <input type="text" id="edit_time" placeholder="Time HH:MM:SS">
+<section id="entriesPanel" class="admin-panel active">
+  <div class="controls">
+    <input type="date" id="from_date">
+    <input type="date" id="to_date">
+    <select id="employee_filter">
+      <option value="">All Employees</option>
+    </select>
+    <select id="item_filter">
+      <option value="">All Items</option>
+    </select>
+    <button onclick="loadReport()">Filter</button>
+    <button onclick="exportCSV()">Export CSV</button>
   </div>
-  <div class="edit-actions">
-    <button type="button" onclick="saveEntryEdit()">Save Changes</button>
-    <button type="button" onclick="cancelEntryEdit()">Cancel</button>
-  </div>
+
+  <section id="editPanel" class="edit-panel">
+    <h3>Edit Entry</h3>
+    <input type="hidden" id="edit_log_id">
+    <div class="edit-grid">
+      <input type="date" id="edit_work_date">
+      <select id="edit_employee"></select>
+      <select id="edit_item"></select>
+      <select id="edit_task"></select>
+      <input type="number" id="edit_quantity" min="0" step="1" placeholder="Quantity">
+      <input type="text" id="edit_time" placeholder="Time HH:MM:SS">
+    </div>
+    <div class="edit-actions">
+      <button type="button" onclick="saveEntryEdit()">Save Changes</button>
+      <button type="button" onclick="cancelEntryEdit()">Cancel</button>
+    </div>
+  </section>
+
+  <div id="summary"></div>
+  <div id="table"></div>
 </section>
 
-<div id="summary"></div>
-<div id="table"></div>
+<section id="calendarPanel" class="admin-panel">
+  <div class="calendar-tools">
+    <button type="button" onclick="changeAdminCalendarMonth(-1)">Previous</button>
+    <input type="month" id="calendar_month" onchange="loadAdminCalendar()">
+    <button type="button" onclick="changeAdminCalendarMonth(1)">Next</button>
+  </div>
+
+  <div id="adminCalendar" class="admin-calendar-grid"></div>
+
+  <section id="scheduleEditor" class="edit-panel schedule-editor">
+    <h3>Edit Calendar Day</h3>
+    <input type="hidden" id="schedule_edit_date">
+    <div><b id="scheduleEditLabel"></b></div>
+    <div class="batch-fields">
+      <div class="batch-field">
+        <label>Production Batch - Hijnx</label>
+        <div id="batchHijnxRows"></div>
+        <button type="button" onclick="addBatchEntry('hijnx')">Add Hijnx Batch</button>
+      </div>
+      <div class="batch-field">
+        <label>Production Batch - SB</label>
+        <div id="batchSbRows"></div>
+        <button type="button" onclick="addBatchEntry('sb')">Add SB Batch</button>
+      </div>
+    </div>
+    <div class="schedule-task-section">
+      <h4>Tasks</h4>
+      <div id="scheduleTaskRows"></div>
+      <button type="button" onclick="addScheduleTask()">Add Task</button>
+    </div>
+    <div class="edit-actions">
+      <button type="button" onclick="saveScheduleDay()">Save Day</button>
+      <button type="button" onclick="cancelScheduleEdit()">Cancel</button>
+    </div>
+  </section>
+</section>
 
 <script src="employees.js"></script>
 <script src="admin.js"></script>

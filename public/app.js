@@ -8,6 +8,7 @@ let pausedSeconds = 0;
 let isTimerPaused = false;
 let pausedElapsedSeconds = 0;
 const pendingTimerStorageKey = "productionTracker.pendingTimer";
+const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function savePendingTimer(state) {
   localStorage.setItem(pendingTimerStorageKey, JSON.stringify(state));
@@ -96,6 +97,187 @@ function formatSeconds(sec) {
     String(minutes).padStart(2, "0") + ":" +
     String(seconds).padStart(2, "0")
   );
+}
+
+function toIsoDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function dateOnly(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function startOfWeek(date) {
+  const start = dateOnly(date);
+  return addDays(start, -start.getDay());
+}
+
+function formatDisplayDate(isoDate) {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+function normalizeBatchList(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map(item => {
+        if (item && typeof item === "object") {
+          return {
+            item: String(item.item || "").trim(),
+            units: String(item.units || "").trim()
+          };
+        }
+
+        return {
+          item: String(item || "").trim(),
+          units: ""
+        };
+      })
+      .filter(batch => batch.item);
+  }
+
+  const singleValue = String(value || "").trim();
+  return singleValue ? [{ item: singleValue, units: "" }] : [];
+}
+
+function parseSchedulePayload(rawValue) {
+  const empty = {
+    batchHijnx: [],
+    batchSb: [],
+    tasks: []
+  };
+
+  if (!rawValue) return empty;
+
+  try {
+    const parsed = JSON.parse(rawValue);
+    if (parsed && !Array.isArray(parsed) && typeof parsed === "object") {
+      return {
+        batchHijnx: normalizeBatchList(parsed.batchHijnx),
+        batchSb: normalizeBatchList(parsed.batchSb),
+        tasks: Array.isArray(parsed.tasks)
+          ? parsed.tasks
+              .map(task => ({
+                text: String(task.text || "").trim(),
+                days: Math.max(1, Number.parseInt(task.days, 10) || 1)
+              }))
+              .filter(task => task.text)
+          : []
+      };
+    }
+
+    if (Array.isArray(parsed)) {
+      return {
+        ...empty,
+        tasks: parsed
+          .map(task => ({
+            text: String(task.text || "").trim(),
+            days: Math.max(1, Number.parseInt(task.days, 10) || 1)
+          }))
+          .filter(task => task.text)
+      };
+    }
+  } catch (err) {
+    // Older saved calendar entries are plain newline-delimited text.
+  }
+
+  return {
+    ...empty,
+    tasks: String(rawValue)
+      .split("\n")
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map(line => ({ text: line, days: 1 }))
+  };
+}
+
+function appendTaskList(container, tasks) {
+  if (!tasks.length) return;
+
+  const list = document.createElement("ol");
+  list.className = "schedule-task-list";
+
+  tasks.forEach(task => {
+    const item = document.createElement("li");
+    item.textContent = task.text;
+    list.appendChild(item);
+  });
+
+  container.appendChild(list);
+}
+
+function appendBatchList(container, scheduleDay) {
+  const batches = [
+    ...scheduleDay.batchHijnx.map(batch => ["Production Batch - Hijnx", batch]),
+    ...scheduleDay.batchSb.map(batch => ["Production Batch - SB", batch])
+  ];
+
+  if (!batches.length) return;
+
+  const batchList = document.createElement("div");
+  batchList.className = "schedule-batches";
+
+  batches.forEach(([label, batch]) => {
+    const item = document.createElement("div");
+    item.className = "schedule-batch";
+    item.textContent = batch.units
+      ? `${label}: ${batch.item} - ${batch.units} units`
+      : `${label}: ${batch.item}`;
+    batchList.appendChild(item);
+  });
+
+  container.appendChild(batchList);
+}
+
+function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
+  const activeSchedule = new Map();
+  const rangeStart = dateOnly(visibleStart);
+  const rangeEnd = dateOnly(visibleEnd);
+
+  for (let index = 0; index <= 13; index += 1) {
+    activeSchedule.set(toIsoDate(addDays(rangeStart, index)), {
+      batchHijnx: [],
+      batchSb: [],
+      tasks: []
+    });
+  }
+
+  rows.forEach(row => {
+    const [year, month, day] = row.schedule_date.split("-").map(Number);
+    const startDate = new Date(year, month - 1, day);
+    const payload = parseSchedulePayload(row.tasks);
+
+    if (activeSchedule.has(row.schedule_date)) {
+      const scheduleDay = activeSchedule.get(row.schedule_date);
+      scheduleDay.batchHijnx = payload.batchHijnx;
+      scheduleDay.batchSb = payload.batchSb;
+    }
+
+    payload.tasks.forEach(task => {
+      for (let offset = 0; offset < task.days; offset += 1) {
+        const activeDate = addDays(startDate, offset);
+        if (activeDate < rangeStart || activeDate > rangeEnd) continue;
+
+        const isoDate = toIsoDate(activeDate);
+        if (!activeSchedule.has(isoDate)) {
+          activeSchedule.set(isoDate, { batchHijnx: [], batchSb: [], tasks: [] });
+        }
+        activeSchedule.get(isoDate).tasks.push({ text: task.text });
+      }
+    });
+  });
+
+  return activeSchedule;
 }
 
 function renderSavedEntries() {
@@ -192,18 +374,25 @@ async function load() {
 function showTab(tabName) {
   const trackerTab = document.getElementById("trackerTab");
   const calculatorTab = document.getElementById("calculatorTab");
+  const scheduleTab = document.getElementById("scheduleTab");
   const buttons = document.querySelectorAll(".tab-button");
 
   trackerTab.classList.toggle("active", tabName === "tracker");
   calculatorTab.classList.toggle("active", tabName === "calculator");
+  scheduleTab.classList.toggle("active", tabName === "schedule");
 
   buttons.forEach(button => {
     const isActive =
       (tabName === "tracker" && button.textContent === "Time Entry") ||
-      (tabName === "calculator" && button.textContent === "Qty Calculator");
+      (tabName === "calculator" && button.textContent === "Qty Calculator") ||
+      (tabName === "schedule" && button.textContent === "Schedule");
 
     button.classList.toggle("active", isActive);
   });
+
+  if (tabName === "schedule") {
+    loadSchedule();
+  }
 }
 
 function createBulkTypeSelect() {
@@ -534,6 +723,92 @@ async function restorePendingTimer() {
   }
 
   applyTimerState(log);
+}
+
+async function loadSchedule() {
+  const weekStart = startOfWeek(new Date());
+  const weekEnd = addDays(weekStart, 13);
+  const from = toIsoDate(addDays(weekStart, -180));
+  const to = toIsoDate(weekEnd);
+  const res = await fetch(`/schedule?from=${from}&to=${to}`);
+
+  if (!res.ok) return;
+
+  const rows = await res.json();
+  const scheduleByDate = buildActiveScheduleByDate(rows, weekStart, weekEnd);
+  renderScheduleCalendar(weekStart, scheduleByDate);
+  renderWeeklyTasks(weekStart, scheduleByDate);
+}
+
+function renderScheduleCalendar(weekStart, scheduleByDate) {
+  const calendar = document.getElementById("scheduleCalendar");
+  const range = document.getElementById("scheduleRange");
+  calendar.innerHTML = "";
+
+  range.textContent = `${formatDisplayDate(toIsoDate(weekStart))} - ${formatDisplayDate(toIsoDate(addDays(weekStart, 13)))}`;
+
+  dayNames.forEach(dayName => {
+    const header = document.createElement("div");
+    header.className = "schedule-day-name";
+    header.textContent = dayName;
+    calendar.appendChild(header);
+  });
+
+  for (let index = 0; index < 14; index += 1) {
+    const date = addDays(weekStart, index);
+    const isoDate = toIsoDate(date);
+    const cell = document.createElement("div");
+    cell.className = "schedule-cell";
+
+    const dateLabel = document.createElement("div");
+    dateLabel.className = "schedule-date";
+    dateLabel.textContent = formatDisplayDate(isoDate);
+    cell.appendChild(dateLabel);
+
+    const scheduleDay = scheduleByDate.get(isoDate) || { batchHijnx: [], batchSb: [], tasks: [] };
+    appendBatchList(cell, scheduleDay);
+
+    const tasks = document.createElement("div");
+    tasks.className = "schedule-tasks";
+    appendTaskList(tasks, scheduleDay.tasks);
+    cell.appendChild(tasks);
+
+    calendar.appendChild(cell);
+  }
+}
+
+function renderWeeklyTasks(weekStart, scheduleByDate) {
+  const container = document.getElementById("weeklyTasks");
+  container.innerHTML = "";
+
+  for (let index = 0; index < 7; index += 1) {
+    const date = addDays(weekStart, index);
+    const isoDate = toIsoDate(date);
+    const scheduleDay = scheduleByDate.get(isoDate) || { batchHijnx: [], batchSb: [], tasks: [] };
+    if (!scheduleDay.tasks.length) continue;
+
+    const item = document.createElement("div");
+    item.className = "weekly-task-item";
+
+    const dateLabel = document.createElement("div");
+    dateLabel.className = "weekly-task-date";
+    dateLabel.textContent = `${dayNames[date.getDay()]} ${formatDisplayDate(isoDate)}`;
+    item.appendChild(dateLabel);
+
+    const tasks = document.createElement("div");
+    tasks.className = "schedule-tasks";
+    appendTaskList(tasks, scheduleDay.tasks);
+    item.appendChild(tasks);
+
+    container.appendChild(item);
+  }
+
+  if (!container.children.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-entries";
+    empty.textContent = "No weekly tasks scheduled.";
+    container.appendChild(empty);
+  }
 }
 
 load();

@@ -89,6 +89,97 @@
       font-weight: bold;
     }
 
+    .schedule-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .schedule-header h3 {
+      margin: 0;
+    }
+
+    .schedule-range {
+      color: #555;
+      font-size: 14px;
+    }
+
+    .schedule-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(120px, 1fr));
+      gap: 1px;
+      overflow-x: auto;
+      border: 1px solid #d8d8d2;
+      background: #d8d8d2;
+    }
+
+    .schedule-day-name,
+    .schedule-cell {
+      background: #fff;
+      min-height: 110px;
+      padding: 8px;
+    }
+
+    .schedule-day-name {
+      min-height: auto;
+      background: #ecece6;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .schedule-date {
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+
+    .schedule-tasks {
+      line-height: 1.35;
+    }
+
+    .schedule-batches {
+      display: grid;
+      gap: 5px;
+      margin-bottom: 8px;
+    }
+
+    .schedule-batch {
+      background: #eef5fb;
+      border-left: 3px solid #2364aa;
+      padding: 5px 6px;
+    }
+
+    .schedule-task-list {
+      margin: 0 0 0 20px;
+      padding: 0;
+    }
+
+    .schedule-task-list li {
+      margin-bottom: 4px;
+    }
+
+    .weekly-tasks {
+      margin-top: 18px;
+    }
+
+    .weekly-task-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .weekly-task-item {
+      border: 1px solid #d8d8d2;
+      background: #fff;
+      padding: 10px;
+    }
+
+    .weekly-task-date {
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+
     .saved-entries {
       margin-top: 24px;
     }
@@ -157,6 +248,10 @@
       table {
         min-width: 640px;
       }
+
+      .schedule-grid {
+        grid-template-columns: repeat(7, 140px);
+      }
     }
   </style>
 </head>
@@ -167,6 +262,7 @@
 <div class="tabs">
   <button class="tab-button active" type="button" onclick="showTab('tracker')">Time Entry</button>
   <button class="tab-button" type="button" onclick="showTab('calculator')">Qty Calculator</button>
+  <button class="tab-button" type="button" onclick="showTab('schedule')">Schedule</button>
 </div>
 
 <section id="trackerTab" class="tab-panel active">
@@ -222,6 +318,19 @@
   </datalist>
 
   <div class="calc-total">Total Qty: <span id="calcGrandTotal">0</span></div>
+</section>
+
+<section id="scheduleTab" class="tab-panel">
+  <div class="schedule-header">
+    <h3>Two Week Schedule</h3>
+    <div id="scheduleRange" class="schedule-range"></div>
+  </div>
+  <div id="scheduleCalendar" class="schedule-grid"></div>
+
+  <div class="weekly-tasks">
+    <h3>This Week's Tasks</h3>
+    <div id="weeklyTasks" class="weekly-task-list"></div>
+  </div>
 </section>
 
 <script src="employees.js"></script>

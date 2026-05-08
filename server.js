@@ -113,6 +113,10 @@ async function logLookupCount(table) {
   console.log(`${table} rows: ${rows[0].count}`);
 }
 
+function isIsoDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
 async function initializeDatabase() {
   await runSql(`
     CREATE TABLE IF NOT EXISTS items (
@@ -141,6 +145,14 @@ async function initializeDatabase() {
       paused_seconds INTEGER DEFAULT 0,
       pause_started_at TEXT,
       quantity INTEGER
+    )
+  `);
+
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS schedule_days (
+      schedule_date TEXT PRIMARY KEY,
+      tasks TEXT DEFAULT '',
+      updated_at TEXT
     )
   `);
 
@@ -175,6 +187,53 @@ app.get("/tasks", (req, res) => {
     if (err) return res.status(500).send(err.message);
     res.json(rows);
   });
+});
+
+/* ---------- SCHEDULE ---------- */
+app.get("/schedule", (req, res) => {
+  const { from, to } = req.query;
+
+  if (!isIsoDate(from) || !isIsoDate(to)) {
+    return res.status(400).send("Valid from and to dates are required");
+  }
+
+  db.all(
+    `SELECT schedule_date, tasks, updated_at
+     FROM schedule_days
+     WHERE schedule_date BETWEEN ? AND ?
+     ORDER BY schedule_date`,
+    [from, to],
+    (err, rows) => {
+      if (err) return res.status(500).send(err.message);
+      res.json(rows);
+    }
+  );
+});
+
+app.put("/admin/schedule/:date", (req, res) => {
+  const scheduleDate = req.params.date;
+  const tasks = String(req.body.tasks || "").trim();
+
+  if (!isIsoDate(scheduleDate)) {
+    return res.status(400).send("Invalid schedule date");
+  }
+
+  if (tasks.length > 5000) {
+    return res.status(400).send("Tasks are too long");
+  }
+
+  db.run(
+    `INSERT INTO schedule_days (schedule_date, tasks, updated_at)
+     VALUES (?, ?, datetime('now'))
+     ON CONFLICT(schedule_date) DO UPDATE SET
+       tasks = excluded.tasks,
+       updated_at = excluded.updated_at`,
+    [scheduleDate, tasks],
+    function (err) {
+      if (err) return res.status(500).send(err.message);
+      res.json({ message: "Schedule updated", schedule_date: scheduleDate, tasks });
+    }
+  );
 });
 
 /* ---------- START TIMER ---------- */
