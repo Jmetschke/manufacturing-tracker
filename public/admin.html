@@ -11,13 +11,28 @@
     .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
     .controls input, .controls select { flex: 1 1 180px; min-width: 0; }
     .controls button { flex: 0 1 auto; }
+    .edit-panel {
+      display: none;
+      border: 1px solid #ccc;
+      background: #f8f8f8;
+      margin: 16px 0;
+      padding: 12px;
+    }
+    .edit-panel.active { display: block; }
+    .edit-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+    .edit-grid input, .edit-grid select { flex: 1 1 180px; min-width: 0; }
+    .edit-actions { margin-top: 8px; }
+    .message { margin: 10px 0; }
+    .message.error { color: #a00000; }
+    .message.success { color: #176a2c; }
     #table { overflow-x: auto; width: 100%; }
 
     @media (max-width: 640px) {
       body { padding: 14px; }
-      .controls { flex-direction: column; }
-      .controls input, .controls select, .controls button { width: 100%; margin-left: 0; margin-right: 0; }
-      table { min-width: 720px; }
+      .controls, .edit-grid { flex-direction: column; }
+      .controls input, .controls select, .controls button,
+      .edit-grid input, .edit-grid select, .edit-actions button { width: 100%; margin-left: 0; margin-right: 0; }
+      table { min-width: 860px; }
     }
   </style>
 </head>
@@ -37,6 +52,25 @@
   <button onclick="loadReport()">Filter</button>
   <button onclick="exportCSV()">Export CSV</button>
 </div>
+
+<div id="message" class="message"></div>
+
+<section id="editPanel" class="edit-panel">
+  <h3>Edit Entry</h3>
+  <input type="hidden" id="edit_log_id">
+  <div class="edit-grid">
+    <input type="date" id="edit_work_date">
+    <select id="edit_employee"></select>
+    <select id="edit_item"></select>
+    <select id="edit_task"></select>
+    <input type="number" id="edit_quantity" min="0" step="1" placeholder="Quantity">
+    <input type="text" id="edit_time" placeholder="Time HH:MM:SS">
+  </div>
+  <div class="edit-actions">
+    <button type="button" onclick="saveEntryEdit()">Save Changes</button>
+    <button type="button" onclick="cancelEntryEdit()">Cancel</button>
+  </div>
+</section>
 
 <div id="summary"></div>
 <div id="table"></div>

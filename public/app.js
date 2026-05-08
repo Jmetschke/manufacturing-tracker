@@ -4,6 +4,76 @@ let currentLogId = null;
 let loadedItems = [];
 let pendingEntry = null;
 let savedEntries = [];
+let pausedSeconds = 0;
+let isTimerPaused = false;
+let pausedElapsedSeconds = 0;
+const pendingTimerStorageKey = "productionTracker.pendingTimer";
+
+function savePendingTimer(state) {
+  localStorage.setItem(pendingTimerStorageKey, JSON.stringify(state));
+}
+
+function loadPendingTimer() {
+  const raw = localStorage.getItem(pendingTimerStorageKey);
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    localStorage.removeItem(pendingTimerStorageKey);
+    return null;
+  }
+}
+
+function clearPendingTimer() {
+  localStorage.removeItem(pendingTimerStorageKey);
+}
+
+function selectValue(id, value) {
+  const element = document.getElementById(id);
+  if (value !== undefined && value !== null) {
+    element.value = String(value);
+  }
+}
+
+function buildPendingEntry(log) {
+  return {
+    employee: log.employee,
+    workDate: log.work_date,
+    item: log.item,
+    task: log.task,
+    durationSeconds: Number(log.duration_seconds) || 0
+  };
+}
+
+function updatePauseButton() {
+  const pauseBtn = document.getElementById("pauseBtn");
+  if (!pauseBtn) return;
+
+  pauseBtn.textContent = isTimerPaused ? "Resume" : "Pause";
+  pauseBtn.disabled = !currentLogId || (!startTime && !isTimerPaused);
+}
+
+function applyTimerState(log) {
+  pausedSeconds = Number(log.paused_seconds) || 0;
+  isTimerPaused = Boolean(log.pause_started_at);
+  pausedElapsedSeconds = Math.max(0, Number(log.elapsed_seconds) || 0);
+
+  if (isTimerPaused) {
+    startTime = Number(log.start_epoch) * 1000;
+    clearInterval(timerInterval);
+    timerInterval = null;
+    document.getElementById("timer").innerText = formatSeconds(pausedElapsedSeconds);
+    updatePauseButton();
+    return;
+  }
+
+  startTime = Number(log.start_epoch) * 1000;
+  clearInterval(timerInterval);
+  timerInterval = setInterval(updateTimer, 1000);
+  updateTimer();
+  updatePauseButton();
+}
 
 function loadEmployeeOptions() {
   const employeeSel = document.getElementById("employee");
@@ -111,10 +181,12 @@ async function load() {
 
   document.getElementById("work_date").valueAsDate = new Date();
   document.getElementById("qty").disabled = true;
+  document.getElementById("pauseBtn").disabled = true;
   document.getElementById("saveBtn").disabled = true;
 
   renderSavedEntries();
   addCalcRow();
+  await restorePendingTimer();
 }
 
 function showTab(tabName) {
@@ -277,7 +349,10 @@ async function startTimer() {
   const data = await res.json();
   currentLogId = data.log_id;
 
-  startTime = Date.now();
+  startTime = Number(data.start_epoch) * 1000;
+  pausedSeconds = 0;
+  isTimerPaused = false;
+  pausedElapsedSeconds = 0;
   pendingEntry = {
     employee,
     workDate: work_date,
@@ -285,10 +360,12 @@ async function startTimer() {
     task: taskSel.options[taskSel.selectedIndex].text,
     durationSeconds: 0
   };
+  savePendingTimer({ logId: currentLogId });
 
   clearInterval(timerInterval);
   timerInterval = setInterval(updateTimer, 1000);
   updateTimer();
+  updatePauseButton();
 }
 
 async function stopTimer() {
@@ -311,10 +388,16 @@ async function stopTimer() {
 
   clearInterval(timerInterval);
   timerInterval = null;
-  if (pendingEntry && startTime) {
-    pendingEntry.durationSeconds = Math.floor((Date.now() - startTime) / 1000);
+  const data = await res.json();
+  if (pendingEntry) {
+    pendingEntry.durationSeconds = Number(data.duration_seconds) || 0;
   }
   startTime = null;
+  pausedSeconds = 0;
+  isTimerPaused = false;
+  pausedElapsedSeconds = 0;
+  savePendingTimer({ logId: currentLogId });
+  updatePauseButton();
 
   const qtyInput = document.getElementById("qty");
   const saveBtn = document.getElementById("saveBtn");
@@ -324,6 +407,30 @@ async function stopTimer() {
   qtyInput.focus();
 
   alert("Timer stopped. Enter quantity to finish.");
+}
+
+async function pauseTimer() {
+  if (!currentLogId || (!startTime && !isTimerPaused)) {
+    alert("No active timer");
+    return;
+  }
+
+  const endpoint = isTimerPaused ? "/resume" : "/pause";
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ log_id: currentLogId })
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    alert((isTimerPaused ? "Resume" : "Pause") + " failed: " + text);
+    return;
+  }
+
+  const data = await res.json();
+  applyTimerState(data);
+  savePendingTimer({ logId: currentLogId });
 }
 
 async function saveQuantity() {
@@ -364,20 +471,69 @@ async function saveQuantity() {
 
   currentLogId = null;
   pendingEntry = null;
+  startTime = null;
+  pausedSeconds = 0;
+  isTimerPaused = false;
+  pausedElapsedSeconds = 0;
+  clearPendingTimer();
   qtyInput.value = "";
   qtyInput.disabled = true;
   saveBtn.disabled = true;
+  updatePauseButton();
   document.getElementById("timer").innerText = "00:00:00";
 
   alert("Entry completed");
 }
 
 function updateTimer() {
-  if (!startTime) return;
+  if (!startTime || isTimerPaused) return;
 
-  const elapsed = Math.floor((Date.now() - startTime) / 1000);
+  const elapsed = Math.max(0, Math.floor((Date.now() - startTime) / 1000) - pausedSeconds);
 
   document.getElementById("timer").innerText = formatSeconds(elapsed);
+}
+
+async function restorePendingTimer() {
+  const storedTimer = loadPendingTimer();
+  if (!storedTimer || !storedTimer.logId) return;
+
+  const res = await fetch(`/timer-state/${storedTimer.logId}`);
+  if (res.status === 404) {
+    clearPendingTimer();
+    return;
+  }
+
+  if (!res.ok) return;
+
+  const log = await res.json();
+  if (log.quantity !== null && log.quantity !== undefined) {
+    clearPendingTimer();
+    return;
+  }
+
+  currentLogId = log.log_id;
+  pendingEntry = buildPendingEntry(log);
+
+  selectValue("employee", log.employee);
+  selectValue("work_date", log.work_date);
+  selectValue("item", log.item_id);
+  selectValue("task", log.task_id);
+
+  if (log.end_time) {
+    startTime = null;
+    pausedSeconds = 0;
+    isTimerPaused = false;
+    pausedElapsedSeconds = 0;
+    clearInterval(timerInterval);
+    timerInterval = null;
+    document.getElementById("timer").innerText = formatSeconds(pendingEntry.durationSeconds);
+    document.getElementById("qty").disabled = false;
+    document.getElementById("saveBtn").disabled = false;
+    updatePauseButton();
+    return;
+  }
+
+  applyTimerState(log);
 }
 
 load();

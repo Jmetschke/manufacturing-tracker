@@ -138,6 +138,8 @@ async function initializeDatabase() {
       start_time TEXT,
       end_time TEXT,
       duration_seconds INTEGER,
+      paused_seconds INTEGER DEFAULT 0,
+      pause_started_at TEXT,
       quantity INTEGER
     )
   `);
@@ -149,6 +151,8 @@ async function initializeDatabase() {
   await addMissingColumn("time_logs", "start_time", "TEXT");
   await addMissingColumn("time_logs", "end_time", "TEXT");
   await addMissingColumn("time_logs", "duration_seconds", "INTEGER");
+  await addMissingColumn("time_logs", "paused_seconds", "INTEGER DEFAULT 0");
+  await addMissingColumn("time_logs", "pause_started_at", "TEXT");
   await addMissingColumn("time_logs", "quantity", "INTEGER");
 
   await seedNames("items", itemNames);
@@ -186,8 +190,8 @@ app.post("/start", (req, res) => {
   }
 
   db.run(
-    `INSERT INTO time_logs (item_id, task_id, employee, work_date, start_time)
-     VALUES (?, ?, ?, ?, datetime('now'))`,
+    `INSERT INTO time_logs (item_id, task_id, employee, work_date, start_time, paused_seconds)
+     VALUES (?, ?, ?, ?, datetime('now'), 0)`,
     [item_id, task_id, employee, work_date],
     function (err) {
       if (err) {
@@ -195,7 +199,125 @@ app.post("/start", (req, res) => {
         return res.status(500).send(err.message);
       }
 
-      res.json({ log_id: this.lastID });
+      db.get(
+        `SELECT id AS log_id,
+                start_time,
+                strftime('%s', start_time) AS start_epoch
+         FROM time_logs
+         WHERE id = ?`,
+        [this.lastID],
+        (selectErr, row) => {
+          if (selectErr) {
+            console.error(selectErr);
+            return res.status(500).send(selectErr.message);
+          }
+
+          res.json(row);
+        }
+      );
+    }
+  );
+});
+
+function timerStateSelect(whereClause) {
+  return `
+    SELECT
+      l.id AS log_id,
+      l.item_id,
+      l.task_id,
+      l.employee,
+      l.work_date,
+      l.start_time,
+      l.end_time,
+      l.duration_seconds,
+      COALESCE(l.paused_seconds, 0) AS paused_seconds,
+      l.pause_started_at,
+      l.quantity,
+      strftime('%s', l.start_time) AS start_epoch,
+      strftime('%s', l.pause_started_at) AS pause_started_epoch,
+      CASE
+        WHEN l.end_time IS NOT NULL THEN COALESCE(l.duration_seconds, 0)
+        WHEN l.pause_started_at IS NOT NULL THEN
+          strftime('%s', l.pause_started_at) - strftime('%s', l.start_time) - COALESCE(l.paused_seconds, 0)
+        ELSE
+          strftime('%s', 'now') - strftime('%s', l.start_time) - COALESCE(l.paused_seconds, 0)
+      END AS elapsed_seconds,
+      COALESCE(i.name, 'Unknown Item') AS item,
+      COALESCE(t.name, 'Unknown Task') AS task
+    FROM time_logs l
+    LEFT JOIN items i ON i.id = l.item_id
+    LEFT JOIN tasks t ON t.id = l.task_id
+    ${whereClause}
+  `;
+}
+
+/* ---------- TIMER STATE ---------- */
+app.get("/timer-state/:id", (req, res) => {
+  db.get(timerStateSelect("WHERE l.id = ?"), [req.params.id], (err, row) => {
+    if (err) return res.status(500).send(err.message);
+    if (!row) return res.status(404).send("Timer not found");
+
+    res.json(row);
+  });
+});
+
+/* ---------- PAUSE TIMER ---------- */
+app.post("/pause", (req, res) => {
+  const { log_id } = req.body;
+
+  if (!log_id) {
+    return res.status(400).send("Missing log_id");
+  }
+
+  db.run(
+    `UPDATE time_logs
+     SET pause_started_at = datetime('now')
+     WHERE id = ?
+     AND end_time IS NULL
+     AND pause_started_at IS NULL`,
+    [log_id],
+    function (err) {
+      if (err) return res.status(500).send(err.message);
+
+      if (this.changes === 0) {
+        return res.status(400).send("Timer is already paused, stopped, or invalid");
+      }
+
+      db.get(timerStateSelect("WHERE l.id = ?"), [log_id], (selectErr, row) => {
+        if (selectErr) return res.status(500).send(selectErr.message);
+        res.json(row);
+      });
+    }
+  );
+});
+
+/* ---------- RESUME TIMER ---------- */
+app.post("/resume", (req, res) => {
+  const { log_id } = req.body;
+
+  if (!log_id) {
+    return res.status(400).send("Missing log_id");
+  }
+
+  db.run(
+    `UPDATE time_logs
+     SET paused_seconds = COALESCE(paused_seconds, 0) + strftime('%s','now') - strftime('%s', pause_started_at),
+         pause_started_at = NULL
+     WHERE id = ?
+     AND end_time IS NULL
+     AND pause_started_at IS NOT NULL`,
+    [log_id],
+    function (err) {
+      if (err) return res.status(500).send(err.message);
+
+      if (this.changes === 0) {
+        return res.status(400).send("Timer is not paused, stopped, or invalid");
+      }
+
+      db.get(timerStateSelect("WHERE l.id = ?"), [log_id], (selectErr, row) => {
+        if (selectErr) return res.status(500).send(selectErr.message);
+        res.json(row);
+      });
     }
   );
 });
@@ -211,7 +333,14 @@ app.post("/stop", (req, res) => {
   db.run(
     `UPDATE time_logs
      SET end_time = datetime('now'),
-         duration_seconds = strftime('%s','now') - strftime('%s', start_time)
+         duration_seconds =
+           CASE
+             WHEN pause_started_at IS NOT NULL THEN
+               strftime('%s', pause_started_at) - strftime('%s', start_time) - COALESCE(paused_seconds, 0)
+             ELSE
+               strftime('%s','now') - strftime('%s', start_time) - COALESCE(paused_seconds, 0)
+           END,
+         pause_started_at = NULL
      WHERE id = ?
      AND end_time IS NULL`,
     [log_id],
@@ -222,7 +351,16 @@ app.post("/stop", (req, res) => {
         return res.status(400).send("Timer already stopped or invalid log_id");
       }
 
-      res.json({ message: "Stopped", log_id });
+      db.get(
+        `SELECT id AS log_id, duration_seconds
+         FROM time_logs
+         WHERE id = ?`,
+        [log_id],
+        (selectErr, row) => {
+          if (selectErr) return res.status(500).send(selectErr.message);
+          res.json({ message: "Stopped", ...row });
+        }
+      );
     }
   );
 });
@@ -254,6 +392,83 @@ app.post("/update-qty", (req, res) => {
       }
 
       res.json({ message: "Quantity updated" });
+    }
+  );
+});
+
+/* ---------- ADMIN ENTRIES ---------- */
+app.get("/admin/entries", (req, res) => {
+  db.all(`
+    SELECT
+      l.id AS log_id,
+      l.item_id,
+      l.task_id,
+      COALESCE(i.name, 'Unknown Item') AS item,
+      COALESCE(t.name, 'Unknown Task') AS task,
+      l.employee,
+      l.work_date,
+      COALESCE(l.quantity, 0) AS quantity,
+      COALESCE(l.duration_seconds, 0) AS duration_seconds,
+      CASE
+        WHEN COALESCE(l.quantity, 0) = 0 THEN 0
+        ELSE COALESCE(l.duration_seconds, 0) / COALESCE(l.quantity, 0)
+      END AS sec_per_unit
+    FROM time_logs l
+    LEFT JOIN items i ON i.id = l.item_id
+    LEFT JOIN tasks t ON t.id = l.task_id
+    WHERE l.end_time IS NOT NULL
+    ORDER BY l.work_date DESC, l.id DESC
+  `, [], (err, rows) => {
+    if (err) return res.status(500).send(err.message);
+    res.json(rows);
+  });
+});
+
+app.put("/admin/entries/:id", (req, res) => {
+  const { employee, work_date } = req.body;
+  let { item_id, task_id } = req.body;
+  let { quantity, duration_seconds } = req.body;
+
+  if (!employee || !work_date || !item_id || !task_id) {
+    return res.status(400).send("Employee, date, item, and task are required");
+  }
+
+  item_id = Number(item_id);
+  task_id = Number(task_id);
+  quantity = Number(quantity);
+  duration_seconds = Number(duration_seconds);
+
+  if (!Number.isInteger(item_id) || !Number.isInteger(task_id)) {
+    return res.status(400).send("Invalid item or task");
+  }
+
+  if (!Number.isInteger(quantity) || quantity < 0) {
+    return res.status(400).send("Quantity must be a whole number zero or greater");
+  }
+
+  if (!Number.isInteger(duration_seconds) || duration_seconds < 0) {
+    return res.status(400).send("Time must be a whole number zero or greater");
+  }
+
+  db.run(
+    `UPDATE time_logs
+     SET item_id = ?,
+         task_id = ?,
+         employee = ?,
+         work_date = ?,
+         quantity = ?,
+         duration_seconds = ?
+     WHERE id = ?
+     AND end_time IS NOT NULL`,
+    [item_id, task_id, employee, work_date, quantity, duration_seconds, req.params.id],
+    function (err) {
+      if (err) return res.status(500).send(err.message);
+
+      if (this.changes === 0) {
+        return res.status(404).send("Completed entry not found");
+      }
+
+      res.json({ message: "Entry updated" });
     }
   );
 });
