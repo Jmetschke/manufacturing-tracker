@@ -2,6 +2,7 @@
 <html>
 <head>
   <title>Production Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -56,6 +57,7 @@
 
     button {
       cursor: pointer;
+      touch-action: manipulation;
     }
 
     table {
@@ -279,10 +281,10 @@
   <h3>Timer: <span id="timer">00:00:00</span></h3>
 
   <div class="timer-actions">
-    <button onclick="startTimer()">Start</button>
-    <button id="pauseBtn" onclick="pauseTimer()">Pause</button>
-    <button onclick="stopTimer()">Stop</button>
-    <button id="saveBtn" onclick="saveQuantity()">Save Qty</button>
+    <button type="button" onclick="startTimer()">Start</button>
+    <button type="button" id="pauseBtn" onclick="pauseTimer()">Pause</button>
+    <button type="button" onclick="stopTimer()">Stop</button>
+    <button type="button" id="saveBtn" onclick="saveQuantity()">Save Qty</button>
   </div>
 
   <div class="saved-entries">

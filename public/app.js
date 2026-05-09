@@ -11,23 +11,39 @@ const pendingTimerStorageKey = "productionTracker.pendingTimer";
 const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function savePendingTimer(state) {
-  localStorage.setItem(pendingTimerStorageKey, JSON.stringify(state));
+  try {
+    localStorage.setItem(pendingTimerStorageKey, JSON.stringify(state));
+  } catch (err) {
+    console.warn("Could not save pending timer state:", err);
+  }
 }
 
 function loadPendingTimer() {
-  const raw = localStorage.getItem(pendingTimerStorageKey);
+  let raw = null;
+
+  try {
+    raw = localStorage.getItem(pendingTimerStorageKey);
+  } catch (err) {
+    console.warn("Could not load pending timer state:", err);
+    return null;
+  }
+
   if (!raw) return null;
 
   try {
     return JSON.parse(raw);
   } catch (err) {
-    localStorage.removeItem(pendingTimerStorageKey);
+    clearPendingTimer();
     return null;
   }
 }
 
 function clearPendingTimer() {
-  localStorage.removeItem(pendingTimerStorageKey);
+  try {
+    localStorage.removeItem(pendingTimerStorageKey);
+  } catch (err) {
+    console.warn("Could not clear pending timer state:", err);
+  }
 }
 
 function selectValue(id, value) {
