@@ -2,9 +2,11 @@
 <html>
 <head>
   <title>Admin Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     body { font-family: Arial; padding: 20px; }
     input, select, button { box-sizing: border-box; font-size: 15px; margin: 4px; padding: 8px; }
+    button { cursor: pointer; touch-action: manipulation; }
     table { border-collapse: collapse; width: 100%; margin-top: 15px; }
     th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
     th { background: #eee; }
@@ -136,13 +138,22 @@
     #table { overflow-x: auto; width: 100%; }
 
     @media (max-width: 640px) {
-      body { padding: 14px; }
-      .admin-tabs, .controls, .edit-grid, .calendar-tools { flex-direction: column; }
+      html { font-size: 18px; }
+      body { padding: 16px; font-size: 18px; }
+      h2 { font-size: 1.6rem; }
+      h3 { font-size: 1.25rem; }
+      input, select, button { min-height: 52px; font-size: 18px; padding: 12px; }
+      .admin-tabs, .controls, .edit-grid, .calendar-tools { flex-direction: column; gap: 10px; }
+      .admin-tab-button { width: 100%; margin-left: 0; margin-right: 0; padding: 14px 12px; text-align: left; font-size: 18px; }
       .controls input, .controls select, .controls button,
       .edit-grid input, .edit-grid select, .edit-actions button,
       .calendar-tools input, .calendar-tools button { width: 100%; margin-left: 0; margin-right: 0; }
-      table { min-width: 860px; }
-      .admin-calendar-grid { grid-template-columns: repeat(7, 140px); }
+      table { min-width: 860px; font-size: 16px; }
+      th, td { padding: 10px; }
+      .admin-calendar-grid { grid-template-columns: repeat(7, 160px); }
+      .admin-day-name,
+      .admin-calendar-day,
+      .admin-batch-item { font-size: 16px; }
       .batch-row,
       .schedule-task-row { grid-template-columns: 28px 1fr; }
       .batch-row button,

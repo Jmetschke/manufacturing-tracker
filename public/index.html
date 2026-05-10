@@ -226,8 +226,29 @@
     }
 
     @media (max-width: 640px) {
+      html {
+        font-size: 18px;
+      }
+
       body {
-        padding: 14px;
+        padding: 16px;
+        font-size: 18px;
+      }
+
+      h2 {
+        font-size: 1.6rem;
+      }
+
+      h3 {
+        font-size: 1.25rem;
+      }
+
+      input,
+      select,
+      button {
+        min-height: 52px;
+        font-size: 18px;
+        padding: 12px;
       }
 
       .tabs,
@@ -235,6 +256,7 @@
       .timer-actions,
       .calculator-actions {
         flex-direction: column;
+        gap: 10px;
       }
 
       .tab-button,
@@ -247,12 +269,32 @@
         margin-right: 0;
       }
 
+      .tab-button {
+        padding: 14px 12px;
+        text-align: left;
+      }
+
       table {
         min-width: 640px;
+        font-size: 16px;
+      }
+
+      th,
+      td {
+        padding: 10px;
+      }
+
+      .calc-total {
+        font-size: 1.4rem;
+      }
+
+      .weekly-task-item,
+      .schedule-cell {
+        font-size: 16px;
       }
 
       .schedule-grid {
-        grid-template-columns: repeat(7, 140px);
+        grid-template-columns: repeat(7, 160px);
       }
     }
   </style>
