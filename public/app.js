@@ -128,6 +128,25 @@ function addDays(date, days) {
   return next;
 }
 
+function isWeekend(date) {
+  return date.getDay() === 0 || date.getDay() === 6;
+}
+
+function getProjectedWorkDates(startDate, days) {
+  const dates = [];
+  let current = dateOnly(startDate);
+
+  while (dates.length < days) {
+    if (!isWeekend(current)) {
+      dates.push(current);
+    }
+
+    current = addDays(current, 1);
+  }
+
+  return dates;
+}
+
 function dateOnly(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
@@ -280,16 +299,15 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
     }
 
     payload.tasks.forEach(task => {
-      for (let offset = 0; offset < task.days; offset += 1) {
-        const activeDate = addDays(startDate, offset);
-        if (activeDate < rangeStart || activeDate > rangeEnd) continue;
+      getProjectedWorkDates(startDate, task.days).forEach(activeDate => {
+        if (activeDate < rangeStart || activeDate > rangeEnd) return;
 
         const isoDate = toIsoDate(activeDate);
         if (!activeSchedule.has(isoDate)) {
           activeSchedule.set(isoDate, { batchHijnx: [], batchSb: [], tasks: [] });
         }
         activeSchedule.get(isoDate).tasks.push({ text: task.text });
-      }
+      });
     });
   });
 

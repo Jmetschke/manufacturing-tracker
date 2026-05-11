@@ -155,6 +155,12 @@ function addDays(date, days) {
   return next;
 }
 
+function isWeekendIsoDate(value) {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getDay() === 0 || date.getDay() === 6;
+}
+
 function monthStart(monthValue) {
   const [year, month] = monthValue.split("-").map(Number);
   return new Date(year, month - 1, 1);
@@ -736,13 +742,15 @@ function populateScheduleTaskRows(tasks) {
   lines.forEach(task => addScheduleTask(task.text, task.days));
 }
 
-function buildSchedulePayload() {
-  const tasks = Array.from(document.querySelectorAll(".schedule-task-row"))
-    .map(row => ({
-      text: row.querySelector(".schedule-task-input").value.trim(),
-      days: Math.max(1, Number.parseInt(row.querySelector(".schedule-task-days").value, 10) || 1)
-    }))
-    .filter(task => task.text);
+function buildSchedulePayload(includeTasks = true) {
+  const tasks = includeTasks
+    ? Array.from(document.querySelectorAll(".schedule-task-row"))
+        .map(row => ({
+          text: row.querySelector(".schedule-task-input").value.trim(),
+          days: Math.max(1, Number.parseInt(row.querySelector(".schedule-task-days").value, 10) || 1)
+        }))
+        .filter(task => task.text)
+    : [];
 
   return JSON.stringify({
     batchHijnx: getBatchValues("hijnx"),
@@ -753,12 +761,15 @@ function buildSchedulePayload() {
 
 function editScheduleDay(isoDate) {
   const payload = parseSchedulePayload(adminScheduleRows.get(isoDate));
+  const isWeekendDay = isWeekendIsoDate(isoDate);
+  const taskSection = document.querySelector(".schedule-task-section");
 
   document.getElementById("schedule_edit_date").value = isoDate;
   document.getElementById("scheduleEditLabel").textContent = formatDisplayDate(isoDate);
   populateBatchRows("hijnx", payload.batchHijnx);
   populateBatchRows("sb", payload.batchSb);
-  populateScheduleTaskRows(adminScheduleRows.get(isoDate) || "");
+  taskSection.hidden = isWeekendDay;
+  populateScheduleTaskRows(isWeekendDay ? "" : adminScheduleRows.get(isoDate) || "");
   document.getElementById("scheduleEditor").classList.add("active");
   showMessage("");
   getBatchRows("hijnx").querySelector(".batch-input").focus();
@@ -770,11 +781,12 @@ function cancelScheduleEdit() {
   getBatchRows("hijnx").innerHTML = "";
   getBatchRows("sb").innerHTML = "";
   document.getElementById("scheduleTaskRows").innerHTML = "";
+  document.querySelector(".schedule-task-section").hidden = false;
 }
 
 async function saveScheduleDay() {
   const scheduleDate = document.getElementById("schedule_edit_date").value;
-  const tasks = buildSchedulePayload();
+  const tasks = buildSchedulePayload(!isWeekendIsoDate(scheduleDate));
 
   if (!scheduleDate) return;
 

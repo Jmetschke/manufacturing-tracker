@@ -117,6 +117,77 @@ function isIsoDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
+function isWeekendIsoDate(value) {
+  if (!isIsoDate(value)) return false;
+
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getDay() === 0 || date.getDay() === 6;
+}
+
+function parseSchedulePayloadForCleanup(rawValue) {
+  const empty = {
+    batchHijnx: [],
+    batchSb: [],
+    tasks: []
+  };
+
+  if (!rawValue) return empty;
+
+  try {
+    const parsed = JSON.parse(rawValue);
+    if (parsed && !Array.isArray(parsed) && typeof parsed === "object") {
+      return {
+        batchHijnx: Array.isArray(parsed.batchHijnx) ? parsed.batchHijnx : [],
+        batchSb: Array.isArray(parsed.batchSb) ? parsed.batchSb : [],
+        tasks: Array.isArray(parsed.tasks) ? parsed.tasks : []
+      };
+    }
+
+    if (Array.isArray(parsed)) {
+      return {
+        ...empty,
+        tasks: parsed
+      };
+    }
+  } catch (err) {
+    return {
+      ...empty,
+      tasks: String(rawValue)
+        .split("\n")
+        .map(line => line.trim())
+        .filter(Boolean)
+        .map(text => ({ text, days: 1 }))
+    };
+  }
+
+  return empty;
+}
+
+function removeScheduleTasks(rawValue) {
+  const payload = parseSchedulePayloadForCleanup(rawValue);
+  payload.tasks = [];
+  return JSON.stringify(payload);
+}
+
+async function clearWeekendScheduleTasks() {
+  const rows = await allSql("SELECT schedule_date, tasks FROM schedule_days");
+
+  for (const row of rows) {
+    if (!isWeekendIsoDate(row.schedule_date)) continue;
+
+    const payload = parseSchedulePayloadForCleanup(row.tasks);
+    if (!payload.tasks.length) continue;
+
+    payload.tasks = [];
+    await runSql(
+      "UPDATE schedule_days SET tasks = ?, updated_at = datetime('now') WHERE schedule_date = ?",
+      [JSON.stringify(payload), row.schedule_date]
+    );
+    console.log(`Removed weekend calendar tasks from ${row.schedule_date}`);
+  }
+}
+
 async function initializeDatabase() {
   await runSql(`
     CREATE TABLE IF NOT EXISTS items (
@@ -166,6 +237,7 @@ async function initializeDatabase() {
   await addMissingColumn("time_logs", "paused_seconds", "INTEGER DEFAULT 0");
   await addMissingColumn("time_logs", "pause_started_at", "TEXT");
   await addMissingColumn("time_logs", "quantity", "INTEGER");
+  await clearWeekendScheduleTasks();
 
   await seedNames("items", itemNames);
   await seedNames("tasks", taskNames);
@@ -222,16 +294,18 @@ app.put("/admin/schedule/:date", (req, res) => {
     return res.status(400).send("Tasks are too long");
   }
 
+  const savedTasks = isWeekendIsoDate(scheduleDate) ? removeScheduleTasks(tasks) : tasks;
+
   db.run(
     `INSERT INTO schedule_days (schedule_date, tasks, updated_at)
      VALUES (?, ?, datetime('now'))
      ON CONFLICT(schedule_date) DO UPDATE SET
        tasks = excluded.tasks,
        updated_at = excluded.updated_at`,
-    [scheduleDate, tasks],
+    [scheduleDate, savedTasks],
     function (err) {
       if (err) return res.status(500).send(err.message);
-      res.json({ message: "Schedule updated", schedule_date: scheduleDate, tasks });
+      res.json({ message: "Schedule updated", schedule_date: scheduleDate, tasks: savedTasks });
     }
   );
 });
