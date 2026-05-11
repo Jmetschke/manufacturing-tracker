@@ -639,11 +639,19 @@ async function pauseTimer() {
   }
 
   const endpoint = isTimerPaused ? "/resume" : "/pause";
-  const res = await fetch(endpoint, {
+  let res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ log_id: currentLogId })
   });
+
+  if (!res.ok && isTimerPaused) {
+    res = await fetch("/restart", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ log_id: currentLogId })
+    });
+  }
 
   if (!res.ok) {
     const text = await res.text();

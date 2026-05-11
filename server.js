@@ -402,27 +402,67 @@ app.post("/pause", (req, res) => {
     return res.status(400).send("Missing log_id");
   }
 
-  db.run(
-    `UPDATE time_logs
-     SET pause_started_at = datetime('now')
-     WHERE id = ?
-     AND end_time IS NULL
-     AND pause_started_at IS NULL`,
-    [log_id],
-    function (err) {
-      if (err) return res.status(500).send(err.message);
+  db.get(timerStateSelect("WHERE l.id = ?"), [log_id], (stateErr, current) => {
+    if (stateErr) return res.status(500).send(stateErr.message);
+    if (!current) return res.status(404).send("Timer not found");
+    if (current.end_time) return res.status(400).send("Timer is already stopped");
+    if (current.pause_started_at) return res.status(400).send("Timer is already paused");
 
-      if (this.changes === 0) {
-        return res.status(400).send("Timer is already paused, stopped, or invalid");
+    db.run(
+      `UPDATE time_logs
+       SET pause_started_at = datetime('now')
+       WHERE id = ?
+       AND end_time IS NULL
+       AND pause_started_at IS NULL`,
+      [log_id],
+      err => {
+        if (err) return res.status(500).send(err.message);
+
+        db.get(timerStateSelect("WHERE l.id = ?"), [log_id], (selectErr, row) => {
+          if (selectErr) return res.status(500).send(selectErr.message);
+          if (!row || !row.pause_started_at) {
+            return res.status(400).send("Timer could not be paused");
+          }
+          res.json(row);
+        });
       }
-
-      db.get(timerStateSelect("WHERE l.id = ?"), [log_id], (selectErr, row) => {
-        if (selectErr) return res.status(500).send(selectErr.message);
-        res.json(row);
-      });
-    }
-  );
+    );
+  });
 });
+
+function secondsSinceNowSql(columnName) {
+  return `strftime('%s','now') - strftime('%s', ${columnName})`;
+}
+
+function resumeTimer(logId, res) {
+  db.get(timerStateSelect("WHERE l.id = ?"), [logId], (stateErr, current) => {
+    if (stateErr) return res.status(500).send(stateErr.message);
+    if (!current) return res.status(404).send("Timer not found");
+    if (current.end_time) return res.status(400).send("Timer is already stopped");
+    if (!current.pause_started_at) return res.status(400).send("Timer is not paused");
+
+    db.run(
+      `UPDATE time_logs
+       SET paused_seconds = COALESCE(paused_seconds, 0) + ${secondsSinceNowSql("pause_started_at")},
+           pause_started_at = NULL
+       WHERE id = ?
+       AND end_time IS NULL
+       AND pause_started_at IS NOT NULL`,
+      [logId],
+      err => {
+        if (err) return res.status(500).send(err.message);
+
+        db.get(timerStateSelect("WHERE l.id = ?"), [logId], (selectErr, row) => {
+          if (selectErr) return res.status(500).send(selectErr.message);
+          if (!row || row.pause_started_at) {
+            return res.status(400).send("Timer could not be resumed");
+          }
+          res.json(row);
+        });
+      }
+    );
+  });
+}
 
 /* ---------- RESUME TIMER ---------- */
 app.post("/resume", (req, res) => {
@@ -432,27 +472,18 @@ app.post("/resume", (req, res) => {
     return res.status(400).send("Missing log_id");
   }
 
-  db.run(
-    `UPDATE time_logs
-     SET paused_seconds = COALESCE(paused_seconds, 0) + strftime('%s','now') - strftime('%s', pause_started_at),
-         pause_started_at = NULL
-     WHERE id = ?
-     AND end_time IS NULL
-     AND pause_started_at IS NOT NULL`,
-    [log_id],
-    function (err) {
-      if (err) return res.status(500).send(err.message);
+  resumeTimer(log_id, res);
+});
 
-      if (this.changes === 0) {
-        return res.status(400).send("Timer is not paused, stopped, or invalid");
-      }
+/* ---------- LEGACY RESUME TIMER ---------- */
+app.post("/restart", (req, res) => {
+  const { log_id } = req.body;
 
-      db.get(timerStateSelect("WHERE l.id = ?"), [log_id], (selectErr, row) => {
-        if (selectErr) return res.status(500).send(selectErr.message);
-        res.json(row);
-      });
-    }
-  );
+  if (!log_id) {
+    return res.status(400).send("Missing log_id");
+  }
+
+  resumeTimer(log_id, res);
 });
 
 /* ---------- STOP TIMER ---------- */
