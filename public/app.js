@@ -359,10 +359,18 @@ function renderSavedEntries() {
 }
 
 const bulkTypes = [
-  { label: "Speed Rack(20)", value: 80 },
-  { label: "Sheetpan", value: 4 },
-  { label: "Mold(10g)", value: 40 },
-  { label: "Mold(2.4g)", value: 112 },
+  { label: "Speed Rack(1pks)", value: 2400 },
+  { label: "Speed Rack(2pks)", value: 1200 },
+  { label: "Speed Rack(10pks)", value: 1000 },
+  { label: "Speed Rack(3pks)", value: 3360 },
+  { label: "Sheet Pan(1pks)", value: 120 },
+  { label: "Sheetpan(2pks)", value: 60 },
+  { label: "Sheetpan(10pk)", value: 50 },
+  { label: "Sheetpan(3pk)", value: 168 },
+  { label: "Mold(10g 1pk)", value: 40 },
+  { label: "Mold(10g 2pk)", value: 20 },
+  { label: "Mold(2.4g 10pk)", value: 12.6 },
+  { label: "Mold (2.4g 3pk)", value: 42 },
   { label: "Band og Bags(100)", value: 100 },
   { label: "Band of Bags(50)", value: 50 },
   { label: "Bulk Units(1unit)", value: 1 }
