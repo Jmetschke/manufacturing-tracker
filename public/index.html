@@ -225,6 +225,56 @@
       width: 100%;
     }
 
+    .deliveries-section {
+      margin-top: 18px;
+    }
+
+    .delivery-card {
+      border: 1px solid #d8d8d2;
+      background: #fff;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+
+    .delivery-card.received {
+      border-left: 4px solid #176a2c;
+    }
+
+    .delivery-title {
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+
+    .delivery-details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 6px 12px;
+      margin-bottom: 8px;
+    }
+
+    .receive-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .receive-row input {
+      flex: 1 1 180px;
+      min-width: 0;
+    }
+
+    .receive-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .receive-toggle input {
+      margin: 0;
+    }
+
     @media (max-width: 640px) {
       html {
         font-size: 18px;
@@ -289,12 +339,25 @@
       }
 
       .weekly-task-item,
-      .schedule-cell {
+      .schedule-cell,
+      .delivery-card {
         font-size: 16px;
       }
 
       .schedule-grid {
         grid-template-columns: repeat(7, 160px);
+      }
+
+      .receive-row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .receive-row input,
+      .receive-row button {
+        width: 100%;
+        margin-left: 0;
+        margin-right: 0;
       }
     }
   </style>
@@ -307,6 +370,7 @@
   <button class="tab-button active" type="button" onclick="showTab('tracker')">Time Entry</button>
   <button class="tab-button" type="button" onclick="showTab('calculator')">Qty Calculator</button>
   <button class="tab-button" type="button" onclick="showTab('schedule')">Schedule</button>
+  <button class="tab-button" type="button" onclick="showTab('ordered')">Ordered Items</button>
 </div>
 
 <section id="trackerTab" class="tab-panel active">
@@ -374,6 +438,18 @@
   <div class="weekly-tasks">
     <h3>This Week's Tasks</h3>
     <div id="weeklyTasks" class="weekly-task-list"></div>
+  </div>
+</section>
+
+<section id="orderedTab" class="tab-panel">
+  <div class="deliveries-section">
+    <h3>Expected Deliveries</h3>
+    <div id="expectedDeliveries"></div>
+  </div>
+
+  <div class="deliveries-section">
+    <h3>Received Deliveries</h3>
+    <div id="receivedDeliveries"></div>
   </div>
 </section>
 

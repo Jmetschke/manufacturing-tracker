@@ -227,6 +227,23 @@ async function initializeDatabase() {
     )
   `);
 
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS ordered_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date_ordered TEXT NOT NULL,
+      expected_delivery_date TEXT NOT NULL,
+      item_name TEXT NOT NULL,
+      item_company TEXT NOT NULL,
+      package_qty INTEGER NOT NULL,
+      item_supplier TEXT NOT NULL,
+      department TEXT NOT NULL,
+      received_date TEXT,
+      received_location TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
   await addMissingColumn("time_logs", "item_id", "INTEGER");
   await addMissingColumn("time_logs", "task_id", "INTEGER");
   await addMissingColumn("time_logs", "employee", "TEXT");
@@ -237,6 +254,17 @@ async function initializeDatabase() {
   await addMissingColumn("time_logs", "paused_seconds", "INTEGER DEFAULT 0");
   await addMissingColumn("time_logs", "pause_started_at", "TEXT");
   await addMissingColumn("time_logs", "quantity", "INTEGER");
+  await addMissingColumn("ordered_items", "date_ordered", "TEXT");
+  await addMissingColumn("ordered_items", "expected_delivery_date", "TEXT");
+  await addMissingColumn("ordered_items", "item_name", "TEXT");
+  await addMissingColumn("ordered_items", "item_company", "TEXT");
+  await addMissingColumn("ordered_items", "package_qty", "INTEGER");
+  await addMissingColumn("ordered_items", "item_supplier", "TEXT");
+  await addMissingColumn("ordered_items", "department", "TEXT");
+  await addMissingColumn("ordered_items", "received_date", "TEXT");
+  await addMissingColumn("ordered_items", "received_location", "TEXT");
+  await addMissingColumn("ordered_items", "created_at", "TEXT");
+  await addMissingColumn("ordered_items", "updated_at", "TEXT");
   await clearWeekendScheduleTasks();
 
   await seedNames("items", itemNames);
@@ -306,6 +334,135 @@ app.put("/admin/schedule/:date", (req, res) => {
     function (err) {
       if (err) return res.status(500).send(err.message);
       res.json({ message: "Schedule updated", schedule_date: scheduleDate, tasks: savedTasks });
+    }
+  );
+});
+
+function orderedItemsSelect(whereClause = "") {
+  return `
+    SELECT
+      id,
+      date_ordered,
+      expected_delivery_date,
+      item_name,
+      item_company,
+      package_qty,
+      item_supplier,
+      department,
+      received_date,
+      received_location,
+      created_at,
+      updated_at
+    FROM ordered_items
+    ${whereClause}
+    ORDER BY
+      CASE WHEN received_date IS NULL THEN 0 ELSE 1 END,
+      expected_delivery_date ASC,
+      date_ordered ASC,
+      id DESC
+  `;
+}
+
+function normalizeRequiredText(value) {
+  return String(value || "").trim();
+}
+
+/* ---------- ORDERED ITEMS ---------- */
+app.get("/ordered-items", (req, res) => {
+  db.all(orderedItemsSelect(), [], (err, rows) => {
+    if (err) return res.status(500).send(err.message);
+    res.json(rows);
+  });
+});
+
+app.post("/admin/ordered-items", (req, res) => {
+  const dateOrdered = normalizeRequiredText(req.body.date_ordered);
+  const expectedDeliveryDate = normalizeRequiredText(req.body.expected_delivery_date);
+  const itemName = normalizeRequiredText(req.body.item_name);
+  const itemCompany = normalizeRequiredText(req.body.item_company);
+  const itemSupplier = normalizeRequiredText(req.body.item_supplier);
+  const department = normalizeRequiredText(req.body.department);
+  const packageQty = Number(req.body.package_qty);
+
+  if (!isIsoDate(dateOrdered) || !isIsoDate(expectedDeliveryDate)) {
+    return res.status(400).send("Valid ordered and expected delivery dates are required");
+  }
+
+  if (!itemName || !itemCompany || !itemSupplier || !department) {
+    return res.status(400).send("Item name, company, supplier, and department are required");
+  }
+
+  if (!Number.isInteger(packageQty) || packageQty < 0) {
+    return res.status(400).send("Package QTY must be a whole number zero or greater");
+  }
+
+  db.run(
+    `INSERT INTO ordered_items (
+       date_ordered,
+       expected_delivery_date,
+       item_name,
+       item_company,
+       package_qty,
+       item_supplier,
+       department,
+       updated_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+    [
+      dateOrdered,
+      expectedDeliveryDate,
+      itemName,
+      itemCompany,
+      packageQty,
+      itemSupplier,
+      department
+    ],
+    function (err) {
+      if (err) return res.status(500).send(err.message);
+      res.status(201).json({ message: "Ordered item added", id: this.lastID });
+    }
+  );
+});
+
+app.put("/ordered-items/:id/receive", (req, res) => {
+  const receivedDate = normalizeRequiredText(req.body.received_date);
+  const receivedLocation = normalizeRequiredText(req.body.received_location);
+
+  if (!isIsoDate(receivedDate)) {
+    return res.status(400).send("Valid received date is required");
+  }
+
+  if (!receivedLocation) {
+    return res.status(400).send("Received location is required");
+  }
+
+  db.run(
+    `UPDATE ordered_items
+     SET received_date = ?,
+         received_location = ?,
+         updated_at = datetime('now')
+     WHERE id = ?`,
+    [receivedDate, receivedLocation, req.params.id],
+    function (err) {
+      if (err) return res.status(500).send(err.message);
+      if (this.changes === 0) return res.status(404).send("Ordered item not found");
+      res.json({ message: "Ordered item received" });
+    }
+  );
+});
+
+app.put("/ordered-items/:id/undo-receive", (req, res) => {
+  db.run(
+    `UPDATE ordered_items
+     SET received_date = NULL,
+         received_location = NULL,
+         updated_at = datetime('now')
+     WHERE id = ?`,
+    [req.params.id],
+    function (err) {
+      if (err) return res.status(500).send(err.message);
+      if (this.changes === 0) return res.status(404).send("Ordered item not found");
+      res.json({ message: "Ordered item moved back to expected deliveries" });
     }
   );
 });

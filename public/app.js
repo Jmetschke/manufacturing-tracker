@@ -4,6 +4,7 @@ let currentLogId = null;
 let loadedItems = [];
 let pendingEntry = null;
 let savedEntries = [];
+let orderedItems = [];
 let pausedSeconds = 0;
 let isTimerPaused = false;
 let pausedElapsedSeconds = 0;
@@ -417,23 +418,30 @@ function showTab(tabName) {
   const trackerTab = document.getElementById("trackerTab");
   const calculatorTab = document.getElementById("calculatorTab");
   const scheduleTab = document.getElementById("scheduleTab");
+  const orderedTab = document.getElementById("orderedTab");
   const buttons = document.querySelectorAll(".tab-button");
 
   trackerTab.classList.toggle("active", tabName === "tracker");
   calculatorTab.classList.toggle("active", tabName === "calculator");
   scheduleTab.classList.toggle("active", tabName === "schedule");
+  orderedTab.classList.toggle("active", tabName === "ordered");
 
   buttons.forEach(button => {
     const isActive =
       (tabName === "tracker" && button.textContent === "Time Entry") ||
       (tabName === "calculator" && button.textContent === "Qty Calculator") ||
-      (tabName === "schedule" && button.textContent === "Schedule");
+      (tabName === "schedule" && button.textContent === "Schedule") ||
+      (tabName === "ordered" && button.textContent === "Ordered Items");
 
     button.classList.toggle("active", isActive);
   });
 
   if (tabName === "schedule") {
     loadSchedule();
+  }
+
+  if (tabName === "ordered") {
+    loadOrderedItems();
   }
 }
 
@@ -859,6 +867,185 @@ function renderWeeklyTasks(weekStart, scheduleByDate) {
     empty.textContent = "No weekly tasks scheduled.";
     container.appendChild(empty);
   }
+}
+
+async function loadOrderedItems() {
+  const res = await fetch("/ordered-items");
+  if (!res.ok) return;
+
+  orderedItems = await res.json();
+  renderDeliveries();
+}
+
+function appendDeliveryDetail(container, label, value) {
+  const detail = document.createElement("div");
+  const labelElement = document.createElement("b");
+  labelElement.textContent = `${label}: `;
+  detail.appendChild(labelElement);
+  detail.appendChild(document.createTextNode(value || ""));
+  container.appendChild(detail);
+}
+
+function createDeliveryDetails(item) {
+  const details = document.createElement("div");
+  details.className = "delivery-details";
+
+  appendDeliveryDetail(details, "Date Ordered", item.date_ordered);
+  appendDeliveryDetail(details, "Expected", item.expected_delivery_date);
+  appendDeliveryDetail(details, "Company", item.item_company);
+  appendDeliveryDetail(details, "Package QTY", item.package_qty);
+  appendDeliveryDetail(details, "Supplier", item.item_supplier);
+  appendDeliveryDetail(details, "Department", item.department);
+
+  if (item.received_date) {
+    appendDeliveryDetail(details, "Received", item.received_date);
+    appendDeliveryDetail(details, "Location", item.received_location);
+  }
+
+  return details;
+}
+
+function createDeliveryCard(item, isReceived) {
+  const card = document.createElement("div");
+  card.className = isReceived ? "delivery-card received" : "delivery-card";
+
+  const title = document.createElement("div");
+  title.className = "delivery-title";
+  title.textContent = item.item_name;
+  card.appendChild(title);
+  card.appendChild(createDeliveryDetails(item));
+
+  if (isReceived) {
+    const undoButton = document.createElement("button");
+    undoButton.type = "button";
+    undoButton.textContent = "Undo";
+    undoButton.addEventListener("click", () => undoReceivedItem(item.id));
+    card.appendChild(undoButton);
+    return card;
+  }
+
+  const toggleLabel = document.createElement("label");
+  toggleLabel.className = "receive-toggle";
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.addEventListener("change", () => {
+    if (checkbox.checked) {
+      showReceivePrompt(card, item.id);
+    }
+  });
+
+  toggleLabel.appendChild(checkbox);
+  toggleLabel.appendChild(document.createTextNode("Received"));
+  card.appendChild(toggleLabel);
+
+  return card;
+}
+
+function showReceivePrompt(card, itemId) {
+  const existingRow = card.querySelector(".receive-row");
+  if (existingRow) {
+    existingRow.querySelector("input").focus();
+    return;
+  }
+
+  const row = document.createElement("div");
+  row.className = "receive-row";
+
+  const dateInput = document.createElement("input");
+  dateInput.type = "date";
+  dateInput.value = toIsoDate(new Date());
+  dateInput.setAttribute("aria-label", "Received Date");
+  row.appendChild(dateInput);
+
+  const locationInput = document.createElement("input");
+  locationInput.type = "text";
+  locationInput.placeholder = "Received Location";
+  row.appendChild(locationInput);
+
+  const saveButton = document.createElement("button");
+  saveButton.type = "button";
+  saveButton.textContent = "Save Received";
+  saveButton.addEventListener("click", () => receiveOrderedItem(itemId, dateInput.value, locationInput.value));
+  row.appendChild(saveButton);
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.textContent = "Cancel";
+  cancelButton.addEventListener("click", () => {
+    const checkbox = card.querySelector(".receive-toggle input");
+    checkbox.checked = false;
+    row.remove();
+  });
+  row.appendChild(cancelButton);
+
+  card.appendChild(row);
+  locationInput.focus();
+}
+
+async function receiveOrderedItem(itemId, receivedDate, receivedLocation) {
+  if (!receivedDate || !receivedLocation.trim()) {
+    alert("Received date and location are required");
+    return;
+  }
+
+  const res = await fetch(`/ordered-items/${itemId}/receive`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      received_date: receivedDate,
+      received_location: receivedLocation
+    })
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    alert("Receive failed: " + text);
+    return;
+  }
+
+  await loadOrderedItems();
+}
+
+async function undoReceivedItem(itemId) {
+  const res = await fetch(`/ordered-items/${itemId}/undo-receive`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" }
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    alert("Undo failed: " + text);
+    return;
+  }
+
+  await loadOrderedItems();
+}
+
+function renderDeliveryList(container, items, isReceived) {
+  container.innerHTML = "";
+
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-entries";
+    empty.textContent = isReceived
+      ? "No received deliveries yet."
+      : "No expected deliveries.";
+    container.appendChild(empty);
+    return;
+  }
+
+  items.forEach(item => {
+    container.appendChild(createDeliveryCard(item, isReceived));
+  });
+}
+
+function renderDeliveries() {
+  const expected = orderedItems.filter(item => !item.received_date);
+  const received = orderedItems.filter(item => item.received_date);
+
+  renderDeliveryList(document.getElementById("expectedDeliveries"), expected, false);
+  renderDeliveryList(document.getElementById("receivedDeliveries"), received, true);
 }
 
 load();

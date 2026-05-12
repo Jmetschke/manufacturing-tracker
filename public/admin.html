@@ -135,7 +135,26 @@
     .schedule-task-days {
       max-width: 90px;
     }
+    .ordered-form {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .ordered-field label {
+      display: block;
+      font-weight: bold;
+      margin: 0 0 4px;
+    }
+    .ordered-form input {
+      width: 100%;
+      margin: 0;
+    }
+    .ordered-actions {
+      margin-bottom: 16px;
+    }
     #table { overflow-x: auto; width: 100%; }
+    #orderedItemsTable { overflow-x: auto; width: 100%; }
 
     @media (max-width: 640px) {
       html { font-size: 18px; }
@@ -158,6 +177,8 @@
       .schedule-task-row { grid-template-columns: 28px 1fr; }
       .batch-row button,
       .schedule-task-row button { width: auto; }
+      .ordered-form { grid-template-columns: 1fr; }
+      .ordered-actions button { width: 100%; margin-left: 0; margin-right: 0; }
     }
   </style>
 </head>
@@ -168,6 +189,7 @@
 <div class="admin-tabs">
   <button class="admin-tab-button active" type="button" onclick="showAdminTab('entries')">Entries</button>
   <button class="admin-tab-button" type="button" onclick="showAdminTab('calendar')">Calendar</button>
+  <button class="admin-tab-button" type="button" onclick="showAdminTab('ordered')">Ordered Items</button>
 </div>
 
 <div id="message" class="message"></div>
@@ -242,6 +264,46 @@
       <button type="button" onclick="cancelScheduleEdit()">Cancel</button>
     </div>
   </section>
+</section>
+
+<section id="orderedPanel" class="admin-panel">
+  <h3>Add Ordered Item</h3>
+  <div class="ordered-form">
+    <div class="ordered-field">
+      <label for="ordered_date_ordered">Date Ordered</label>
+      <input type="date" id="ordered_date_ordered">
+    </div>
+    <div class="ordered-field">
+      <label for="ordered_expected_delivery_date">Expected Delivery Date</label>
+      <input type="date" id="ordered_expected_delivery_date">
+    </div>
+    <div class="ordered-field">
+      <label for="ordered_item_name">Item Name</label>
+      <input type="text" id="ordered_item_name">
+    </div>
+    <div class="ordered-field">
+      <label for="ordered_item_company">Item Company</label>
+      <input type="text" id="ordered_item_company">
+    </div>
+    <div class="ordered-field">
+      <label for="ordered_package_qty">Item(package) QTY</label>
+      <input type="number" id="ordered_package_qty" min="0" step="1">
+    </div>
+    <div class="ordered-field">
+      <label for="ordered_item_supplier">Item Supplier</label>
+      <input type="text" id="ordered_item_supplier">
+    </div>
+    <div class="ordered-field">
+      <label for="ordered_department">Department</label>
+      <input type="text" id="ordered_department">
+    </div>
+  </div>
+  <div class="ordered-actions">
+    <button type="button" onclick="saveOrderedItem()">Add Ordered Item</button>
+  </div>
+
+  <h3>Ordered Items</h3>
+  <div id="orderedItemsTable"></div>
 </section>
 
 <script src="employees.js"></script>

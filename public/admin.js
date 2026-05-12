@@ -2,6 +2,7 @@ let reportData = [];
 let allEntries = [];
 let allItems = [];
 let allTasks = [];
+let allOrderedItems = [];
 let adminScheduleRows = new Map();
 const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const hijnxBatchOptions = [
@@ -392,11 +393,13 @@ function appendOrderedTaskList(container, tasks, className) {
 function showAdminTab(tabName) {
   document.getElementById("entriesPanel").classList.toggle("active", tabName === "entries");
   document.getElementById("calendarPanel").classList.toggle("active", tabName === "calendar");
+  document.getElementById("orderedPanel").classList.toggle("active", tabName === "ordered");
 
   document.querySelectorAll(".admin-tab-button").forEach(button => {
     const isActive =
       (tabName === "entries" && button.textContent === "Entries") ||
-      (tabName === "calendar" && button.textContent === "Calendar");
+      (tabName === "calendar" && button.textContent === "Calendar") ||
+      (tabName === "ordered" && button.textContent === "Ordered Items");
     button.classList.toggle("active", isActive);
   });
 
@@ -404,6 +407,10 @@ function showAdminTab(tabName) {
 
   if (tabName === "calendar") {
     loadAdminCalendar();
+  }
+
+  if (tabName === "ordered") {
+    loadOrderedItems();
   }
 }
 
@@ -807,10 +814,111 @@ async function saveScheduleDay() {
   await loadAdminCalendar();
 }
 
+function resetOrderedForm() {
+  document.getElementById("ordered_date_ordered").value = toIsoDate(new Date());
+  document.getElementById("ordered_expected_delivery_date").value = "";
+  document.getElementById("ordered_item_name").value = "";
+  document.getElementById("ordered_item_company").value = "";
+  document.getElementById("ordered_package_qty").value = "";
+  document.getElementById("ordered_item_supplier").value = "";
+  document.getElementById("ordered_department").value = "";
+}
+
+async function loadOrderedItems() {
+  const res = await fetch("/ordered-items");
+
+  if (!res.ok) {
+    showMessage("Could not load ordered items.", "error");
+    return;
+  }
+
+  allOrderedItems = await res.json();
+  renderOrderedItemsTable();
+}
+
+function renderOrderedItemsTable() {
+  const container = document.getElementById("orderedItemsTable");
+  container.innerHTML = "";
+
+  if (!allOrderedItems.length) {
+    const empty = document.createElement("div");
+    empty.className = "message";
+    empty.textContent = "No ordered items entered yet.";
+    container.appendChild(empty);
+    return;
+  }
+
+  const table = document.createElement("table");
+  const headerRow = document.createElement("tr");
+  [
+    "Date Ordered",
+    "Expected Delivery",
+    "Item Name",
+    "Item Company",
+    "Package QTY",
+    "Supplier",
+    "Department",
+    "Received Date",
+    "Location"
+  ].forEach(label => {
+    const th = document.createElement("th");
+    th.textContent = label;
+    headerRow.appendChild(th);
+  });
+  table.appendChild(headerRow);
+
+  allOrderedItems.forEach(item => {
+    const row = document.createElement("tr");
+    [
+      item.date_ordered,
+      item.expected_delivery_date,
+      item.item_name,
+      item.item_company,
+      item.package_qty,
+      item.item_supplier,
+      item.department,
+      item.received_date || "",
+      item.received_location || ""
+    ].forEach(value => appendCell(row, value));
+    table.appendChild(row);
+  });
+
+  container.appendChild(table);
+}
+
+async function saveOrderedItem() {
+  const payload = {
+    date_ordered: document.getElementById("ordered_date_ordered").value,
+    expected_delivery_date: document.getElementById("ordered_expected_delivery_date").value,
+    item_name: document.getElementById("ordered_item_name").value,
+    item_company: document.getElementById("ordered_item_company").value,
+    package_qty: document.getElementById("ordered_package_qty").value,
+    item_supplier: document.getElementById("ordered_item_supplier").value,
+    department: document.getElementById("ordered_department").value
+  };
+
+  const res = await fetch("/admin/ordered-items", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Ordered item save failed: " + text, "error");
+    return;
+  }
+
+  resetOrderedForm();
+  showMessage("Ordered item added.", "success");
+  await loadOrderedItems();
+}
+
 async function initAdmin() {
   loadEmployeeSelects();
   await loadLookups();
   setDefaultCalendarMonth();
+  resetOrderedForm();
   await loadReport();
 }
 
