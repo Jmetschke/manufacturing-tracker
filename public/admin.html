@@ -76,6 +76,20 @@
       border-left: 3px solid #2364aa;
       padding: 5px 6px;
     }
+    .admin-calendar-deliveries {
+      display: grid;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .admin-calendar-delivery-heading {
+      font-weight: bold;
+      color: #176a2c;
+    }
+    .admin-calendar-delivery {
+      background: #eef8f0;
+      border-left: 3px solid #176a2c;
+      padding: 5px 6px;
+    }
     .batch-fields {
       display: grid;
       gap: 8px;
@@ -124,6 +138,14 @@
       margin-bottom: 6px;
       max-width: 860px;
     }
+    .test-pickup-row {
+      display: grid;
+      grid-template-columns: 34px 110px minmax(220px, 1fr) auto;
+      gap: 6px;
+      align-items: start;
+      margin-bottom: 6px;
+      max-width: 860px;
+    }
     .schedule-task-order {
       font-weight: bold;
       text-align: right;
@@ -134,6 +156,24 @@
     }
     .schedule-task-days {
       max-width: 90px;
+    }
+    .test-pickup-row input,
+    .test-pickup-row select {
+      margin: 0;
+      width: 100%;
+    }
+    .test-pickup-items {
+      min-height: 120px;
+    }
+    .admin-test-pickup-list {
+      display: grid;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .admin-test-pickup {
+      background: #fff7e6;
+      border-left: 3px solid #b36b00;
+      padding: 5px 6px;
     }
     .ordered-form {
       display: grid;
@@ -152,6 +192,16 @@
     }
     .ordered-actions {
       margin-bottom: 16px;
+    }
+    .summary-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 10px;
+      line-height: 1.4;
+      margin: 10px 0;
+    }
+    .summary-line span {
+      flex: 1 1 160px;
     }
     .request-order-form {
       display: none;
@@ -174,6 +224,9 @@
     .admin-delivery-section {
       margin-top: 18px;
     }
+    .mobile-stack {
+      width: 100%;
+    }
     #table { overflow-x: auto; width: 100%; }
     #adminExpectedDeliveries,
     #adminReceivedDeliveries { overflow-x: auto; width: 100%; }
@@ -187,17 +240,66 @@
       input, select, button { min-height: 52px; font-size: 18px; padding: 12px; }
       .admin-tabs, .controls, .edit-grid, .calendar-tools { flex-direction: column; gap: 10px; }
       .admin-tab-button { width: 100%; margin-left: 0; margin-right: 0; padding: 14px 12px; text-align: left; font-size: 18px; }
+      .summary-line { display: block; }
+      .summary-line span { display: block; margin-bottom: 4px; }
       .controls input, .controls select, .controls button,
       .edit-grid input, .edit-grid select, .edit-actions button,
       .calendar-tools input, .calendar-tools button { width: 100%; margin-left: 0; margin-right: 0; }
-      table { min-width: 860px; font-size: 16px; }
+      .controls input, .controls select, .controls button,
+      .edit-grid input, .edit-grid select,
+      .calendar-tools input, .calendar-tools button { flex: none; }
+      #table,
+      #adminOrderRequests,
+      #adminExpectedDeliveries,
+      #adminReceivedDeliveries { overflow-x: visible; }
+      .mobile-stack {
+        min-width: 0;
+        border: 0;
+        background: transparent;
+        font-size: 16px;
+      }
+      .mobile-stack thead,
+      .mobile-stack .table-heading-row { display: none; }
+      .mobile-stack tr {
+        display: block;
+        margin-bottom: 10px;
+        border: 1px solid #ccc;
+        background: #fff;
+      }
+      .mobile-stack td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        border: 0;
+        border-bottom: 1px solid #eee;
+        padding: 10px;
+      }
+      .mobile-stack td:last-child { border-bottom: 0; }
+      .mobile-stack td::before {
+        content: attr(data-label);
+        flex: 0 0 42%;
+        font-weight: bold;
+      }
+      .mobile-stack td:empty::after { content: ""; }
+      .mobile-stack input,
+      .mobile-stack select,
+      .mobile-stack button {
+        width: 100%;
+        margin: 0;
+      }
+      .mobile-stack input[type="checkbox"] {
+        width: auto;
+        min-height: 0;
+      }
       th, td { padding: 10px; }
       .admin-calendar-grid { grid-template-columns: repeat(7, 160px); }
       .admin-day-name,
       .admin-calendar-day,
       .admin-batch-item { font-size: 16px; }
       .batch-row,
-      .schedule-task-row { grid-template-columns: 28px 1fr; }
+      .schedule-task-row,
+      .test-pickup-row { grid-template-columns: 28px 1fr; }
       .batch-row button,
       .schedule-task-row button { width: auto; }
       .ordered-form { grid-template-columns: 1fr; }
@@ -282,6 +384,9 @@
       <h4>Tasks</h4>
       <div id="scheduleTaskRows"></div>
       <button type="button" onclick="addScheduleTask()">Add Task</button>
+      <h4>Test Pick Ups</h4>
+      <div id="testPickupRows"></div>
+      <button type="button" onclick="addTestPickup()">Add Test Pick Up</button>
     </div>
     <div class="edit-actions">
       <button type="button" onclick="saveScheduleDay()">Save Day</button>
@@ -291,6 +396,37 @@
 </section>
 
 <section id="orderedPanel" class="admin-panel">
+  <h3>Request Item</h3>
+  <div class="ordered-form">
+    <div class="ordered-field">
+      <label for="admin_request_date">Date</label>
+      <input type="date" id="admin_request_date" required>
+    </div>
+    <div class="ordered-field">
+      <label for="admin_requester_name">Name</label>
+      <input type="text" id="admin_requester_name" required>
+    </div>
+    <div class="ordered-field">
+      <label for="admin_request_department">Department</label>
+      <input type="text" id="admin_request_department">
+    </div>
+    <div class="ordered-field">
+      <label for="admin_request_item_needed">Item Needed</label>
+      <input type="text" id="admin_request_item_needed" required>
+    </div>
+    <div class="ordered-field">
+      <label for="admin_request_qty_needed">QTY Needed</label>
+      <input type="number" id="admin_request_qty_needed" min="1" step="1" required>
+    </div>
+    <div class="ordered-field">
+      <label for="admin_request_suggested_retailer">Suggested Retailer</label>
+      <input type="text" id="admin_request_suggested_retailer">
+    </div>
+  </div>
+  <div class="ordered-actions">
+    <button type="button" onclick="saveAdminOrderRequest()">Submit Request</button>
+  </div>
+
   <h3>Item Requests</h3>
   <div id="adminOrderRequests"></div>
 
@@ -307,10 +443,6 @@
     <div class="ordered-field">
       <label for="ordered_item_name">Item Name</label>
       <input type="text" id="ordered_item_name">
-    </div>
-    <div class="ordered-field">
-      <label for="ordered_item_company">Item Company</label>
-      <input type="text" id="ordered_item_company">
     </div>
     <div class="ordered-field">
       <label for="ordered_package_qty">Item(package) QTY</label>

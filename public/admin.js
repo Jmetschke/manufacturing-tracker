@@ -5,6 +5,7 @@ let allTasks = [];
 let allOrderedItems = [];
 let allOrderRequests = [];
 let adminScheduleRows = new Map();
+let adminExpectedDeliveriesByDate = new Map();
 const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const hijnxBatchOptions = [
   "Alpha OG 1pks",
@@ -205,7 +206,8 @@ function parseSchedulePayload(rawValue) {
   const empty = {
     batchHijnx: [],
     batchSb: [],
-    tasks: []
+    tasks: [],
+    testPickups: []
   };
 
   if (!rawValue) return empty;
@@ -223,7 +225,8 @@ function parseSchedulePayload(rawValue) {
                 days: Math.max(1, Number.parseInt(task.days, 10) || 1)
               }))
               .filter(task => task.text)
-          : []
+          : [],
+        testPickups: normalizeTestPickups(parsed.testPickups)
       };
     }
 
@@ -235,7 +238,8 @@ function parseSchedulePayload(rawValue) {
             text: String(task.text || "").trim(),
             days: Math.max(1, Number.parseInt(task.days, 10) || 1)
           }))
-          .filter(task => task.text)
+          .filter(task => task.text),
+        testPickups: []
       };
     }
   } catch (err) {
@@ -248,8 +252,22 @@ function parseSchedulePayload(rawValue) {
       .split("\n")
       .map(line => line.trim())
       .filter(Boolean)
-      .map(line => ({ text: line, days: 1 }))
+      .map(line => ({ text: line, days: 1 })),
+    testPickups: []
   };
+}
+
+function normalizeTestPickups(value) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map(pickup => ({
+      time: String(pickup && pickup.time ? pickup.time : "").trim(),
+      items: Array.isArray(pickup && pickup.items)
+        ? pickup.items.map(item => String(item || "").trim()).filter(Boolean)
+        : []
+    }))
+    .filter(pickup => /^([01]\d|2[0-3]):[0-5]\d$/.test(pickup.time) && pickup.items.length);
 }
 
 function getScheduleTasks(rawValue) {
@@ -277,6 +295,63 @@ function appendBatchList(container, payload) {
   });
 
   container.appendChild(batchList);
+}
+
+function appendTestPickupList(container, payload) {
+  if (!payload.testPickups.length) return;
+
+  const pickupList = document.createElement("div");
+  pickupList.className = "admin-test-pickup-list";
+
+  payload.testPickups.forEach(pickup => {
+    const item = document.createElement("div");
+    item.className = "admin-test-pickup";
+    item.textContent = `Test Pick Up ${pickup.time}: ${pickup.items.join(", ")}`;
+    pickupList.appendChild(item);
+  });
+
+  container.appendChild(pickupList);
+}
+
+function buildAdminExpectedDeliveriesByDate(items, visibleStart, visibleEnd) {
+  const deliveriesByDate = new Map();
+  const rangeStartIso = toIsoDate(visibleStart);
+  const rangeEndIso = toIsoDate(visibleEnd);
+
+  items.forEach(item => {
+    const expectedDate = item.expected_delivery_date;
+    if (!expectedDate || item.received_date) return;
+    if (expectedDate < rangeStartIso || expectedDate > rangeEndIso) return;
+
+    if (!deliveriesByDate.has(expectedDate)) {
+      deliveriesByDate.set(expectedDate, []);
+    }
+
+    deliveriesByDate.get(expectedDate).push(item);
+  });
+
+  return deliveriesByDate;
+}
+
+function appendAdminExpectedDeliveries(container, deliveries) {
+  if (!deliveries.length) return;
+
+  const section = document.createElement("div");
+  section.className = "admin-calendar-deliveries";
+
+  const heading = document.createElement("div");
+  heading.className = "admin-calendar-delivery-heading";
+  heading.textContent = "Expected Deliveries";
+  section.appendChild(heading);
+
+  deliveries.forEach(delivery => {
+    const item = document.createElement("div");
+    item.className = "admin-calendar-delivery";
+    item.textContent = `${delivery.item_name} - QTY ${delivery.package_qty}`;
+    section.appendChild(item);
+  });
+
+  container.appendChild(section);
 }
 
 function getBatchRows(type) {
@@ -436,8 +511,9 @@ async function loadReport() {
   renderSummary();
 }
 
-function appendCell(row, value) {
+function appendCell(row, value, label = "") {
   const cell = document.createElement("td");
+  cell.dataset.label = label;
   cell.textContent = value;
   row.appendChild(cell);
 }
@@ -447,26 +523,30 @@ function renderTable() {
   container.innerHTML = "";
 
   const table = document.createElement("table");
+  table.className = "mobile-stack";
   const headerRow = document.createElement("tr");
+  headerRow.className = "table-heading-row";
 
-  ["Date", "Employee", "Item", "Task", "Qty", "Time", "Sec/Unit", ""].forEach(label => {
+  const labels = ["Date", "Employee", "Item", "Task", "Qty", "Time", "Sec/Unit", "Action"];
+  labels.forEach(label => {
     const th = document.createElement("th");
-    th.textContent = label;
+    th.textContent = label === "Action" ? "" : label;
     headerRow.appendChild(th);
   });
   table.appendChild(headerRow);
 
   reportData.forEach(entry => {
     const row = document.createElement("tr");
-    appendCell(row, entry.work_date);
-    appendCell(row, entry.employee);
-    appendCell(row, entry.item);
-    appendCell(row, entry.task);
-    appendCell(row, entry.quantity || 0);
-    appendCell(row, secondsToHMS(entry.duration_seconds));
-    appendCell(row, Math.round(entry.sec_per_unit || 0));
+    appendCell(row, entry.work_date, labels[0]);
+    appendCell(row, entry.employee, labels[1]);
+    appendCell(row, entry.item, labels[2]);
+    appendCell(row, entry.task, labels[3]);
+    appendCell(row, entry.quantity || 0, labels[4]);
+    appendCell(row, secondsToHMS(entry.duration_seconds), labels[5]);
+    appendCell(row, Math.round(entry.sec_per_unit || 0), labels[6]);
 
     const actionCell = document.createElement("td");
+    actionCell.dataset.label = labels[7];
     const editButton = document.createElement("button");
     editButton.type = "button";
     editButton.textContent = "Edit";
@@ -492,9 +572,11 @@ function renderSummary() {
   const avg = totalQty ? Math.round(totalTime / totalQty) : 0;
 
   document.getElementById("summary").innerHTML = `
-    <b>Total Qty:</b> ${totalQty} |
-    <b>Total Time:</b> ${secondsToHMS(totalTime)} |
-    <b>Avg Sec/Unit:</b> ${avg}
+    <div class="summary-line">
+      <span><b>Total Qty:</b> ${totalQty}</span>
+      <span><b>Total Time:</b> ${secondsToHMS(totalTime)}</span>
+      <span><b>Avg Sec/Unit:</b> ${avg}</span>
+    </div>
   `;
 }
 
@@ -607,15 +689,20 @@ async function loadAdminCalendar() {
   const gridEnd = addDays(gridStart, 41);
   const from = toIsoDate(gridStart);
   const to = toIsoDate(gridEnd);
-  const res = await fetch(`/schedule?from=${from}&to=${to}`);
+  const [scheduleRes, orderedRes] = await Promise.all([
+    fetch(`/schedule?from=${from}&to=${to}`),
+    fetch("/ordered-items")
+  ]);
 
-  if (!res.ok) {
+  if (!scheduleRes.ok) {
     showMessage("Could not load calendar.", "error");
     return;
   }
 
-  const rows = await res.json();
+  const rows = await scheduleRes.json();
+  const deliveries = orderedRes.ok ? await orderedRes.json() : [];
   adminScheduleRows = new Map(rows.map(row => [row.schedule_date, row.tasks || ""]));
+  adminExpectedDeliveriesByDate = buildAdminExpectedDeliveriesByDate(deliveries, gridStart, gridEnd);
   renderAdminCalendar(firstDay, gridStart);
 }
 
@@ -646,6 +733,8 @@ function renderAdminCalendar(firstDay, gridStart) {
 
     const payload = parseSchedulePayload(adminScheduleRows.get(isoDate));
     appendBatchList(cell, payload);
+    appendAdminExpectedDeliveries(cell, adminExpectedDeliveriesByDate.get(isoDate) || []);
+    appendTestPickupList(cell, payload);
 
     const tasks = document.createElement("div");
     tasks.className = "admin-calendar-tasks";
@@ -750,6 +839,81 @@ function populateScheduleTaskRows(tasks) {
   lines.forEach(task => addScheduleTask(task.text, task.days));
 }
 
+function refreshTestPickupRows() {
+  document.querySelectorAll(".test-pickup-row").forEach((row, index) => {
+    row.querySelector(".schedule-task-order").textContent = `${index + 1}.`;
+  });
+}
+
+function addTestPickup(value = { time: "", items: [] }) {
+  const rows = document.getElementById("testPickupRows");
+  const row = document.createElement("div");
+  row.className = "test-pickup-row";
+
+  const order = document.createElement("span");
+  order.className = "schedule-task-order";
+  row.appendChild(order);
+
+  const timeInput = document.createElement("input");
+  timeInput.type = "text";
+  timeInput.className = "test-pickup-time";
+  timeInput.placeholder = "00:00";
+  timeInput.inputMode = "numeric";
+  timeInput.maxLength = 5;
+  timeInput.pattern = "([01]\\d|2[0-3]):[0-5]\\d";
+  timeInput.title = "Enter time as HH:MM";
+  timeInput.value = value.time || "";
+  timeInput.addEventListener("input", () => {
+    timeInput.value = timeInput.value
+      .replace(/[^\d:]/g, "")
+      .replace(/^(\d{2})(\d)/, "$1:$2")
+      .slice(0, 5);
+  });
+  row.appendChild(timeInput);
+
+  const itemSelect = document.createElement("select");
+  itemSelect.className = "test-pickup-items";
+  itemSelect.multiple = true;
+  allTasks.forEach(task => {
+    const option = document.createElement("option");
+    option.value = task.name;
+    option.text = task.name;
+    option.selected = Array.isArray(value.items) && value.items.includes(task.name);
+    itemSelect.appendChild(option);
+  });
+  row.appendChild(itemSelect);
+
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.textContent = "Remove";
+  removeButton.addEventListener("click", () => {
+    row.remove();
+    refreshTestPickupRows();
+  });
+  row.appendChild(removeButton);
+
+  rows.appendChild(row);
+  refreshTestPickupRows();
+  return timeInput;
+}
+
+function populateTestPickupRows(testPickups) {
+  const rows = document.getElementById("testPickupRows");
+  rows.innerHTML = "";
+  testPickups.forEach(pickup => addTestPickup(pickup));
+}
+
+function getTestPickupValues() {
+  return Array.from(document.querySelectorAll(".test-pickup-row"))
+    .map(row => ({
+      time: row.querySelector(".test-pickup-time").value.trim(),
+      items: Array.from(row.querySelector(".test-pickup-items").selectedOptions)
+        .map(option => option.value)
+        .filter(Boolean)
+    }))
+    .filter(pickup => pickup.time || pickup.items.length);
+}
+
 function buildSchedulePayload(includeTasks = true) {
   const tasks = includeTasks
     ? Array.from(document.querySelectorAll(".schedule-task-row"))
@@ -760,10 +924,17 @@ function buildSchedulePayload(includeTasks = true) {
         .filter(task => task.text)
     : [];
 
+  const testPickups = includeTasks ? getTestPickupValues() : [];
+  const invalidPickup = testPickups.find(pickup => !/^([01]\d|2[0-3]):[0-5]\d$/.test(pickup.time) || !pickup.items.length);
+  if (invalidPickup) {
+    throw new Error("Each Test Pick Up needs a valid HH:MM time and at least one selected item.");
+  }
+
   return JSON.stringify({
     batchHijnx: getBatchValues("hijnx"),
     batchSb: getBatchValues("sb"),
-    tasks
+    tasks,
+    testPickups
   });
 }
 
@@ -778,6 +949,7 @@ function editScheduleDay(isoDate) {
   populateBatchRows("sb", payload.batchSb);
   taskSection.hidden = isWeekendDay;
   populateScheduleTaskRows(isWeekendDay ? "" : adminScheduleRows.get(isoDate) || "");
+  populateTestPickupRows(isWeekendDay ? [] : payload.testPickups);
   document.getElementById("scheduleEditor").classList.add("active");
   showMessage("");
   getBatchRows("hijnx").querySelector(".batch-input").focus();
@@ -789,12 +961,20 @@ function cancelScheduleEdit() {
   getBatchRows("hijnx").innerHTML = "";
   getBatchRows("sb").innerHTML = "";
   document.getElementById("scheduleTaskRows").innerHTML = "";
+  document.getElementById("testPickupRows").innerHTML = "";
   document.querySelector(".schedule-task-section").hidden = false;
 }
 
 async function saveScheduleDay() {
   const scheduleDate = document.getElementById("schedule_edit_date").value;
-  const tasks = buildSchedulePayload(!isWeekendIsoDate(scheduleDate));
+  let tasks;
+
+  try {
+    tasks = buildSchedulePayload(!isWeekendIsoDate(scheduleDate));
+  } catch (err) {
+    showMessage(err.message, "error");
+    return;
+  }
 
   if (!scheduleDate) return;
 
@@ -819,10 +999,18 @@ function resetOrderedForm() {
   document.getElementById("ordered_date_ordered").value = toIsoDate(new Date());
   document.getElementById("ordered_expected_delivery_date").value = "";
   document.getElementById("ordered_item_name").value = "";
-  document.getElementById("ordered_item_company").value = "";
   document.getElementById("ordered_package_qty").value = "";
   document.getElementById("ordered_item_supplier").value = "";
   document.getElementById("ordered_department").value = "";
+}
+
+function resetAdminOrderRequestForm() {
+  document.getElementById("admin_request_date").value = toIsoDate(new Date());
+  document.getElementById("admin_requester_name").value = "";
+  document.getElementById("admin_request_department").value = "";
+  document.getElementById("admin_request_item_needed").value = "";
+  document.getElementById("admin_request_qty_needed").value = "";
+  document.getElementById("admin_request_suggested_retailer").value = "";
 }
 
 async function loadOrderedItems() {
@@ -856,6 +1044,33 @@ async function loadOrderedAdminData() {
   ]);
 }
 
+async function saveAdminOrderRequest() {
+  const payload = {
+    request_date: document.getElementById("admin_request_date").value,
+    requester_name: document.getElementById("admin_requester_name").value,
+    department: document.getElementById("admin_request_department").value,
+    item_needed: document.getElementById("admin_request_item_needed").value,
+    qty_needed: document.getElementById("admin_request_qty_needed").value,
+    suggested_retailer: document.getElementById("admin_request_suggested_retailer").value
+  };
+
+  const res = await fetch("/order-requests", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Request save failed: " + text, "error");
+    return;
+  }
+
+  resetAdminOrderRequestForm();
+  showMessage("Item request submitted.", "success");
+  await loadOrderRequests();
+}
+
 function renderAdminOrderRequests() {
   const container = document.getElementById("adminOrderRequests");
   container.innerHTML = "";
@@ -869,8 +1084,10 @@ function renderAdminOrderRequests() {
   }
 
   const table = document.createElement("table");
+  table.className = "mobile-stack";
   const headerRow = document.createElement("tr");
-  [
+  headerRow.className = "table-heading-row";
+  const labels = [
     "Date",
     "Name",
     "Department",
@@ -879,7 +1096,8 @@ function renderAdminOrderRequests() {
     "Suggested Retailer",
     "Status",
     "Ordered"
-  ].forEach(label => {
+  ];
+  labels.forEach(label => {
     const th = document.createElement("th");
     th.textContent = label;
     headerRow.appendChild(th);
@@ -888,15 +1106,16 @@ function renderAdminOrderRequests() {
 
   allOrderRequests.forEach(request => {
     const row = document.createElement("tr");
-    appendCell(row, request.request_date);
-    appendCell(row, request.requester_name);
-    appendCell(row, request.department || "");
-    appendCell(row, request.item_needed);
-    appendCell(row, request.qty_needed);
-    appendCell(row, request.suggested_retailer || "");
-    appendCell(row, request.status);
+    appendCell(row, request.request_date, labels[0]);
+    appendCell(row, request.requester_name, labels[1]);
+    appendCell(row, request.department || "", labels[2]);
+    appendCell(row, request.item_needed, labels[3]);
+    appendCell(row, request.qty_needed, labels[4]);
+    appendCell(row, request.suggested_retailer || "", labels[5]);
+    appendCell(row, request.status, labels[6]);
 
     const orderedCell = document.createElement("td");
+    orderedCell.dataset.label = labels[7];
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
     checkbox.checked = Boolean(request.ordered_item_id);
@@ -1008,8 +1227,8 @@ function renderOrderedItemsTable() {
   renderReceivedDeliveriesTable();
 }
 
-function appendDeliveryRowCells(row, item, includeReceivedDetails = false) {
-  [
+function appendDeliveryRowCells(row, item, labels, includeReceivedDetails = false) {
+  const values = [
     item.date_ordered,
     item.expected_delivery_date,
     item.item_name,
@@ -1019,17 +1238,20 @@ function appendDeliveryRowCells(row, item, includeReceivedDetails = false) {
     item.item_supplier,
     item.department,
     item.requested_by || ""
-  ].forEach(value => appendCell(row, value));
+  ];
+
+  values.forEach((value, index) => appendCell(row, value, labels[index]));
 
   if (includeReceivedDetails) {
-    appendCell(row, item.received_date || "");
-    appendCell(row, item.received_location || "");
+    appendCell(row, item.received_date || "", labels[values.length]);
+    appendCell(row, item.received_location || "", labels[values.length + 1]);
   }
 }
 
 function appendDeliveryHeader(table, extraLabels = []) {
   const headerRow = document.createElement("tr");
-  [
+  headerRow.className = "table-heading-row";
+  const labels = [
     "Date Ordered",
     "Expected Delivery",
     "Item Name",
@@ -1040,12 +1262,15 @@ function appendDeliveryHeader(table, extraLabels = []) {
     "Department",
     "Requested By",
     ...extraLabels
-  ].forEach(label => {
+  ];
+
+  labels.forEach(label => {
     const th = document.createElement("th");
     th.textContent = label;
     headerRow.appendChild(th);
   });
   table.appendChild(headerRow);
+  return labels;
 }
 
 function renderExpectedDeliveriesTable() {
@@ -1062,13 +1287,15 @@ function renderExpectedDeliveriesTable() {
   }
 
   const table = document.createElement("table");
-  appendDeliveryHeader(table, ["Received"]);
+  table.className = "mobile-stack";
+  const labels = appendDeliveryHeader(table, ["Received"]);
 
   expectedDeliveries.forEach(item => {
     const row = document.createElement("tr");
-    appendDeliveryRowCells(row, item);
+    appendDeliveryRowCells(row, item, labels);
 
     const actionCell = document.createElement("td");
+    actionCell.dataset.label = labels[labels.length - 1];
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
     checkbox.addEventListener("change", () => {
@@ -1157,13 +1384,15 @@ function renderReceivedDeliveriesTable() {
   }
 
   const table = document.createElement("table");
-  appendDeliveryHeader(table, ["Received Date", "Location", ""]);
+  table.className = "mobile-stack";
+  const labels = appendDeliveryHeader(table, ["Received Date", "Location", "Action"]);
 
   receivedDeliveries.forEach(item => {
     const row = document.createElement("tr");
-    appendDeliveryRowCells(row, item, true);
+    appendDeliveryRowCells(row, item, labels, true);
 
     const actionCell = document.createElement("td");
+    actionCell.dataset.label = labels[labels.length - 1];
     const undoButton = document.createElement("button");
     undoButton.type = "button";
     undoButton.textContent = "Undo";
@@ -1198,7 +1427,6 @@ async function saveOrderedItem() {
     date_ordered: document.getElementById("ordered_date_ordered").value,
     expected_delivery_date: document.getElementById("ordered_expected_delivery_date").value,
     item_name: document.getElementById("ordered_item_name").value,
-    item_company: document.getElementById("ordered_item_company").value,
     package_qty: document.getElementById("ordered_package_qty").value,
     item_supplier: document.getElementById("ordered_item_supplier").value,
     department: document.getElementById("ordered_department").value
@@ -1226,6 +1454,7 @@ async function initAdmin() {
   await loadLookups();
   setDefaultCalendarMonth();
   resetOrderedForm();
+  resetAdminOrderRequestForm();
   await loadReport();
 }
 

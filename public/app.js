@@ -191,7 +191,8 @@ function parseSchedulePayload(rawValue) {
   const empty = {
     batchHijnx: [],
     batchSb: [],
-    tasks: []
+    tasks: [],
+    testPickups: []
   };
 
   if (!rawValue) return empty;
@@ -209,7 +210,8 @@ function parseSchedulePayload(rawValue) {
                 days: Math.max(1, Number.parseInt(task.days, 10) || 1)
               }))
               .filter(task => task.text)
-          : []
+          : [],
+        testPickups: normalizeTestPickups(parsed.testPickups)
       };
     }
 
@@ -221,7 +223,8 @@ function parseSchedulePayload(rawValue) {
             text: String(task.text || "").trim(),
             days: Math.max(1, Number.parseInt(task.days, 10) || 1)
           }))
-          .filter(task => task.text)
+          .filter(task => task.text),
+        testPickups: []
       };
     }
   } catch (err) {
@@ -234,8 +237,22 @@ function parseSchedulePayload(rawValue) {
       .split("\n")
       .map(line => line.trim())
       .filter(Boolean)
-      .map(line => ({ text: line, days: 1 }))
+      .map(line => ({ text: line, days: 1 })),
+    testPickups: []
   };
+}
+
+function normalizeTestPickups(value) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map(pickup => ({
+      time: String(pickup && pickup.time ? pickup.time : "").trim(),
+      items: Array.isArray(pickup && pickup.items)
+        ? pickup.items.map(item => String(item || "").trim()).filter(Boolean)
+        : []
+    }))
+    .filter(pickup => /^([01]\d|2[0-3]):[0-5]\d$/.test(pickup.time) && pickup.items.length);
 }
 
 function appendTaskList(container, tasks) {
@@ -251,6 +268,22 @@ function appendTaskList(container, tasks) {
   });
 
   container.appendChild(list);
+}
+
+function appendTestPickupList(container, testPickups) {
+  if (!testPickups.length) return;
+
+  const pickupList = document.createElement("div");
+  pickupList.className = "test-pickup-list";
+
+  testPickups.forEach(pickup => {
+    const item = document.createElement("div");
+    item.className = "test-pickup";
+    item.textContent = `Test Pick Up ${pickup.time}: ${pickup.items.join(", ")}`;
+    pickupList.appendChild(item);
+  });
+
+  container.appendChild(pickupList);
 }
 
 function appendBatchList(container, scheduleDay) {
@@ -276,6 +309,47 @@ function appendBatchList(container, scheduleDay) {
   container.appendChild(batchList);
 }
 
+function buildExpectedDeliveriesByDate(items, visibleStart, visibleEnd) {
+  const deliveriesByDate = new Map();
+  const rangeStartIso = toIsoDate(visibleStart);
+  const rangeEndIso = toIsoDate(visibleEnd);
+
+  items.forEach(item => {
+    const expectedDate = item.expected_delivery_date;
+    if (!expectedDate || item.received_date) return;
+    if (expectedDate < rangeStartIso || expectedDate > rangeEndIso) return;
+
+    if (!deliveriesByDate.has(expectedDate)) {
+      deliveriesByDate.set(expectedDate, []);
+    }
+
+    deliveriesByDate.get(expectedDate).push(item);
+  });
+
+  return deliveriesByDate;
+}
+
+function appendExpectedDeliveries(container, deliveries) {
+  if (!deliveries.length) return;
+
+  const section = document.createElement("div");
+  section.className = "calendar-deliveries";
+
+  const heading = document.createElement("div");
+  heading.className = "calendar-delivery-heading";
+  heading.textContent = "Expected Deliveries";
+  section.appendChild(heading);
+
+  deliveries.forEach(delivery => {
+    const item = document.createElement("div");
+    item.className = "calendar-delivery";
+    item.textContent = `${delivery.item_name} - QTY ${delivery.package_qty}`;
+    section.appendChild(item);
+  });
+
+  container.appendChild(section);
+}
+
 function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
   const activeSchedule = new Map();
   const rangeStart = dateOnly(visibleStart);
@@ -285,7 +359,8 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
     activeSchedule.set(toIsoDate(addDays(rangeStart, index)), {
       batchHijnx: [],
       batchSb: [],
-      tasks: []
+      tasks: [],
+      testPickups: []
     });
   }
 
@@ -298,6 +373,7 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
       const scheduleDay = activeSchedule.get(row.schedule_date);
       scheduleDay.batchHijnx = payload.batchHijnx;
       scheduleDay.batchSb = payload.batchSb;
+      scheduleDay.testPickups = payload.testPickups;
     }
 
     payload.tasks.forEach(task => {
@@ -306,7 +382,7 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
 
         const isoDate = toIsoDate(activeDate);
         if (!activeSchedule.has(isoDate)) {
-          activeSchedule.set(isoDate, { batchHijnx: [], batchSb: [], tasks: [] });
+          activeSchedule.set(isoDate, { batchHijnx: [], batchSb: [], tasks: [], testPickups: [] });
         }
         activeSchedule.get(isoDate).tasks.push({ text: task.text });
       });
@@ -329,9 +405,11 @@ function renderSavedEntries() {
   }
 
   const table = document.createElement("table");
+  table.className = "mobile-stack";
   const thead = document.createElement("thead");
   const headerRow = document.createElement("tr");
-  ["Date", "Employee", "Item", "Task", "Qty", "Time"].forEach(label => {
+  const labels = ["Date", "Employee", "Item", "Task", "Qty", "Time"];
+  labels.forEach(label => {
     const th = document.createElement("th");
     th.textContent = label;
     headerRow.appendChild(th);
@@ -349,8 +427,9 @@ function renderSavedEntries() {
       entry.task,
       entry.quantity,
       formatSeconds(entry.durationSeconds)
-    ].forEach(value => {
+    ].forEach((value, index) => {
       const td = document.createElement("td");
+      td.dataset.label = labels[index];
       td.textContent = value;
       row.appendChild(td);
     });
@@ -468,12 +547,15 @@ function addCalcRow() {
   const tr = document.createElement("tr");
 
   const bulkTypeCell = document.createElement("td");
+  bulkTypeCell.dataset.label = "Bulk Type";
   bulkTypeCell.appendChild(createBulkTypeSelect());
 
   const bulkCountCell = document.createElement("td");
+  bulkCountCell.dataset.label = "# of Bulk Type";
   bulkCountCell.appendChild(createCalcInput("calc-bulk-count"));
 
   const totalCell = document.createElement("td");
+  totalCell.dataset.label = "Calculated Qty";
   const totalInput = document.createElement("input");
   totalInput.type = "number";
   totalInput.className = "calc-row-total";
@@ -482,6 +564,7 @@ function addCalcRow() {
   totalCell.appendChild(totalInput);
 
   const removeCell = document.createElement("td");
+  removeCell.dataset.label = "Action";
   const removeButton = document.createElement("button");
   removeButton.type = "button";
   removeButton.textContent = "Remove";
@@ -790,17 +873,22 @@ async function loadSchedule() {
   const weekEnd = addDays(weekStart, 13);
   const from = toIsoDate(addDays(weekStart, -180));
   const to = toIsoDate(weekEnd);
-  const res = await fetch(`/schedule?from=${from}&to=${to}`);
+  const [scheduleRes, orderedRes] = await Promise.all([
+    fetch(`/schedule?from=${from}&to=${to}`),
+    fetch("/ordered-items")
+  ]);
 
-  if (!res.ok) return;
+  if (!scheduleRes.ok) return;
 
-  const rows = await res.json();
+  const rows = await scheduleRes.json();
+  const deliveries = orderedRes.ok ? await orderedRes.json() : [];
   const scheduleByDate = buildActiveScheduleByDate(rows, weekStart, weekEnd);
-  renderScheduleCalendar(weekStart, scheduleByDate);
+  const deliveriesByDate = buildExpectedDeliveriesByDate(deliveries, weekStart, weekEnd);
+  renderScheduleCalendar(weekStart, scheduleByDate, deliveriesByDate);
   renderWeeklyTasks(weekStart, scheduleByDate);
 }
 
-function renderScheduleCalendar(weekStart, scheduleByDate) {
+function renderScheduleCalendar(weekStart, scheduleByDate, deliveriesByDate) {
   const calendar = document.getElementById("scheduleCalendar");
   const range = document.getElementById("scheduleRange");
   calendar.innerHTML = "";
@@ -827,6 +915,8 @@ function renderScheduleCalendar(weekStart, scheduleByDate) {
 
     const scheduleDay = scheduleByDate.get(isoDate) || { batchHijnx: [], batchSb: [], tasks: [] };
     appendBatchList(cell, scheduleDay);
+    appendExpectedDeliveries(cell, deliveriesByDate.get(isoDate) || []);
+    appendTestPickupList(cell, scheduleDay.testPickups || []);
 
     const tasks = document.createElement("div");
     tasks.className = "schedule-tasks";

@@ -129,7 +129,8 @@ function parseSchedulePayloadForCleanup(rawValue) {
   const empty = {
     batchHijnx: [],
     batchSb: [],
-    tasks: []
+    tasks: [],
+    testPickups: []
   };
 
   if (!rawValue) return empty;
@@ -140,7 +141,8 @@ function parseSchedulePayloadForCleanup(rawValue) {
       return {
         batchHijnx: Array.isArray(parsed.batchHijnx) ? parsed.batchHijnx : [],
         batchSb: Array.isArray(parsed.batchSb) ? parsed.batchSb : [],
-        tasks: Array.isArray(parsed.tasks) ? parsed.tasks : []
+        tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
+        testPickups: Array.isArray(parsed.testPickups) ? parsed.testPickups : []
       };
     }
 
@@ -565,7 +567,7 @@ app.post("/admin/ordered-items", (req, res) => {
   const dateOrdered = normalizeRequiredText(req.body.date_ordered);
   const expectedDeliveryDate = normalizeRequiredText(req.body.expected_delivery_date);
   const itemName = normalizeRequiredText(req.body.item_name);
-  const itemCompany = normalizeRequiredText(req.body.item_company);
+  const itemCompany = normalizeRequiredText(req.body.item_company) || "Manual Entry";
   const itemSupplier = normalizeRequiredText(req.body.item_supplier);
   const department = normalizeRequiredText(req.body.department);
   const packageQty = Number(req.body.package_qty);
@@ -574,8 +576,8 @@ app.post("/admin/ordered-items", (req, res) => {
     return res.status(400).send("Valid ordered and expected delivery dates are required");
   }
 
-  if (!itemName || !itemCompany || !itemSupplier || !department) {
-    return res.status(400).send("Item name, company, supplier, and department are required");
+  if (!itemName || !itemSupplier || !department) {
+    return res.status(400).send("Item name, supplier, and department are required");
   }
 
   if (!Number.isInteger(packageQty) || packageQty < 0) {

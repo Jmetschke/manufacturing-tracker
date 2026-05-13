@@ -153,6 +153,23 @@
       padding: 5px 6px;
     }
 
+    .calendar-deliveries {
+      display: grid;
+      gap: 5px;
+      margin-bottom: 8px;
+    }
+
+    .calendar-delivery-heading {
+      font-weight: bold;
+      color: #176a2c;
+    }
+
+    .calendar-delivery {
+      background: #eef8f0;
+      border-left: 3px solid #176a2c;
+      padding: 5px 6px;
+    }
+
     .schedule-task-list {
       margin: 0 0 0 20px;
       padding: 0;
@@ -160,6 +177,18 @@
 
     .schedule-task-list li {
       margin-bottom: 4px;
+    }
+
+    .test-pickup-list {
+      display: grid;
+      gap: 5px;
+      margin-bottom: 8px;
+    }
+
+    .test-pickup {
+      background: #fff7e6;
+      border-left: 3px solid #b36b00;
+      padding: 5px 6px;
     }
 
     .weekly-tasks {
@@ -222,6 +251,10 @@
 
     .table-wrap {
       overflow-x: auto;
+      width: 100%;
+    }
+
+    .mobile-stack {
       width: 100%;
     }
 
@@ -330,8 +363,7 @@
       .tabs,
       .entry-fields,
       .timer-actions,
-      .calculator-actions,
-      .request-form {
+      .calculator-actions {
         flex-direction: column;
         gap: 10px;
       }
@@ -347,19 +379,86 @@
         margin-right: 0;
       }
 
+      .entry-fields input,
+      .entry-fields select,
+      .timer-actions button,
+      .calculator-actions button {
+        flex: none;
+      }
+
       .tab-button {
         padding: 14px 12px;
         text-align: left;
       }
 
-      table {
-        min-width: 640px;
+      .request-form,
+      .delivery-details {
+        grid-template-columns: 1fr;
+      }
+
+      .table-wrap,
+      #savedEntries {
+        overflow-x: visible;
+      }
+
+      .mobile-stack {
+        min-width: 0;
+        border: 0;
+        background: transparent;
         font-size: 16px;
+      }
+
+      .mobile-stack thead {
+        display: none;
+      }
+
+      .mobile-stack tr {
+        display: block;
+        margin-bottom: 10px;
+        border: 1px solid #d8d8d2;
+        background: #fff;
+      }
+
+      .mobile-stack td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        border: 0;
+        border-bottom: 1px solid #ecece6;
+        padding: 10px;
+      }
+
+      .mobile-stack td:last-child {
+        border-bottom: 0;
+      }
+
+      .mobile-stack td::before {
+        content: attr(data-label);
+        flex: 0 0 42%;
+        font-weight: bold;
+      }
+
+      .mobile-stack td:empty::after {
+        content: "";
       }
 
       th,
       td {
         padding: 10px;
+      }
+
+      .mobile-stack input,
+      .mobile-stack select,
+      .mobile-stack button {
+        width: 100%;
+        margin: 0;
+      }
+
+      .mobile-stack input[type="checkbox"],
+      .receive-toggle input {
+        width: auto;
+        min-height: 0;
       }
 
       .calc-total {
@@ -435,7 +534,7 @@
   </div>
 
   <div class="table-wrap">
-    <table class="calc-table">
+    <table class="calc-table mobile-stack">
       <thead>
         <tr>
           <th>Bulk Type</th>
