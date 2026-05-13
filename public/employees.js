@@ -12,5 +12,7 @@ window.employeeNames = [
   "Lois",
   "George",
   "Greg",
-  "Eric S"
+  "Eric S",
+  "Wang",
+  "David"
 ];

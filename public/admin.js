@@ -3,6 +3,7 @@ let allEntries = [];
 let allItems = [];
 let allTasks = [];
 let allOrderedItems = [];
+let allOrderRequests = [];
 let adminScheduleRows = new Map();
 const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const hijnxBatchOptions = [
@@ -410,7 +411,7 @@ function showAdminTab(tabName) {
   }
 
   if (tabName === "ordered") {
-    loadOrderedItems();
+    loadOrderedAdminData();
   }
 }
 
@@ -836,14 +837,33 @@ async function loadOrderedItems() {
   renderOrderedItemsTable();
 }
 
-function renderOrderedItemsTable() {
-  const container = document.getElementById("orderedItemsTable");
+async function loadOrderRequests() {
+  const res = await fetch("/order-requests");
+
+  if (!res.ok) {
+    showMessage("Could not load item requests.", "error");
+    return;
+  }
+
+  allOrderRequests = await res.json();
+  renderAdminOrderRequests();
+}
+
+async function loadOrderedAdminData() {
+  await Promise.all([
+    loadOrderRequests(),
+    loadOrderedItems()
+  ]);
+}
+
+function renderAdminOrderRequests() {
+  const container = document.getElementById("adminOrderRequests");
   container.innerHTML = "";
 
-  if (!allOrderedItems.length) {
+  if (!allOrderRequests.length) {
     const empty = document.createElement("div");
     empty.className = "message";
-    empty.textContent = "No ordered items entered yet.";
+    empty.textContent = "No item requests yet.";
     container.appendChild(empty);
     return;
   }
@@ -851,15 +871,14 @@ function renderOrderedItemsTable() {
   const table = document.createElement("table");
   const headerRow = document.createElement("tr");
   [
-    "Date Ordered",
-    "Expected Delivery",
-    "Item Name",
-    "Item Company",
-    "Package QTY",
-    "Supplier",
+    "Date",
+    "Name",
     "Department",
-    "Received Date",
-    "Location"
+    "Item Needed",
+    "QTY Needed",
+    "Suggested Retailer",
+    "Status",
+    "Ordered"
   ].forEach(label => {
     const th = document.createElement("th");
     th.textContent = label;
@@ -867,23 +886,311 @@ function renderOrderedItemsTable() {
   });
   table.appendChild(headerRow);
 
-  allOrderedItems.forEach(item => {
+  allOrderRequests.forEach(request => {
     const row = document.createElement("tr");
-    [
-      item.date_ordered,
-      item.expected_delivery_date,
-      item.item_name,
-      item.item_company,
-      item.package_qty,
-      item.item_supplier,
-      item.department,
-      item.received_date || "",
-      item.received_location || ""
-    ].forEach(value => appendCell(row, value));
+    appendCell(row, request.request_date);
+    appendCell(row, request.requester_name);
+    appendCell(row, request.department || "");
+    appendCell(row, request.item_needed);
+    appendCell(row, request.qty_needed);
+    appendCell(row, request.suggested_retailer || "");
+    appendCell(row, request.status);
+
+    const orderedCell = document.createElement("td");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = Boolean(request.ordered_item_id);
+    checkbox.disabled = Boolean(request.ordered_item_id);
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) {
+        showRequestOrderForm(request, orderedCell, checkbox);
+      }
+    });
+    orderedCell.appendChild(checkbox);
+    row.appendChild(orderedCell);
+
     table.appendChild(row);
   });
 
   container.appendChild(table);
+}
+
+function createOrderField(labelText, input) {
+  const field = document.createElement("div");
+  const label = document.createElement("label");
+  label.textContent = labelText;
+  field.appendChild(label);
+  field.appendChild(input);
+  return field;
+}
+
+function showRequestOrderForm(request, cell, checkbox) {
+  const existingForm = cell.querySelector(".request-order-form");
+  if (existingForm) {
+    existingForm.classList.add("active");
+    return;
+  }
+
+  const form = document.createElement("div");
+  form.className = "request-order-form active";
+
+  const dateOrdered = document.createElement("input");
+  dateOrdered.type = "date";
+  dateOrdered.value = toIsoDate(new Date());
+  form.appendChild(createOrderField("Date Ordered", dateOrdered));
+
+  const packageQty = document.createElement("input");
+  packageQty.type = "number";
+  packageQty.min = "1";
+  packageQty.step = "1";
+  packageQty.value = request.qty_needed || "";
+  form.appendChild(createOrderField("Unit-package QTY Ordered", packageQty));
+
+  const unitsPerPackage = document.createElement("input");
+  unitsPerPackage.type = "number";
+  unitsPerPackage.min = "0";
+  unitsPerPackage.step = "1";
+  form.appendChild(createOrderField("Units Per Package", unitsPerPackage));
+
+  const retailer = document.createElement("input");
+  retailer.type = "text";
+  retailer.value = request.suggested_retailer || "";
+  form.appendChild(createOrderField("Retailer", retailer));
+
+  const expectedDelivery = document.createElement("input");
+  expectedDelivery.type = "date";
+  form.appendChild(createOrderField("Expected Delivery", expectedDelivery));
+
+  const saveButton = document.createElement("button");
+  saveButton.type = "button";
+  saveButton.textContent = "Save Ordered";
+  saveButton.addEventListener("click", () => markRequestOrdered(request.id, {
+    date_ordered: dateOrdered.value,
+    package_qty: packageQty.value,
+    units_per_package: unitsPerPackage.value,
+    retailer: retailer.value,
+    expected_delivery_date: expectedDelivery.value
+  }));
+  form.appendChild(saveButton);
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.textContent = "Cancel";
+  cancelButton.addEventListener("click", () => {
+    checkbox.checked = false;
+    form.remove();
+  });
+  form.appendChild(cancelButton);
+
+  cell.appendChild(form);
+  expectedDelivery.focus();
+}
+
+async function markRequestOrdered(requestId, payload) {
+  const res = await fetch(`/admin/order-requests/${requestId}/order`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Could not mark request ordered: " + text, "error");
+    return;
+  }
+
+  showMessage("Item request marked ordered and added to expected deliveries.", "success");
+  await loadOrderedAdminData();
+}
+
+function renderOrderedItemsTable() {
+  renderExpectedDeliveriesTable();
+  renderReceivedDeliveriesTable();
+}
+
+function appendDeliveryRowCells(row, item, includeReceivedDetails = false) {
+  [
+    item.date_ordered,
+    item.expected_delivery_date,
+    item.item_name,
+    item.item_company,
+    item.package_qty,
+    item.units_per_package || "",
+    item.item_supplier,
+    item.department,
+    item.requested_by || ""
+  ].forEach(value => appendCell(row, value));
+
+  if (includeReceivedDetails) {
+    appendCell(row, item.received_date || "");
+    appendCell(row, item.received_location || "");
+  }
+}
+
+function appendDeliveryHeader(table, extraLabels = []) {
+  const headerRow = document.createElement("tr");
+  [
+    "Date Ordered",
+    "Expected Delivery",
+    "Item Name",
+    "Item Company",
+    "Package QTY",
+    "Units/Package",
+    "Supplier",
+    "Department",
+    "Requested By",
+    ...extraLabels
+  ].forEach(label => {
+    const th = document.createElement("th");
+    th.textContent = label;
+    headerRow.appendChild(th);
+  });
+  table.appendChild(headerRow);
+}
+
+function renderExpectedDeliveriesTable() {
+  const container = document.getElementById("adminExpectedDeliveries");
+  container.innerHTML = "";
+  const expectedDeliveries = allOrderedItems.filter(item => !item.received_date);
+
+  if (!expectedDeliveries.length) {
+    const empty = document.createElement("div");
+    empty.className = "message";
+    empty.textContent = "No expected deliveries.";
+    container.appendChild(empty);
+    return;
+  }
+
+  const table = document.createElement("table");
+  appendDeliveryHeader(table, ["Received"]);
+
+  expectedDeliveries.forEach(item => {
+    const row = document.createElement("tr");
+    appendDeliveryRowCells(row, item);
+
+    const actionCell = document.createElement("td");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) {
+        showAdminReceiveForm(item.id, actionCell, checkbox);
+      }
+    });
+    actionCell.appendChild(checkbox);
+    row.appendChild(actionCell);
+
+    table.appendChild(row);
+  });
+
+  container.appendChild(table);
+}
+
+function showAdminReceiveForm(itemId, cell, checkbox) {
+  const existingForm = cell.querySelector(".request-order-form");
+  if (existingForm) {
+    existingForm.classList.add("active");
+    return;
+  }
+
+  const form = document.createElement("div");
+  form.className = "request-order-form active";
+
+  const receivedDate = document.createElement("input");
+  receivedDate.type = "date";
+  receivedDate.value = toIsoDate(new Date());
+  form.appendChild(createOrderField("Received Date", receivedDate));
+
+  const location = document.createElement("input");
+  location.type = "text";
+  form.appendChild(createOrderField("Location", location));
+
+  const saveButton = document.createElement("button");
+  saveButton.type = "button";
+  saveButton.textContent = "Save Received";
+  saveButton.addEventListener("click", () => saveAdminReceivedItem(itemId, {
+    received_date: receivedDate.value,
+    received_location: location.value
+  }));
+  form.appendChild(saveButton);
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.textContent = "Cancel";
+  cancelButton.addEventListener("click", () => {
+    checkbox.checked = false;
+    form.remove();
+  });
+  form.appendChild(cancelButton);
+
+  cell.appendChild(form);
+  location.focus();
+}
+
+async function saveAdminReceivedItem(itemId, payload) {
+  const res = await fetch(`/ordered-items/${itemId}/receive`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Could not mark delivery received: " + text, "error");
+    return;
+  }
+
+  showMessage("Delivery marked received.", "success");
+  await loadOrderedItems();
+}
+
+function renderReceivedDeliveriesTable() {
+  const container = document.getElementById("adminReceivedDeliveries");
+  container.innerHTML = "";
+  const receivedDeliveries = allOrderedItems.filter(item => item.received_date);
+
+  if (!receivedDeliveries.length) {
+    const empty = document.createElement("div");
+    empty.className = "message";
+    empty.textContent = "No received deliveries yet.";
+    container.appendChild(empty);
+    return;
+  }
+
+  const table = document.createElement("table");
+  appendDeliveryHeader(table, ["Received Date", "Location", ""]);
+
+  receivedDeliveries.forEach(item => {
+    const row = document.createElement("tr");
+    appendDeliveryRowCells(row, item, true);
+
+    const actionCell = document.createElement("td");
+    const undoButton = document.createElement("button");
+    undoButton.type = "button";
+    undoButton.textContent = "Undo";
+    undoButton.addEventListener("click", () => undoAdminReceivedItem(item.id));
+    actionCell.appendChild(undoButton);
+    row.appendChild(actionCell);
+
+    table.appendChild(row);
+  });
+
+  container.appendChild(table);
+}
+
+async function undoAdminReceivedItem(itemId) {
+  const res = await fetch(`/ordered-items/${itemId}/undo-receive`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" }
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Could not undo received delivery: " + text, "error");
+    return;
+  }
+
+  showMessage("Delivery moved back to expected deliveries.", "success");
+  await loadOrderedItems();
 }
 
 async function saveOrderedItem() {

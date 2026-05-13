@@ -229,6 +229,28 @@
       margin-top: 18px;
     }
 
+    .request-form {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .request-field label {
+      display: block;
+      font-weight: bold;
+      margin: 0 0 4px;
+    }
+
+    .request-field input {
+      width: 100%;
+      margin: 0;
+    }
+
+    .request-actions {
+      margin-bottom: 18px;
+    }
+
     .delivery-card {
       border: 1px solid #d8d8d2;
       background: #fff;
@@ -238,6 +260,10 @@
 
     .delivery-card.received {
       border-left: 4px solid #176a2c;
+    }
+
+    .delivery-card.request {
+      border-left: 4px solid #2364aa;
     }
 
     .delivery-title {
@@ -304,7 +330,8 @@
       .tabs,
       .entry-fields,
       .timer-actions,
-      .calculator-actions {
+      .calculator-actions,
+      .request-form {
         flex-direction: column;
         gap: 10px;
       }
@@ -313,7 +340,8 @@
       .entry-fields input,
       .entry-fields select,
       .timer-actions button,
-      .calculator-actions button {
+      .calculator-actions button,
+      .request-actions button {
         width: 100%;
         margin-left: 0;
         margin-right: 0;
@@ -442,6 +470,44 @@
 </section>
 
 <section id="orderedTab" class="tab-panel">
+  <div class="deliveries-section">
+    <h3>Request Item</h3>
+    <div class="request-form">
+      <div class="request-field">
+        <label for="request_date">Date</label>
+        <input type="date" id="request_date" required>
+      </div>
+      <div class="request-field">
+        <label for="requester_name">Name</label>
+        <input type="text" id="requester_name" required>
+      </div>
+      <div class="request-field">
+        <label for="request_department">Department</label>
+        <input type="text" id="request_department">
+      </div>
+      <div class="request-field">
+        <label for="request_item_needed">Item Needed</label>
+        <input type="text" id="request_item_needed" required>
+      </div>
+      <div class="request-field">
+        <label for="request_qty_needed">QTY Needed</label>
+        <input type="number" id="request_qty_needed" min="1" step="1" required>
+      </div>
+      <div class="request-field">
+        <label for="request_suggested_retailer">Suggested Retailer</label>
+        <input type="text" id="request_suggested_retailer">
+      </div>
+    </div>
+    <div class="request-actions">
+      <button type="button" onclick="saveOrderRequest()">Submit Request</button>
+    </div>
+  </div>
+
+  <div class="deliveries-section">
+    <h3>Item Requests</h3>
+    <div id="orderRequests"></div>
+  </div>
+
   <div class="deliveries-section">
     <h3>Expected Deliveries</h3>
     <div id="expectedDeliveries"></div>

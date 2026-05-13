@@ -5,6 +5,7 @@ let loadedItems = [];
 let pendingEntry = null;
 let savedEntries = [];
 let orderedItems = [];
+let orderRequests = [];
 let pausedSeconds = 0;
 let isTimerPaused = false;
 let pausedElapsedSeconds = 0;
@@ -410,6 +411,7 @@ async function load() {
   document.getElementById("saveBtn").disabled = true;
 
   renderSavedEntries();
+  resetOrderRequestForm();
   addCalcRow();
   await restorePendingTimer();
 }
@@ -441,7 +443,7 @@ function showTab(tabName) {
   }
 
   if (tabName === "ordered") {
-    loadOrderedItems();
+    loadOrderedTab();
   }
 }
 
@@ -877,12 +879,103 @@ async function loadOrderedItems() {
   renderDeliveries();
 }
 
+async function loadOrderRequests() {
+  const res = await fetch("/order-requests");
+  if (!res.ok) return;
+
+  orderRequests = await res.json();
+  renderOrderRequests();
+}
+
+async function loadOrderedTab() {
+  await Promise.all([
+    loadOrderedItems(),
+    loadOrderRequests()
+  ]);
+}
+
+function resetOrderRequestForm() {
+  const dateInput = document.getElementById("request_date");
+  if (!dateInput) return;
+
+  dateInput.value = toIsoDate(new Date());
+  document.getElementById("requester_name").value = "";
+  document.getElementById("request_department").value = "";
+  document.getElementById("request_item_needed").value = "";
+  document.getElementById("request_qty_needed").value = "";
+  document.getElementById("request_suggested_retailer").value = "";
+}
+
+async function saveOrderRequest() {
+  const payload = {
+    request_date: document.getElementById("request_date").value,
+    requester_name: document.getElementById("requester_name").value,
+    department: document.getElementById("request_department").value,
+    item_needed: document.getElementById("request_item_needed").value,
+    qty_needed: document.getElementById("request_qty_needed").value,
+    suggested_retailer: document.getElementById("request_suggested_retailer").value
+  };
+
+  const res = await fetch("/order-requests", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    alert("Request failed: " + text);
+    return;
+  }
+
+  resetOrderRequestForm();
+  await loadOrderRequests();
+  alert("Request submitted");
+}
+
+function renderOrderRequests() {
+  const container = document.getElementById("orderRequests");
+  container.innerHTML = "";
+
+  if (!orderRequests.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-entries";
+    empty.textContent = "No item requests yet.";
+    container.appendChild(empty);
+    return;
+  }
+
+  orderRequests.forEach(request => {
+    const card = document.createElement("div");
+    card.className = "delivery-card request";
+
+    const title = document.createElement("div");
+    title.className = "delivery-title";
+    title.textContent = request.item_needed;
+    card.appendChild(title);
+
+    const details = document.createElement("div");
+    details.className = "delivery-details";
+    appendDeliveryDetail(details, "Date", request.request_date);
+    appendDeliveryDetail(details, "Name", request.requester_name);
+    appendDeliveryDetail(details, "Department", request.department);
+    appendDeliveryDetail(details, "QTY Needed", request.qty_needed);
+    appendDeliveryDetail(details, "Suggested Retailer", request.suggested_retailer);
+    appendDeliveryDetail(details, "Status", request.status);
+    card.appendChild(details);
+
+    container.appendChild(card);
+  });
+}
+
 function appendDeliveryDetail(container, label, value) {
+  if (value === undefined || value === null || value === "") return;
+
   const detail = document.createElement("div");
   const labelElement = document.createElement("b");
   labelElement.textContent = `${label}: `;
   detail.appendChild(labelElement);
-  detail.appendChild(document.createTextNode(value || ""));
+  detail.appendChild(document.createTextNode(value));
   container.appendChild(detail);
 }
 
@@ -894,8 +987,10 @@ function createDeliveryDetails(item) {
   appendDeliveryDetail(details, "Expected", item.expected_delivery_date);
   appendDeliveryDetail(details, "Company", item.item_company);
   appendDeliveryDetail(details, "Package QTY", item.package_qty);
+  appendDeliveryDetail(details, "Units/Package", item.units_per_package);
   appendDeliveryDetail(details, "Supplier", item.item_supplier);
   appendDeliveryDetail(details, "Department", item.department);
+  appendDeliveryDetail(details, "Requested By", item.requested_by);
 
   if (item.received_date) {
     appendDeliveryDetail(details, "Received", item.received_date);

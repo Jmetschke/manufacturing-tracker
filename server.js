@@ -235,10 +235,29 @@ async function initializeDatabase() {
       item_name TEXT NOT NULL,
       item_company TEXT NOT NULL,
       package_qty INTEGER NOT NULL,
+      units_per_package INTEGER,
       item_supplier TEXT NOT NULL,
       department TEXT NOT NULL,
+      request_id INTEGER,
+      requested_by TEXT,
       received_date TEXT,
       received_location TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS order_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      request_date TEXT NOT NULL,
+      requester_name TEXT NOT NULL,
+      department TEXT,
+      item_needed TEXT NOT NULL,
+      qty_needed INTEGER NOT NULL,
+      suggested_retailer TEXT,
+      ordered_item_id INTEGER,
+      ordered_at TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     )
@@ -259,12 +278,25 @@ async function initializeDatabase() {
   await addMissingColumn("ordered_items", "item_name", "TEXT");
   await addMissingColumn("ordered_items", "item_company", "TEXT");
   await addMissingColumn("ordered_items", "package_qty", "INTEGER");
+  await addMissingColumn("ordered_items", "units_per_package", "INTEGER");
   await addMissingColumn("ordered_items", "item_supplier", "TEXT");
   await addMissingColumn("ordered_items", "department", "TEXT");
+  await addMissingColumn("ordered_items", "request_id", "INTEGER");
+  await addMissingColumn("ordered_items", "requested_by", "TEXT");
   await addMissingColumn("ordered_items", "received_date", "TEXT");
   await addMissingColumn("ordered_items", "received_location", "TEXT");
   await addMissingColumn("ordered_items", "created_at", "TEXT");
   await addMissingColumn("ordered_items", "updated_at", "TEXT");
+  await addMissingColumn("order_requests", "request_date", "TEXT");
+  await addMissingColumn("order_requests", "requester_name", "TEXT");
+  await addMissingColumn("order_requests", "department", "TEXT");
+  await addMissingColumn("order_requests", "item_needed", "TEXT");
+  await addMissingColumn("order_requests", "qty_needed", "INTEGER");
+  await addMissingColumn("order_requests", "suggested_retailer", "TEXT");
+  await addMissingColumn("order_requests", "ordered_item_id", "INTEGER");
+  await addMissingColumn("order_requests", "ordered_at", "TEXT");
+  await addMissingColumn("order_requests", "created_at", "TEXT");
+  await addMissingColumn("order_requests", "updated_at", "TEXT");
   await clearWeekendScheduleTasks();
 
   await seedNames("items", itemNames);
@@ -347,8 +379,11 @@ function orderedItemsSelect(whereClause = "") {
       item_name,
       item_company,
       package_qty,
+      units_per_package,
       item_supplier,
       department,
+      request_id,
+      requested_by,
       received_date,
       received_location,
       created_at,
@@ -372,6 +407,157 @@ app.get("/ordered-items", (req, res) => {
   db.all(orderedItemsSelect(), [], (err, rows) => {
     if (err) return res.status(500).send(err.message);
     res.json(rows);
+  });
+});
+
+function orderRequestsSelect() {
+  return `
+    SELECT
+      id,
+      request_date,
+      requester_name,
+      department,
+      item_needed,
+      qty_needed,
+      suggested_retailer,
+      ordered_item_id,
+      ordered_at,
+      CASE WHEN ordered_item_id IS NULL THEN 'In Process' ELSE 'Ordered' END AS status,
+      created_at,
+      updated_at
+    FROM order_requests
+    ORDER BY
+      CASE WHEN ordered_item_id IS NULL THEN 0 ELSE 1 END,
+      request_date DESC,
+      id DESC
+  `;
+}
+
+/* ---------- ORDER REQUESTS ---------- */
+app.get("/order-requests", (req, res) => {
+  db.all(orderRequestsSelect(), [], (err, rows) => {
+    if (err) return res.status(500).send(err.message);
+    res.json(rows);
+  });
+});
+
+app.post("/order-requests", (req, res) => {
+  const requestDate = normalizeRequiredText(req.body.request_date);
+  const requesterName = normalizeRequiredText(req.body.requester_name);
+  const department = normalizeRequiredText(req.body.department);
+  const itemNeeded = normalizeRequiredText(req.body.item_needed);
+  const suggestedRetailer = normalizeRequiredText(req.body.suggested_retailer);
+  const qtyNeeded = Number(req.body.qty_needed);
+
+  if (!isIsoDate(requestDate)) {
+    return res.status(400).send("Valid request date is required");
+  }
+
+  if (!requesterName || !itemNeeded) {
+    return res.status(400).send("Name and item needed are required");
+  }
+
+  if (!Number.isInteger(qtyNeeded) || qtyNeeded <= 0) {
+    return res.status(400).send("QTY needed must be a whole number greater than zero");
+  }
+
+  db.run(
+    `INSERT INTO order_requests (
+       request_date,
+       requester_name,
+       department,
+       item_needed,
+       qty_needed,
+       suggested_retailer,
+       updated_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
+    [requestDate, requesterName, department, itemNeeded, qtyNeeded, suggestedRetailer],
+    function (err) {
+      if (err) return res.status(500).send(err.message);
+      res.status(201).json({ message: "Order request added", id: this.lastID });
+    }
+  );
+});
+
+app.put("/admin/order-requests/:id/order", (req, res) => {
+  const requestId = req.params.id;
+  const dateOrdered = normalizeRequiredText(req.body.date_ordered);
+  const expectedDeliveryDate = normalizeRequiredText(req.body.expected_delivery_date);
+  const retailer = normalizeRequiredText(req.body.retailer);
+  const packageQty = Number(req.body.package_qty);
+  const unitsPerPackageRaw = normalizeRequiredText(req.body.units_per_package);
+  const unitsPerPackage = unitsPerPackageRaw ? Number(unitsPerPackageRaw) : null;
+
+  if (!isIsoDate(dateOrdered) || !isIsoDate(expectedDeliveryDate)) {
+    return res.status(400).send("Valid ordered and expected delivery dates are required");
+  }
+
+  if (!Number.isInteger(packageQty) || packageQty <= 0) {
+    return res.status(400).send("Unit-package QTY ordered must be a whole number greater than zero");
+  }
+
+  if (unitsPerPackage !== null && (!Number.isInteger(unitsPerPackage) || unitsPerPackage < 0)) {
+    return res.status(400).send("Units per package must be a whole number zero or greater");
+  }
+
+  if (!retailer) {
+    return res.status(400).send("Retailer is required");
+  }
+
+  db.get("SELECT * FROM order_requests WHERE id = ?", [requestId], (selectErr, request) => {
+    if (selectErr) return res.status(500).send(selectErr.message);
+    if (!request) return res.status(404).send("Order request not found");
+    if (request.ordered_item_id) return res.status(400).send("Order request is already marked ordered");
+
+    db.run(
+      `INSERT INTO ordered_items (
+         date_ordered,
+         expected_delivery_date,
+         item_name,
+         item_company,
+         package_qty,
+         units_per_package,
+         item_supplier,
+         department,
+         request_id,
+         requested_by,
+         updated_at
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+      [
+        dateOrdered,
+        expectedDeliveryDate,
+        request.item_needed,
+        request.requester_name,
+        packageQty,
+        unitsPerPackage,
+        retailer,
+        request.department || "",
+        request.id,
+        request.requester_name
+      ],
+      function (insertErr) {
+        if (insertErr) return res.status(500).send(insertErr.message);
+
+        const orderedItemId = this.lastID;
+        db.run(
+          `UPDATE order_requests
+           SET ordered_item_id = ?,
+               ordered_at = datetime('now'),
+               updated_at = datetime('now')
+           WHERE id = ?`,
+          [orderedItemId, request.id],
+          updateErr => {
+            if (updateErr) return res.status(500).send(updateErr.message);
+            res.json({
+              message: "Order request marked ordered",
+              ordered_item_id: orderedItemId
+            });
+          }
+        );
+      }
+    );
   });
 });
 

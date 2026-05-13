@@ -153,8 +153,31 @@
     .ordered-actions {
       margin-bottom: 16px;
     }
+    .request-order-form {
+      display: none;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .request-order-form.active {
+      display: grid;
+    }
+    .request-order-form label {
+      display: block;
+      font-weight: bold;
+      margin: 0 0 4px;
+    }
+    .request-order-form input {
+      width: 100%;
+      margin: 0;
+    }
+    .admin-delivery-section {
+      margin-top: 18px;
+    }
     #table { overflow-x: auto; width: 100%; }
-    #orderedItemsTable { overflow-x: auto; width: 100%; }
+    #adminExpectedDeliveries,
+    #adminReceivedDeliveries { overflow-x: auto; width: 100%; }
+    #adminOrderRequests { overflow-x: auto; width: 100%; }
 
     @media (max-width: 640px) {
       html { font-size: 18px; }
@@ -179,6 +202,7 @@
       .schedule-task-row button { width: auto; }
       .ordered-form { grid-template-columns: 1fr; }
       .ordered-actions button { width: 100%; margin-left: 0; margin-right: 0; }
+      .request-order-form { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -267,6 +291,9 @@
 </section>
 
 <section id="orderedPanel" class="admin-panel">
+  <h3>Item Requests</h3>
+  <div id="adminOrderRequests"></div>
+
   <h3>Add Ordered Item</h3>
   <div class="ordered-form">
     <div class="ordered-field">
@@ -302,8 +329,15 @@
     <button type="button" onclick="saveOrderedItem()">Add Ordered Item</button>
   </div>
 
-  <h3>Ordered Items</h3>
-  <div id="orderedItemsTable"></div>
+  <div class="admin-delivery-section">
+    <h3>Expected Deliveries</h3>
+    <div id="adminExpectedDeliveries"></div>
+  </div>
+
+  <div class="admin-delivery-section">
+    <h3>Received Deliveries</h3>
+    <div id="adminReceivedDeliveries"></div>
+  </div>
 </section>
 
 <script src="employees.js"></script>
