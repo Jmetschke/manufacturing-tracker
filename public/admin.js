@@ -1244,7 +1244,8 @@ function appendDeliveryRowCells(row, item, labels, includeReceivedDetails = fals
 
   if (includeReceivedDetails) {
     appendCell(row, item.received_date || "", labels[values.length]);
-    appendCell(row, item.received_location || "", labels[values.length + 1]);
+    appendCell(row, item.received_time || "", labels[values.length + 1]);
+    appendCell(row, item.received_location || "", labels[values.length + 2]);
   }
 }
 
@@ -1327,6 +1328,21 @@ function showAdminReceiveForm(itemId, cell, checkbox) {
   receivedDate.value = toIsoDate(new Date());
   form.appendChild(createOrderField("Received Date", receivedDate));
 
+  const receivedTime = document.createElement("input");
+  receivedTime.type = "text";
+  receivedTime.placeholder = "00:00";
+  receivedTime.inputMode = "numeric";
+  receivedTime.maxLength = 5;
+  receivedTime.pattern = "([01]\\d|2[0-3]):[0-5]\\d";
+  receivedTime.title = "Received time as HH:MM";
+  receivedTime.addEventListener("input", () => {
+    receivedTime.value = receivedTime.value
+      .replace(/[^\d:]/g, "")
+      .replace(/^(\d{2})(\d)/, "$1:$2")
+      .slice(0, 5);
+  });
+  form.appendChild(createOrderField("Time", receivedTime));
+
   const location = document.createElement("input");
   location.type = "text";
   form.appendChild(createOrderField("Location", location));
@@ -1336,6 +1352,7 @@ function showAdminReceiveForm(itemId, cell, checkbox) {
   saveButton.textContent = "Save Received";
   saveButton.addEventListener("click", () => saveAdminReceivedItem(itemId, {
     received_date: receivedDate.value,
+    received_time: receivedTime.value,
     received_location: location.value
   }));
   form.appendChild(saveButton);
@@ -1354,6 +1371,14 @@ function showAdminReceiveForm(itemId, cell, checkbox) {
 }
 
 async function saveAdminReceivedItem(itemId, payload) {
+  const receivedTime = String(payload.received_time || "").trim();
+  if (receivedTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(receivedTime)) {
+    showMessage("Received time must use HH:MM format.", "error");
+    return;
+  }
+
+  payload.received_time = receivedTime;
+
   const res = await fetch(`/ordered-items/${itemId}/receive`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -1385,7 +1410,7 @@ function renderReceivedDeliveriesTable() {
 
   const table = document.createElement("table");
   table.className = "mobile-stack";
-  const labels = appendDeliveryHeader(table, ["Received Date", "Location", "Action"]);
+  const labels = appendDeliveryHeader(table, ["Received Date", "Time", "Location", "Action"]);
 
   receivedDeliveries.forEach(item => {
     const row = document.createElement("tr");

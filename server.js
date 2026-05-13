@@ -243,6 +243,7 @@ async function initializeDatabase() {
       request_id INTEGER,
       requested_by TEXT,
       received_date TEXT,
+      received_time TEXT,
       received_location TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
@@ -286,6 +287,7 @@ async function initializeDatabase() {
   await addMissingColumn("ordered_items", "request_id", "INTEGER");
   await addMissingColumn("ordered_items", "requested_by", "TEXT");
   await addMissingColumn("ordered_items", "received_date", "TEXT");
+  await addMissingColumn("ordered_items", "received_time", "TEXT");
   await addMissingColumn("ordered_items", "received_location", "TEXT");
   await addMissingColumn("ordered_items", "created_at", "TEXT");
   await addMissingColumn("ordered_items", "updated_at", "TEXT");
@@ -387,6 +389,7 @@ function orderedItemsSelect(whereClause = "") {
       request_id,
       requested_by,
       received_date,
+      received_time,
       received_location,
       created_at,
       updated_at
@@ -614,10 +617,15 @@ app.post("/admin/ordered-items", (req, res) => {
 
 app.put("/ordered-items/:id/receive", (req, res) => {
   const receivedDate = normalizeRequiredText(req.body.received_date);
+  const receivedTime = normalizeRequiredText(req.body.received_time);
   const receivedLocation = normalizeRequiredText(req.body.received_location);
 
   if (!isIsoDate(receivedDate)) {
     return res.status(400).send("Valid received date is required");
+  }
+
+  if (receivedTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(receivedTime)) {
+    return res.status(400).send("Received time must use HH:MM format");
   }
 
   if (!receivedLocation) {
@@ -627,10 +635,11 @@ app.put("/ordered-items/:id/receive", (req, res) => {
   db.run(
     `UPDATE ordered_items
      SET received_date = ?,
+         received_time = ?,
          received_location = ?,
          updated_at = datetime('now')
      WHERE id = ?`,
-    [receivedDate, receivedLocation, req.params.id],
+    [receivedDate, receivedTime || null, receivedLocation, req.params.id],
     function (err) {
       if (err) return res.status(500).send(err.message);
       if (this.changes === 0) return res.status(404).send("Ordered item not found");
@@ -643,6 +652,7 @@ app.put("/ordered-items/:id/undo-receive", (req, res) => {
   db.run(
     `UPDATE ordered_items
      SET received_date = NULL,
+         received_time = NULL,
          received_location = NULL,
          updated_at = datetime('now')
      WHERE id = ?`,

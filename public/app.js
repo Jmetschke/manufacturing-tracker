@@ -1084,6 +1084,7 @@ function createDeliveryDetails(item) {
 
   if (item.received_date) {
     appendDeliveryDetail(details, "Received", item.received_date);
+    appendDeliveryDetail(details, "Time", item.received_time);
     appendDeliveryDetail(details, "Location", item.received_location);
   }
 
@@ -1148,10 +1149,30 @@ function showReceivePrompt(card, itemId) {
   locationInput.placeholder = "Received Location";
   row.appendChild(locationInput);
 
+  const timeInput = document.createElement("input");
+  timeInput.type = "text";
+  timeInput.placeholder = "00:00";
+  timeInput.inputMode = "numeric";
+  timeInput.maxLength = 5;
+  timeInput.pattern = "([01]\\d|2[0-3]):[0-5]\\d";
+  timeInput.title = "Received time as HH:MM";
+  timeInput.addEventListener("input", () => {
+    timeInput.value = timeInput.value
+      .replace(/[^\d:]/g, "")
+      .replace(/^(\d{2})(\d)/, "$1:$2")
+      .slice(0, 5);
+  });
+  row.appendChild(timeInput);
+
   const saveButton = document.createElement("button");
   saveButton.type = "button";
   saveButton.textContent = "Save Received";
-  saveButton.addEventListener("click", () => receiveOrderedItem(itemId, dateInput.value, locationInput.value));
+  saveButton.addEventListener("click", () => receiveOrderedItem(
+    itemId,
+    dateInput.value,
+    locationInput.value,
+    timeInput.value
+  ));
   row.appendChild(saveButton);
 
   const cancelButton = document.createElement("button");
@@ -1168,9 +1189,14 @@ function showReceivePrompt(card, itemId) {
   locationInput.focus();
 }
 
-async function receiveOrderedItem(itemId, receivedDate, receivedLocation) {
+async function receiveOrderedItem(itemId, receivedDate, receivedLocation, receivedTime = "") {
   if (!receivedDate || !receivedLocation.trim()) {
     alert("Received date and location are required");
+    return;
+  }
+
+  if (receivedTime.trim() && !/^([01]\d|2[0-3]):[0-5]\d$/.test(receivedTime.trim())) {
+    alert("Received time must use HH:MM format");
     return;
   }
 
@@ -1179,7 +1205,8 @@ async function receiveOrderedItem(itemId, receivedDate, receivedLocation) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       received_date: receivedDate,
-      received_location: receivedLocation
+      received_location: receivedLocation,
+      received_time: receivedTime.trim()
     })
   });
 
