@@ -1,13 +1,154 @@
 console.log("SERVER ACTIVE - CORRECT FILE");
 
 const express = require("express");
+const crypto = require("crypto");
+const path = require("path");
 const db = require("./db");
 const app = express();
 
 app.use(express.json());
-app.use(express.static("public"));
 
 const PORT = process.env.PORT || 3000;
+const ACCESS_CODE = process.env.ACCESS_CODE || "5838";
+const ADMIN_ACCESS_CODE = process.env.ADMIN_ACCESS_CODE || "0187";
+const ACCESS_COOKIE = "manufacturing_tracker_access";
+const ADMIN_ACCESS_COOKIE = "manufacturing_tracker_admin_access";
+const ACCESS_SECRET = process.env.ACCESS_SESSION_SECRET || `${ACCESS_CODE}:${ADMIN_ACCESS_CODE}`;
+
+function parseCookies(header = "") {
+  return Object.fromEntries(
+    header
+      .split(";")
+      .map(cookie => cookie.trim())
+      .filter(Boolean)
+      .map(cookie => {
+        const equalsIndex = cookie.indexOf("=");
+        if (equalsIndex === -1) return [cookie, ""];
+        return [
+          decodeURIComponent(cookie.slice(0, equalsIndex)),
+          decodeURIComponent(cookie.slice(equalsIndex + 1))
+        ];
+      })
+  );
+}
+
+function createAccessToken(level) {
+  return crypto
+    .createHmac("sha256", ACCESS_SECRET)
+    .update(`${level}-access-granted`)
+    .digest("hex");
+}
+
+function hasAdminAccess(req) {
+  const cookies = parseCookies(req.headers.cookie || "");
+  return cookies[ADMIN_ACCESS_COOKIE] === createAccessToken("admin");
+}
+
+function hasAppAccess(req) {
+  const cookies = parseCookies(req.headers.cookie || "");
+  return cookies[ACCESS_COOKIE] === createAccessToken("app") || hasAdminAccess(req);
+}
+
+function sendAccessCookie(res, level) {
+  const cookieName = level === "admin" ? ADMIN_ACCESS_COOKIE : ACCESS_COOKIE;
+
+  res.cookie(cookieName, createAccessToken(level), {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/"
+  });
+}
+
+function clearAccessCookie(res) {
+  res.clearCookie(ACCESS_COOKIE, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/"
+  });
+  res.clearCookie(ADMIN_ACCESS_COOKIE, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/"
+  });
+}
+
+function isAdminPath(pathname) {
+  return pathname === "/admin.html" || pathname.startsWith("/admin/");
+}
+
+function getSafeNextPath(rawValue) {
+  const nextPath = String(rawValue || "/");
+  if (!nextPath.startsWith("/") || nextPath.startsWith("//")) return "/";
+  if (nextPath === "/access" || nextPath === "/access.html") return "/";
+  return nextPath;
+}
+
+function accessRedirect(nextPath) {
+  return `/access?next=${encodeURIComponent(nextPath)}`;
+}
+
+app.get("/access", (req, res) => {
+  const nextPath = getSafeNextPath(req.query.next);
+  if (isAdminPath(nextPath) && hasAdminAccess(req)) return res.redirect(nextPath);
+  if (!isAdminPath(nextPath) && hasAppAccess(req)) return res.redirect(nextPath);
+  res.sendFile(path.join(__dirname, "public", "access.html"));
+});
+
+app.get("/access.html", (req, res) => {
+  const nextPath = getSafeNextPath(req.query.next);
+  if (isAdminPath(nextPath) && hasAdminAccess(req)) return res.redirect(nextPath);
+  if (!isAdminPath(nextPath) && hasAppAccess(req)) return res.redirect(nextPath);
+  res.sendFile(path.join(__dirname, "public", "access.html"));
+});
+
+app.post("/access", (req, res) => {
+  const submittedCode = String(req.body.code || "");
+  const nextPath = getSafeNextPath(req.body.next);
+
+  if (submittedCode === ADMIN_ACCESS_CODE) {
+    sendAccessCookie(res, "admin");
+    return res.json({ message: "Admin access granted", redirect: nextPath || "/admin.html" });
+  }
+
+  if (submittedCode === ACCESS_CODE) {
+    sendAccessCookie(res, "app");
+    return res.json({
+      message: "Access granted",
+      redirect: isAdminPath(nextPath) ? "/" : nextPath
+    });
+  }
+
+  return res.status(401).json({ message: "Invalid access code" });
+});
+
+app.post("/logout", (req, res) => {
+  clearAccessCookie(res);
+  res.json({ message: "Access cleared" });
+});
+
+app.use((req, res, next) => {
+  if (isAdminPath(req.path)) {
+    if (hasAdminAccess(req)) return next();
+
+    const acceptsHtml = (req.headers.accept || "").includes("text/html");
+    if (acceptsHtml || req.method === "GET") {
+      return res.redirect(accessRedirect(req.originalUrl));
+    }
+
+    return res.status(403).json({ message: "Admin access code required" });
+  }
+
+  if (hasAppAccess(req)) return next();
+
+  const acceptsHtml = (req.headers.accept || "").includes("text/html");
+  if (acceptsHtml || req.method === "GET") {
+    return res.redirect(accessRedirect(req.originalUrl));
+  }
+
+  return res.status(401).json({ message: "Access code required" });
+});
+
+app.use(express.static("public"));
 
 const itemNames = [
   "Daytime Focus Micro Pump",
@@ -129,6 +270,7 @@ function parseSchedulePayloadForCleanup(rawValue) {
   const empty = {
     batchHijnx: [],
     batchSb: [],
+    events: [],
     tasks: [],
     testPickups: []
   };
@@ -141,6 +283,7 @@ function parseSchedulePayloadForCleanup(rawValue) {
       return {
         batchHijnx: Array.isArray(parsed.batchHijnx) ? parsed.batchHijnx : [],
         batchSb: Array.isArray(parsed.batchSb) ? parsed.batchSb : [],
+        events: Array.isArray(parsed.events) ? parsed.events : [],
         tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
         testPickups: Array.isArray(parsed.testPickups) ? parsed.testPickups : []
       };
@@ -611,6 +754,78 @@ app.post("/admin/ordered-items", (req, res) => {
     function (err) {
       if (err) return res.status(500).send(err.message);
       res.status(201).json({ message: "Ordered item added", id: this.lastID });
+    }
+  );
+});
+
+app.post("/ordered-items/received", (req, res) => {
+  const dateOrdered = normalizeRequiredText(req.body.date_ordered);
+  const expectedDeliveryDate = normalizeRequiredText(req.body.expected_delivery_date);
+  const itemName = normalizeRequiredText(req.body.item_name);
+  const itemCompany = normalizeRequiredText(req.body.item_company) || "Manual Received Entry";
+  const itemSupplier = normalizeRequiredText(req.body.item_supplier);
+  const department = normalizeRequiredText(req.body.department);
+  const receivedDate = normalizeRequiredText(req.body.received_date);
+  const receivedTime = normalizeRequiredText(req.body.received_time);
+  const receivedLocation = normalizeRequiredText(req.body.received_location);
+  const packageQty = Number(req.body.package_qty);
+  const unitsPerPackageRaw = normalizeRequiredText(req.body.units_per_package);
+  const unitsPerPackage = unitsPerPackageRaw ? Number(unitsPerPackageRaw) : null;
+
+  if (!isIsoDate(dateOrdered) || !isIsoDate(expectedDeliveryDate) || !isIsoDate(receivedDate)) {
+    return res.status(400).send("Valid ordered, expected delivery, and received dates are required");
+  }
+
+  if (receivedTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(receivedTime)) {
+    return res.status(400).send("Received time must use HH:MM format");
+  }
+
+  if (!itemName || !itemSupplier || !department || !receivedLocation) {
+    return res.status(400).send("Item name, supplier, department, and received location are required");
+  }
+
+  if (!Number.isInteger(packageQty) || packageQty < 0) {
+    return res.status(400).send("Package QTY must be a whole number zero or greater");
+  }
+
+  if (unitsPerPackage !== null && (!Number.isInteger(unitsPerPackage) || unitsPerPackage < 0)) {
+    return res.status(400).send("Units per package must be a whole number zero or greater");
+  }
+
+  db.run(
+    `INSERT INTO ordered_items (
+       date_ordered,
+       expected_delivery_date,
+       item_name,
+       item_company,
+       package_qty,
+       units_per_package,
+       item_supplier,
+       department,
+       requested_by,
+       received_date,
+       received_time,
+       received_location,
+       updated_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+    [
+      dateOrdered,
+      expectedDeliveryDate,
+      itemName,
+      itemCompany,
+      packageQty,
+      unitsPerPackage,
+      itemSupplier,
+      department,
+      itemCompany,
+      receivedDate,
+      receivedTime || null,
+      receivedLocation
+    ],
+    function (err) {
+      if (err) return res.status(500).send(err.message);
+      res.status(201).json({ message: "Received item added", id: this.lastID });
     }
   );
 });

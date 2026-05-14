@@ -9,7 +9,9 @@ let orderRequests = [];
 let pausedSeconds = 0;
 let isTimerPaused = false;
 let pausedElapsedSeconds = 0;
+let calculatorLinkedToQty = false;
 const pendingTimerStorageKey = "productionTracker.pendingTimer";
+const dailyEntryDefaultsStorageKey = "productionTracker.dailyEntryDefaults";
 const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function savePendingTimer(state) {
@@ -55,6 +57,62 @@ function selectValue(id, value) {
   }
 }
 
+function getTodayIsoDate() {
+  return toIsoDate(new Date());
+}
+
+function saveDailyEntryDefaults() {
+  const employee = document.getElementById("employee").value;
+  const workDate = document.getElementById("work_date").value;
+
+  try {
+    localStorage.setItem(dailyEntryDefaultsStorageKey, JSON.stringify({
+      savedOn: getTodayIsoDate(),
+      employee,
+      workDate
+    }));
+  } catch (err) {
+    console.warn("Could not save daily entry defaults:", err);
+  }
+}
+
+function applyDailyEntryDefaults() {
+  let defaults = null;
+
+  try {
+    defaults = JSON.parse(localStorage.getItem(dailyEntryDefaultsStorageKey) || "null");
+  } catch (err) {
+    defaults = null;
+  }
+
+  const today = getTodayIsoDate();
+  const employee = document.getElementById("employee");
+  const workDate = document.getElementById("work_date");
+
+  if (!defaults || defaults.savedOn !== today) {
+    workDate.value = today;
+    try {
+      localStorage.removeItem(dailyEntryDefaultsStorageKey);
+    } catch (err) {
+      console.warn("Could not clear daily entry defaults:", err);
+    }
+    return;
+  }
+
+  if (defaults.employee) {
+    employee.value = defaults.employee;
+  }
+
+  workDate.value = defaults.workDate || today;
+}
+
+function setupDailyEntryDefaults() {
+  ["employee", "work_date"].forEach(id => {
+    const field = document.getElementById(id);
+    if (field) field.addEventListener("change", saveDailyEntryDefaults);
+  });
+}
+
 function buildPendingEntry(log) {
   return {
     employee: log.employee,
@@ -73,6 +131,73 @@ function updatePauseButton() {
   pauseBtn.disabled = !currentLogId || (!startTime && !isTimerPaused);
 }
 
+function setTimerMessage(text, type = "") {
+  const message = document.getElementById("timerMessage");
+  if (!message) return;
+
+  message.textContent = text;
+  message.className = type ? `timer-message ${type}` : "timer-message";
+}
+
+function updateTimerWorkflowUI() {
+  const startBtn = document.getElementById("startBtn");
+  const pauseBtn = document.getElementById("pauseBtn");
+  const stopBtn = document.getElementById("stopBtn");
+  const saveBtn = document.getElementById("saveBtn");
+  const qtyInput = document.getElementById("qty");
+  const status = document.getElementById("timerStatus");
+  const hint = document.getElementById("timerHint");
+  const context = document.getElementById("timerContext");
+
+  if (!startBtn || !pauseBtn || !stopBtn || !saveBtn || !qtyInput || !status || !hint || !context) {
+    updatePauseButton();
+    return;
+  }
+
+  const hasActiveLog = Boolean(currentLogId);
+  const stoppedNeedsQty = hasActiveLog && !startTime && !isTimerPaused;
+  const running = hasActiveLog && Boolean(startTime) && !isTimerPaused;
+  const paused = hasActiveLog && isTimerPaused;
+
+  startBtn.disabled = hasActiveLog;
+  pauseBtn.disabled = !running && !paused;
+  stopBtn.disabled = !running && !paused;
+  saveBtn.disabled = !stoppedNeedsQty;
+  qtyInput.disabled = false;
+
+  ["employee", "work_date", "item", "task"].forEach(id => {
+    const field = document.getElementById(id);
+    if (field) field.disabled = hasActiveLog;
+  });
+
+  if (pendingEntry) {
+    context.textContent = `${pendingEntry.employee} | ${pendingEntry.item} | ${pendingEntry.task}`;
+  } else {
+    context.textContent = "";
+  }
+
+  status.className = "timer-status";
+  if (running) {
+    status.classList.add("running");
+    status.textContent = "Timer running";
+    hint.textContent = "Work is being timed. Quantity can be entered now. Use Pause for a break, or Stop Timer when done.";
+  } else if (paused) {
+    status.classList.add("paused");
+    status.textContent = "Timer paused";
+    hint.textContent = "Quantity can be adjusted while paused. Tap Resume to continue, or Stop Timer if done.";
+  } else if (stoppedNeedsQty) {
+    status.classList.add("stopped");
+    status.textContent = "Timer stopped";
+    hint.textContent = "Confirm the completed quantity, then tap Finish Entry.";
+  } else {
+    status.classList.add("ready");
+    status.textContent = "Ready to start";
+    hint.textContent = "Select employee, date, item, task, and quantity. Then tap Start Timer.";
+  }
+
+  updatePauseButton();
+}
+
 function applyTimerState(log) {
   pausedSeconds = Number(log.paused_seconds) || 0;
   isTimerPaused = Boolean(log.pause_started_at);
@@ -83,7 +208,7 @@ function applyTimerState(log) {
     clearInterval(timerInterval);
     timerInterval = null;
     document.getElementById("timer").innerText = formatSeconds(pausedElapsedSeconds);
-    updatePauseButton();
+    updateTimerWorkflowUI();
     return;
   }
 
@@ -91,7 +216,7 @@ function applyTimerState(log) {
   clearInterval(timerInterval);
   timerInterval = setInterval(updateTimer, 1000);
   updateTimer();
-  updatePauseButton();
+  updateTimerWorkflowUI();
 }
 
 function loadEmployeeOptions() {
@@ -187,10 +312,44 @@ function normalizeBatchList(value) {
   return singleValue ? [{ item: singleValue, units: "" }] : [];
 }
 
+function isHHMM(value) {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
+
+function normalizeEventList(value) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map(event => {
+      const days = Math.max(1, Number.parseInt(event && event.days, 10) || 1);
+      const times = Array.isArray(event && event.times) ? event.times : [];
+
+      return {
+        date: String(event && event.date ? event.date : "").trim(),
+        title: String(event && event.title ? event.title : "").trim(),
+        days,
+        times: Array.from({ length: days }, (_, index) => ({
+          start: String(times[index] && times[index].start ? times[index].start : "").trim(),
+          end: String(times[index] && times[index].end ? times[index].end : "").trim()
+        })),
+        location: String(event && event.location ? event.location : "").trim(),
+        company: String(event && event.company ? event.company : "").trim()
+      };
+    })
+    .filter(event =>
+      /^\d{4}-\d{2}-\d{2}$/.test(event.date) &&
+      event.title &&
+      event.location &&
+      event.company &&
+      event.times.every(time => isHHMM(time.start) && isHHMM(time.end))
+    );
+}
+
 function parseSchedulePayload(rawValue) {
   const empty = {
     batchHijnx: [],
     batchSb: [],
+    events: [],
     tasks: [],
     testPickups: []
   };
@@ -203,6 +362,7 @@ function parseSchedulePayload(rawValue) {
       return {
         batchHijnx: normalizeBatchList(parsed.batchHijnx),
         batchSb: normalizeBatchList(parsed.batchSb),
+        events: normalizeEventList(parsed.events),
         tasks: Array.isArray(parsed.tasks)
           ? parsed.tasks
               .map(task => ({
@@ -286,6 +446,22 @@ function appendTestPickupList(container, testPickups) {
   container.appendChild(pickupList);
 }
 
+function appendEventList(container, events) {
+  if (!events.length) return;
+
+  const eventList = document.createElement("div");
+  eventList.className = "event-list";
+
+  events.forEach(event => {
+    const item = document.createElement("div");
+    item.className = "event-item";
+    item.textContent = `${event.title} ${event.start}-${event.end} - ${event.location} - ${event.company}`;
+    eventList.appendChild(item);
+  });
+
+  container.appendChild(eventList);
+}
+
 function appendBatchList(container, scheduleDay) {
   const batches = [
     ...scheduleDay.batchHijnx.map(batch => ["Production Batch - Hijnx", batch]),
@@ -359,6 +535,7 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
     activeSchedule.set(toIsoDate(addDays(rangeStart, index)), {
       batchHijnx: [],
       batchSb: [],
+      events: [],
       tasks: [],
       testPickups: []
     });
@@ -376,13 +553,37 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
       scheduleDay.testPickups = payload.testPickups;
     }
 
+    payload.events.forEach(event => {
+      const [eventYear, eventMonth, eventDay] = event.date.split("-").map(Number);
+      const eventStart = new Date(eventYear, eventMonth - 1, eventDay);
+
+      for (let index = 0; index < event.days; index += 1) {
+        const eventDate = addDays(eventStart, index);
+        if (eventDate < rangeStart || eventDate > rangeEnd) continue;
+
+        const isoDate = toIsoDate(eventDate);
+        if (!activeSchedule.has(isoDate)) {
+          activeSchedule.set(isoDate, { batchHijnx: [], batchSb: [], events: [], tasks: [], testPickups: [] });
+        }
+
+        const time = event.times[index] || { start: "", end: "" };
+        activeSchedule.get(isoDate).events.push({
+          title: event.title,
+          start: time.start,
+          end: time.end,
+          location: event.location,
+          company: event.company
+        });
+      }
+    });
+
     payload.tasks.forEach(task => {
       getProjectedWorkDates(startDate, task.days).forEach(activeDate => {
         if (activeDate < rangeStart || activeDate > rangeEnd) return;
 
         const isoDate = toIsoDate(activeDate);
         if (!activeSchedule.has(isoDate)) {
-          activeSchedule.set(isoDate, { batchHijnx: [], batchSb: [], tasks: [], testPickups: [] });
+          activeSchedule.set(isoDate, { batchHijnx: [], batchSb: [], events: [], tasks: [], testPickups: [] });
         }
         activeSchedule.get(isoDate).tasks.push({ text: task.text });
       });
@@ -484,15 +685,20 @@ async function load() {
     taskSel.appendChild(o);
   });
 
-  document.getElementById("work_date").valueAsDate = new Date();
+  setupDailyEntryDefaults();
+  applyDailyEntryDefaults();
   document.getElementById("qty").disabled = true;
   document.getElementById("pauseBtn").disabled = true;
+  document.getElementById("stopBtn").disabled = true;
   document.getElementById("saveBtn").disabled = true;
 
   renderSavedEntries();
   resetOrderRequestForm();
+  resetManualReceivedForm();
+  setupTimeInput("manual_received_time");
   addCalcRow();
   await restorePendingTimer();
+  updateTimerWorkflowUI();
 }
 
 function showTab(tabName) {
@@ -538,7 +744,10 @@ function createBulkTypeSelect() {
     select.appendChild(option);
   });
 
-  select.addEventListener("change", updateCalculator);
+  select.addEventListener("change", () => {
+    calculatorLinkedToQty = true;
+    updateCalculator();
+  });
   return select;
 }
 
@@ -591,7 +800,10 @@ function createCalcInput(className) {
   input.step = "1";
   input.value = "0";
   input.className = className;
-  input.addEventListener("input", updateCalculator);
+  input.addEventListener("input", () => {
+    calculatorLinkedToQty = true;
+    updateCalculator();
+  });
   return input;
 }
 
@@ -616,6 +828,10 @@ function updateCalculator() {
   });
 
   document.getElementById("calcGrandTotal").textContent = String(grandTotal);
+
+  if (calculatorLinkedToQty) {
+    syncCalculatorTotalToQty(grandTotal);
+  }
 }
 
 function clearCalculator() {
@@ -625,19 +841,27 @@ function clearCalculator() {
 
 function copyCalcTotalToQty() {
   const total = document.getElementById("calcGrandTotal").textContent;
-  const qtyInput = document.getElementById("qty");
 
-  qtyInput.value = total;
+  calculatorLinkedToQty = true;
+  syncCalculatorTotalToQty(total);
   showTab("tracker");
 
+  const qtyInput = document.getElementById("qty");
   if (!qtyInput.disabled) {
     qtyInput.focus();
   }
 }
 
+function syncCalculatorTotalToQty(total) {
+  const qtyInput = document.getElementById("qty");
+  if (!qtyInput) return;
+
+  qtyInput.value = String(total);
+}
+
 async function startTimer() {
   if (currentLogId) {
-    alert("Timer already running");
+    setTimerMessage("A timer is already active. Stop it before starting a new one.", "error");
     return;
   }
 
@@ -649,12 +873,12 @@ async function startTimer() {
   const task_id = taskSel.value;
 
   if (!employee || !work_date) {
-    alert("Employee and date are required");
+    setTimerMessage("Select an employee and date before starting.", "error");
     return;
   }
 
   if (!item_id || !task_id) {
-    alert("Item and task are required");
+    setTimerMessage("Select an item and task before starting.", "error");
     return;
   }
 
@@ -666,7 +890,7 @@ async function startTimer() {
 
   if (!res.ok) {
     const text = await res.text();
-    alert("Start failed: " + text);
+    setTimerMessage("Start failed: " + text, "error");
     return;
   }
 
@@ -689,12 +913,13 @@ async function startTimer() {
   clearInterval(timerInterval);
   timerInterval = setInterval(updateTimer, 1000);
   updateTimer();
-  updatePauseButton();
+  setTimerMessage("Timer started.");
+  updateTimerWorkflowUI();
 }
 
 async function stopTimer() {
   if (!currentLogId) {
-    alert("No active timer");
+    setTimerMessage("Start a timer before stopping.", "error");
     return;
   }
 
@@ -706,7 +931,7 @@ async function stopTimer() {
 
   if (!res.ok) {
     const text = await res.text();
-    alert("Stop failed: " + text);
+    setTimerMessage("Stop failed: " + text, "error");
     return;
   }
 
@@ -721,7 +946,6 @@ async function stopTimer() {
   isTimerPaused = false;
   pausedElapsedSeconds = 0;
   savePendingTimer({ logId: currentLogId });
-  updatePauseButton();
 
   const qtyInput = document.getElementById("qty");
   const saveBtn = document.getElementById("saveBtn");
@@ -729,13 +953,13 @@ async function stopTimer() {
   qtyInput.disabled = false;
   saveBtn.disabled = false;
   qtyInput.focus();
-
-  alert("Timer stopped. Enter quantity to finish.");
+  setTimerMessage("Timer stopped. Confirm quantity, then tap Finish Entry.");
+  updateTimerWorkflowUI();
 }
 
 async function pauseTimer() {
   if (!currentLogId || (!startTime && !isTimerPaused)) {
-    alert("No active timer");
+    setTimerMessage("Start a timer before pausing.", "error");
     return;
   }
 
@@ -756,13 +980,15 @@ async function pauseTimer() {
 
   if (!res.ok) {
     const text = await res.text();
-    alert((isTimerPaused ? "Resume" : "Pause") + " failed: " + text);
+    setTimerMessage((isTimerPaused ? "Resume" : "Pause") + " failed: " + text, "error");
     return;
   }
 
   const data = await res.json();
+  const wasPaused = isTimerPaused;
   applyTimerState(data);
   savePendingTimer({ logId: currentLogId });
+  setTimerMessage(wasPaused ? "Timer resumed." : "Timer paused.");
 }
 
 async function saveQuantity() {
@@ -771,12 +997,12 @@ async function saveQuantity() {
   const quantity = qtyInput.value;
 
   if (!currentLogId) {
-    alert("No active log to update");
+    setTimerMessage("No stopped timer is waiting for quantity.", "error");
     return;
   }
 
   if (!quantity) {
-    alert("Enter a quantity");
+    setTimerMessage("Enter quantity before finishing the entry.", "error");
     return;
   }
 
@@ -791,7 +1017,7 @@ async function saveQuantity() {
 
   if (!res.ok) {
     const text = await res.text();
-    alert("Save failed: " + text);
+    setTimerMessage("Save failed: " + text, "error");
     return;
   }
 
@@ -811,10 +1037,9 @@ async function saveQuantity() {
   qtyInput.value = "";
   qtyInput.disabled = true;
   saveBtn.disabled = true;
-  updatePauseButton();
   document.getElementById("timer").innerText = "00:00:00";
-
-  alert("Entry completed");
+  setTimerMessage("Entry completed and saved.");
+  updateTimerWorkflowUI();
 }
 
 function updateTimer() {
@@ -861,7 +1086,7 @@ async function restorePendingTimer() {
     document.getElementById("timer").innerText = formatSeconds(pendingEntry.durationSeconds);
     document.getElementById("qty").disabled = false;
     document.getElementById("saveBtn").disabled = false;
-    updatePauseButton();
+    updateTimerWorkflowUI();
     return;
   }
 
@@ -913,7 +1138,8 @@ function renderScheduleCalendar(weekStart, scheduleByDate, deliveriesByDate) {
     dateLabel.textContent = formatDisplayDate(isoDate);
     cell.appendChild(dateLabel);
 
-    const scheduleDay = scheduleByDate.get(isoDate) || { batchHijnx: [], batchSb: [], tasks: [] };
+    const scheduleDay = scheduleByDate.get(isoDate) || { batchHijnx: [], batchSb: [], events: [], tasks: [] };
+    appendEventList(cell, scheduleDay.events || []);
     appendBatchList(cell, scheduleDay);
     appendExpectedDeliveries(cell, deliveriesByDate.get(isoDate) || []);
     appendTestPickupList(cell, scheduleDay.testPickups || []);
@@ -996,6 +1222,37 @@ function resetOrderRequestForm() {
   document.getElementById("request_suggested_retailer").value = "";
 }
 
+function setupTimeInput(id) {
+  const input = document.getElementById(id);
+  if (!input) return;
+
+  input.pattern = "([01]\\d|2[0-3]):[0-5]\\d";
+  input.title = "Time as HH:MM";
+  input.addEventListener("input", () => {
+    input.value = input.value
+      .replace(/[^\d:]/g, "")
+      .replace(/^(\d{2})(\d)/, "$1:$2")
+      .slice(0, 5);
+  });
+}
+
+function resetManualReceivedForm() {
+  const dateOrdered = document.getElementById("manual_received_date_ordered");
+  if (!dateOrdered) return;
+
+  const today = toIsoDate(new Date());
+  dateOrdered.value = today;
+  document.getElementById("manual_received_expected_delivery_date").value = today;
+  document.getElementById("manual_received_item_name").value = "";
+  document.getElementById("manual_received_package_qty").value = "";
+  document.getElementById("manual_received_units_per_package").value = "";
+  document.getElementById("manual_received_item_supplier").value = "";
+  document.getElementById("manual_received_department").value = "";
+  document.getElementById("manual_received_date").value = today;
+  document.getElementById("manual_received_time").value = "";
+  document.getElementById("manual_received_location").value = "";
+}
+
 async function saveOrderRequest() {
   const payload = {
     request_date: document.getElementById("request_date").value,
@@ -1023,11 +1280,49 @@ async function saveOrderRequest() {
   alert("Request submitted");
 }
 
+async function saveManualReceivedItem() {
+  const receivedTime = document.getElementById("manual_received_time").value.trim();
+  if (receivedTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(receivedTime)) {
+    alert("Received time must use HH:MM format");
+    return;
+  }
+
+  const payload = {
+    date_ordered: document.getElementById("manual_received_date_ordered").value,
+    expected_delivery_date: document.getElementById("manual_received_expected_delivery_date").value,
+    item_name: document.getElementById("manual_received_item_name").value,
+    package_qty: document.getElementById("manual_received_package_qty").value,
+    units_per_package: document.getElementById("manual_received_units_per_package").value,
+    item_supplier: document.getElementById("manual_received_item_supplier").value,
+    department: document.getElementById("manual_received_department").value,
+    received_date: document.getElementById("manual_received_date").value,
+    received_time: receivedTime,
+    received_location: document.getElementById("manual_received_location").value
+  };
+
+  const res = await fetch("/ordered-items/received", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    alert("Received item save failed: " + text);
+    return;
+  }
+
+  resetManualReceivedForm();
+  await loadOrderedItems();
+  alert("Received item added");
+}
+
 function renderOrderRequests() {
   const container = document.getElementById("orderRequests");
+  const openRequests = orderRequests.filter(request => !request.ordered_item_id);
   container.innerHTML = "";
 
-  if (!orderRequests.length) {
+  if (!openRequests.length) {
     const empty = document.createElement("div");
     empty.className = "empty-entries";
     empty.textContent = "No item requests yet.";
@@ -1035,7 +1330,7 @@ function renderOrderRequests() {
     return;
   }
 
-  orderRequests.forEach(request => {
+  openRequests.forEach(request => {
     const card = document.createElement("div");
     card.className = "delivery-card request";
 

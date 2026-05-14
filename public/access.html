@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Access Required</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      box-sizing: border-box;
+      min-height: 100vh;
+      margin: 0;
+      padding: 24px;
+      display: grid;
+      place-items: center;
+      font-family: Arial, sans-serif;
+      color: #202124;
+      background: #f7f7f4;
+    }
+
+    .access-panel {
+      width: min(100%, 420px);
+      border: 1px solid #d8d8d2;
+      background: #fff;
+      padding: 20px;
+    }
+
+    h1 {
+      margin: 0 0 16px;
+      font-size: 1.6rem;
+    }
+
+    label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+
+    input,
+    button {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 48px;
+      font-size: 18px;
+      padding: 10px;
+    }
+
+    button {
+      margin-top: 12px;
+      border: 1px solid #2364aa;
+      background: #2364aa;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    .message {
+      min-height: 24px;
+      margin-top: 10px;
+      color: #a00000;
+    }
+  </style>
+</head>
+<body>
+  <main class="access-panel">
+    <h1>Access Required</h1>
+    <form id="accessForm">
+      <label for="accessCode">Access Code</label>
+      <input type="password" id="accessCode" autocomplete="current-password" required autofocus>
+      <button type="submit">Enter App</button>
+      <div id="message" class="message"></div>
+    </form>
+  </main>
+
+  <script>
+    document.getElementById("accessForm").addEventListener("submit", async event => {
+      event.preventDefault();
+
+      const message = document.getElementById("message");
+      message.textContent = "";
+
+      const res = await fetch("/access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: document.getElementById("accessCode").value,
+          next: new URLSearchParams(window.location.search).get("next") || "/"
+        })
+      });
+
+      if (!res.ok) {
+        message.textContent = "Invalid access code.";
+        return;
+      }
+
+      const data = await res.json();
+      window.location.href = data.redirect || "/";
+    });
+  </script>
+</body>
+</html>

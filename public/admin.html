@@ -10,6 +10,18 @@
     table { border-collapse: collapse; width: 100%; margin-top: 15px; }
     th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
     th { background: #eee; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .page-header h2 { margin: 0; }
+    .screen-link {
+      border: 1px solid #2364aa;
+      background: #2364aa;
+      color: #fff;
+      text-decoration: none;
+      padding: 9px 12px;
+      font-size: 15px;
+      line-height: 1.2;
+    }
+    .screen-link:visited { color: #fff; }
     .admin-tabs { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid #ccc; }
     .admin-tab-button { border: 0; border-bottom: 3px solid transparent; background: transparent; cursor: pointer; padding: 10px 14px; }
     .admin-tab-button.active { border-bottom-color: #2364aa; color: #123c69; font-weight: bold; }
@@ -54,6 +66,16 @@
     .admin-calendar-day {
       min-height: 120px;
     }
+    .admin-event-list {
+      display: grid;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .admin-event-item {
+      background: #f3eefb;
+      border-left: 3px solid #6d3bbd;
+      padding: 5px 6px;
+    }
     .admin-calendar-day.outside-month {
       background: #f5f5f5;
       color: #777;
@@ -96,10 +118,50 @@
       margin-top: 10px;
       max-width: 860px;
     }
+    .event-fields {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+      max-width: 980px;
+    }
+    .event-row {
+      border: 1px solid #ccc;
+      background: #fff;
+      padding: 10px;
+    }
+    .event-row-grid {
+      display: grid;
+      grid-template-columns: 130px minmax(180px, 1fr) 90px minmax(160px, 1fr) minmax(160px, 1fr) auto;
+      gap: 6px;
+      align-items: end;
+    }
+    .event-field label,
     .batch-field label {
       display: block;
       font-weight: bold;
       margin: 0 4px 3px;
+    }
+    .event-field input,
+    .event-row-grid input,
+    .event-row-grid select,
+    .event-field select {
+      margin: 0;
+      width: 100%;
+    }
+    .event-day-times {
+      display: grid;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .event-day-time-row {
+      display: grid;
+      grid-template-columns: 70px 120px 120px;
+      gap: 6px;
+      align-items: center;
+    }
+    .event-day-time-row input {
+      margin: 0;
+      width: 100%;
     }
     .batch-row {
       display: grid;
@@ -236,6 +298,8 @@
       html { font-size: 18px; }
       body { padding: 16px; font-size: 18px; }
       h2 { font-size: 1.6rem; }
+      .page-header { flex-direction: column; align-items: stretch; }
+      .screen-link { display: block; text-align: center; font-size: 18px; padding: 14px 12px; }
       h3 { font-size: 1.25rem; }
       input, select, button { min-height: 52px; font-size: 18px; padding: 12px; }
       .admin-tabs, .controls, .edit-grid, .calendar-tools { flex-direction: column; gap: 10px; }
@@ -300,6 +364,8 @@
       .batch-row,
       .schedule-task-row,
       .test-pickup-row { grid-template-columns: 28px 1fr; }
+      .event-row-grid,
+      .event-day-time-row { grid-template-columns: 1fr; }
       .batch-row button,
       .schedule-task-row button { width: auto; }
       .ordered-form { grid-template-columns: 1fr; }
@@ -310,7 +376,10 @@
 </head>
 <body>
 
-<h2>Admin Dashboard</h2>
+<div class="page-header">
+  <h2>Admin Dashboard</h2>
+  <a class="screen-link" href="/">Production Tracker</a>
+</div>
 
 <div class="admin-tabs">
   <button class="admin-tab-button active" type="button" onclick="showAdminTab('entries')">Entries</button>
@@ -368,6 +437,13 @@
     <h3>Edit Calendar Day</h3>
     <input type="hidden" id="schedule_edit_date">
     <div><b id="scheduleEditLabel"></b></div>
+    <div class="event-fields">
+      <div class="batch-field">
+        <label>Events</label>
+        <div id="eventRows"></div>
+        <button type="button" onclick="addEventEntry()">Add Event</button>
+      </div>
+    </div>
     <div class="batch-fields">
       <div class="batch-field">
         <label>Production Batch - Hijnx</label>
@@ -468,6 +544,52 @@
 
   <div class="admin-delivery-section">
     <h3>Received Deliveries</h3>
+    <h3>Manual Received Item</h3>
+    <div class="ordered-form">
+      <div class="ordered-field">
+        <label for="admin_manual_received_date_ordered">Date Ordered</label>
+        <input type="date" id="admin_manual_received_date_ordered" required>
+      </div>
+      <div class="ordered-field">
+        <label for="admin_manual_received_expected_delivery_date">Expected Delivery</label>
+        <input type="date" id="admin_manual_received_expected_delivery_date" required>
+      </div>
+      <div class="ordered-field">
+        <label for="admin_manual_received_item_name">Item Name</label>
+        <input type="text" id="admin_manual_received_item_name" required>
+      </div>
+      <div class="ordered-field">
+        <label for="admin_manual_received_package_qty">Package QTY</label>
+        <input type="number" id="admin_manual_received_package_qty" min="0" step="1" required>
+      </div>
+      <div class="ordered-field">
+        <label for="admin_manual_received_units_per_package">Units Per Package</label>
+        <input type="number" id="admin_manual_received_units_per_package" min="0" step="1">
+      </div>
+      <div class="ordered-field">
+        <label for="admin_manual_received_item_supplier">Retailer/Supplier</label>
+        <input type="text" id="admin_manual_received_item_supplier" required>
+      </div>
+      <div class="ordered-field">
+        <label for="admin_manual_received_department">Department</label>
+        <input type="text" id="admin_manual_received_department" required>
+      </div>
+      <div class="ordered-field">
+        <label for="admin_manual_received_date">Received Date</label>
+        <input type="date" id="admin_manual_received_date" required>
+      </div>
+      <div class="ordered-field">
+        <label for="admin_manual_received_time">Received Time</label>
+        <input type="text" id="admin_manual_received_time" placeholder="00:00" inputmode="numeric" maxlength="5">
+      </div>
+      <div class="ordered-field">
+        <label for="admin_manual_received_location">Received Location</label>
+        <input type="text" id="admin_manual_received_location" required>
+      </div>
+    </div>
+    <div class="ordered-actions">
+      <button type="button" onclick="saveAdminManualReceivedItem()">Add Received Item</button>
+    </div>
     <div id="adminReceivedDeliveries"></div>
   </div>
 </section>

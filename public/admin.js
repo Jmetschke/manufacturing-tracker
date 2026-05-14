@@ -6,7 +6,9 @@ let allOrderedItems = [];
 let allOrderRequests = [];
 let adminScheduleRows = new Map();
 let adminExpectedDeliveriesByDate = new Map();
+let adminEventsByDate = new Map();
 const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const eventCompanyOptions = ["Snackbar", "Hijnx", "Snackbar & Hijnx"];
 const hijnxBatchOptions = [
   "Alpha OG 1pks",
   "Alpha OG 2pks",
@@ -158,6 +160,10 @@ function addDays(date, days) {
   return next;
 }
 
+function dateOnly(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
 function isWeekendIsoDate(value) {
   const [year, month, day] = value.split("-").map(Number);
   const date = new Date(year, month - 1, day);
@@ -202,10 +208,44 @@ function normalizeBatchList(value) {
   return singleValue ? [{ item: singleValue, units: "" }] : [];
 }
 
+function isHHMM(value) {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
+
+function normalizeEventList(value) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map(event => {
+      const days = Math.max(1, Number.parseInt(event && event.days, 10) || 1);
+      const times = Array.isArray(event && event.times) ? event.times : [];
+
+      return {
+        date: String(event && event.date ? event.date : "").trim(),
+        title: String(event && event.title ? event.title : "").trim(),
+        days,
+        times: Array.from({ length: days }, (_, index) => ({
+          start: String(times[index] && times[index].start ? times[index].start : "").trim(),
+          end: String(times[index] && times[index].end ? times[index].end : "").trim()
+        })),
+        location: String(event && event.location ? event.location : "").trim(),
+        company: eventCompanyOptions.includes(event && event.company) ? event.company : ""
+      };
+    })
+    .filter(event =>
+      /^\d{4}-\d{2}-\d{2}$/.test(event.date) &&
+      event.title &&
+      event.location &&
+      event.company &&
+      event.times.every(time => isHHMM(time.start) && isHHMM(time.end))
+    );
+}
+
 function parseSchedulePayload(rawValue) {
   const empty = {
     batchHijnx: [],
     batchSb: [],
+    events: [],
     tasks: [],
     testPickups: []
   };
@@ -218,6 +258,7 @@ function parseSchedulePayload(rawValue) {
       return {
         batchHijnx: normalizeBatchList(parsed.batchHijnx),
         batchSb: normalizeBatchList(parsed.batchSb),
+        events: normalizeEventList(parsed.events),
         tasks: Array.isArray(parsed.tasks)
           ? parsed.tasks
               .map(task => ({
@@ -295,6 +336,57 @@ function appendBatchList(container, payload) {
   });
 
   container.appendChild(batchList);
+}
+
+function appendEventList(container, events) {
+  if (!events.length) return;
+
+  const eventList = document.createElement("div");
+  eventList.className = "admin-event-list";
+
+  events.forEach(event => {
+    const item = document.createElement("div");
+    item.className = "admin-event-item";
+    item.textContent = `${event.title} ${event.start}-${event.end} - ${event.location} - ${event.company}`;
+    eventList.appendChild(item);
+  });
+
+  container.appendChild(eventList);
+}
+
+function buildAdminEventsByDate(rows, visibleStart, visibleEnd) {
+  const eventsByDate = new Map();
+  const rangeStart = dateOnly(visibleStart);
+  const rangeEnd = dateOnly(visibleEnd);
+
+  rows.forEach(row => {
+    const payload = parseSchedulePayload(row.tasks);
+    payload.events.forEach(event => {
+      const [year, month, day] = event.date.split("-").map(Number);
+      const eventStart = new Date(year, month - 1, day);
+
+      for (let index = 0; index < event.days; index += 1) {
+        const eventDate = addDays(eventStart, index);
+        if (eventDate < rangeStart || eventDate > rangeEnd) continue;
+
+        const isoDate = toIsoDate(eventDate);
+        if (!eventsByDate.has(isoDate)) {
+          eventsByDate.set(isoDate, []);
+        }
+
+        const time = event.times[index] || { start: "", end: "" };
+        eventsByDate.get(isoDate).push({
+          title: event.title,
+          start: time.start,
+          end: time.end,
+          location: event.location,
+          company: event.company
+        });
+      }
+    });
+  });
+
+  return eventsByDate;
 }
 
 function appendTestPickupList(container, payload) {
@@ -448,6 +540,175 @@ function getBatchValues(type) {
       units: row.querySelector(".batch-units").value.trim()
     }))
     .filter(batch => batch.item);
+}
+
+function refreshEventRows() {
+  document.querySelectorAll(".event-row").forEach((row, index) => {
+    const label = row.querySelector(".event-row-number");
+    if (label) label.textContent = `Event ${index + 1}`;
+  });
+}
+
+function setupHHMMInput(input) {
+  input.inputMode = "numeric";
+  input.maxLength = 5;
+  input.pattern = "([01]\\d|2[0-3]):[0-5]\\d";
+  input.placeholder = "00:00";
+  input.title = "Enter time as HH:MM";
+  input.addEventListener("input", () => {
+    input.value = input.value
+      .replace(/[^\d:]/g, "")
+      .replace(/^(\d{2})(\d)/, "$1:$2")
+      .slice(0, 5);
+  });
+}
+
+function renderEventTimeRows(row, times = []) {
+  const container = row.querySelector(".event-day-times");
+  const days = Math.max(1, Number.parseInt(row.querySelector(".event-days").value, 10) || 1);
+  container.innerHTML = "";
+
+  for (let index = 0; index < days; index += 1) {
+    const time = times[index] || {};
+    const timeRow = document.createElement("div");
+    timeRow.className = "event-day-time-row";
+
+    const label = document.createElement("span");
+    label.textContent = `Day ${index + 1}`;
+    timeRow.appendChild(label);
+
+    const start = document.createElement("input");
+    start.type = "text";
+    start.className = "event-start-time";
+    start.value = time.start || "";
+    setupHHMMInput(start);
+    timeRow.appendChild(start);
+
+    const end = document.createElement("input");
+    end.type = "text";
+    end.className = "event-end-time";
+    end.value = time.end || "";
+    setupHHMMInput(end);
+    timeRow.appendChild(end);
+
+    container.appendChild(timeRow);
+  }
+}
+
+function addEventEntry(value = {}) {
+  const rows = document.getElementById("eventRows");
+  const row = document.createElement("div");
+  row.className = "event-row";
+
+  const heading = document.createElement("b");
+  heading.className = "event-row-number";
+  row.appendChild(heading);
+
+  const grid = document.createElement("div");
+  grid.className = "event-row-grid";
+
+  const dateInput = document.createElement("input");
+  dateInput.type = "date";
+  dateInput.className = "event-date";
+  dateInput.value = value.date || document.getElementById("schedule_edit_date").value || toIsoDate(new Date());
+  grid.appendChild(createOrderField("Date", dateInput));
+
+  const title = document.createElement("input");
+  title.type = "text";
+  title.className = "event-title";
+  title.value = value.title || "";
+  grid.appendChild(createOrderField("Event Title", title));
+
+  const days = document.createElement("input");
+  days.type = "number";
+  days.className = "event-days";
+  days.min = "1";
+  days.step = "1";
+  days.value = String(Math.max(1, Number.parseInt(value.days, 10) || 1));
+  days.addEventListener("input", () => renderEventTimeRows(row, getEventTimesFromRow(row)));
+  grid.appendChild(createOrderField("Length of Days", days));
+
+  const location = document.createElement("input");
+  location.type = "text";
+  location.className = "event-location";
+  location.value = value.location || "";
+  grid.appendChild(createOrderField("Location", location));
+
+  const company = document.createElement("select");
+  company.className = "event-company";
+  const blankOption = document.createElement("option");
+  blankOption.value = "";
+  blankOption.text = "Company Participating";
+  company.appendChild(blankOption);
+  eventCompanyOptions.forEach(optionValue => {
+    const option = document.createElement("option");
+    option.value = optionValue;
+    option.text = optionValue;
+    company.appendChild(option);
+  });
+  company.value = value.company || "";
+  grid.appendChild(createOrderField("Company Participating", company));
+
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.textContent = "Remove";
+  removeButton.addEventListener("click", () => {
+    row.remove();
+    refreshEventRows();
+  });
+  grid.appendChild(removeButton);
+
+  row.appendChild(grid);
+
+  const timeContainer = document.createElement("div");
+  timeContainer.className = "event-day-times";
+  row.appendChild(timeContainer);
+
+  rows.appendChild(row);
+  renderEventTimeRows(row, value.times || []);
+  refreshEventRows();
+  return title;
+}
+
+function populateEventRows(events) {
+  const rows = document.getElementById("eventRows");
+  rows.innerHTML = "";
+  events.forEach(event => addEventEntry(event));
+}
+
+function getEventTimesFromRow(row) {
+  return Array.from(row.querySelectorAll(".event-day-time-row")).map(timeRow => ({
+    start: timeRow.querySelector(".event-start-time").value.trim(),
+    end: timeRow.querySelector(".event-end-time").value.trim()
+  }));
+}
+
+function getEventValues() {
+  return Array.from(document.querySelectorAll(".event-row"))
+    .map(row => ({
+      date: row.querySelector(".event-date").value,
+      title: row.querySelector(".event-title").value.trim(),
+      days: Math.max(1, Number.parseInt(row.querySelector(".event-days").value, 10) || 1),
+      times: getEventTimesFromRow(row),
+      location: row.querySelector(".event-location").value.trim(),
+      company: row.querySelector(".event-company").value
+    }))
+    .filter(event => event.date || event.title || event.location || event.company || event.times.some(time => time.start || time.end));
+}
+
+function validateEvents(events) {
+  const invalid = events.find(event =>
+    !event.date ||
+    !event.title ||
+    !event.location ||
+    !event.company ||
+    event.times.length !== event.days ||
+    event.times.some(time => !isHHMM(time.start) || !isHHMM(time.end))
+  );
+
+  if (invalid) {
+    throw new Error("Each Event needs a date, title, location, company, and valid HH:MM start/end times for every day.");
+  }
 }
 
 function appendOrderedTaskList(container, tasks, className) {
@@ -687,7 +948,7 @@ async function loadAdminCalendar() {
   const firstDay = monthStart(monthInput.value);
   const gridStart = monthGridStart(firstDay);
   const gridEnd = addDays(gridStart, 41);
-  const from = toIsoDate(gridStart);
+  const from = toIsoDate(addDays(gridStart, -180));
   const to = toIsoDate(gridEnd);
   const [scheduleRes, orderedRes] = await Promise.all([
     fetch(`/schedule?from=${from}&to=${to}`),
@@ -703,6 +964,7 @@ async function loadAdminCalendar() {
   const deliveries = orderedRes.ok ? await orderedRes.json() : [];
   adminScheduleRows = new Map(rows.map(row => [row.schedule_date, row.tasks || ""]));
   adminExpectedDeliveriesByDate = buildAdminExpectedDeliveriesByDate(deliveries, gridStart, gridEnd);
+  adminEventsByDate = buildAdminEventsByDate(rows, gridStart, gridEnd);
   renderAdminCalendar(firstDay, gridStart);
 }
 
@@ -730,6 +992,8 @@ function renderAdminCalendar(firstDay, gridStart) {
     dateLabel.className = "admin-calendar-date";
     dateLabel.textContent = date.getDate();
     cell.appendChild(dateLabel);
+
+    appendEventList(cell, adminEventsByDate.get(isoDate) || []);
 
     const payload = parseSchedulePayload(adminScheduleRows.get(isoDate));
     appendBatchList(cell, payload);
@@ -915,6 +1179,9 @@ function getTestPickupValues() {
 }
 
 function buildSchedulePayload(includeTasks = true) {
+  const events = getEventValues();
+  validateEvents(events);
+
   const tasks = includeTasks
     ? Array.from(document.querySelectorAll(".schedule-task-row"))
         .map(row => ({
@@ -933,6 +1200,7 @@ function buildSchedulePayload(includeTasks = true) {
   return JSON.stringify({
     batchHijnx: getBatchValues("hijnx"),
     batchSb: getBatchValues("sb"),
+    events,
     tasks,
     testPickups
   });
@@ -945,6 +1213,7 @@ function editScheduleDay(isoDate) {
 
   document.getElementById("schedule_edit_date").value = isoDate;
   document.getElementById("scheduleEditLabel").textContent = formatDisplayDate(isoDate);
+  populateEventRows(payload.events);
   populateBatchRows("hijnx", payload.batchHijnx);
   populateBatchRows("sb", payload.batchSb);
   taskSection.hidden = isWeekendDay;
@@ -958,6 +1227,7 @@ function editScheduleDay(isoDate) {
 function cancelScheduleEdit() {
   document.getElementById("scheduleEditor").classList.remove("active");
   document.getElementById("schedule_edit_date").value = "";
+  document.getElementById("eventRows").innerHTML = "";
   getBatchRows("hijnx").innerHTML = "";
   getBatchRows("sb").innerHTML = "";
   document.getElementById("scheduleTaskRows").innerHTML = "";
@@ -1011,6 +1281,37 @@ function resetAdminOrderRequestForm() {
   document.getElementById("admin_request_item_needed").value = "";
   document.getElementById("admin_request_qty_needed").value = "";
   document.getElementById("admin_request_suggested_retailer").value = "";
+}
+
+function setupAdminTimeInput(id) {
+  const input = document.getElementById(id);
+  if (!input) return;
+
+  input.pattern = "([01]\\d|2[0-3]):[0-5]\\d";
+  input.title = "Time as HH:MM";
+  input.addEventListener("input", () => {
+    input.value = input.value
+      .replace(/[^\d:]/g, "")
+      .replace(/^(\d{2})(\d)/, "$1:$2")
+      .slice(0, 5);
+  });
+}
+
+function resetAdminManualReceivedForm() {
+  const dateOrdered = document.getElementById("admin_manual_received_date_ordered");
+  if (!dateOrdered) return;
+
+  const today = toIsoDate(new Date());
+  dateOrdered.value = today;
+  document.getElementById("admin_manual_received_expected_delivery_date").value = today;
+  document.getElementById("admin_manual_received_item_name").value = "";
+  document.getElementById("admin_manual_received_package_qty").value = "";
+  document.getElementById("admin_manual_received_units_per_package").value = "";
+  document.getElementById("admin_manual_received_item_supplier").value = "";
+  document.getElementById("admin_manual_received_department").value = "";
+  document.getElementById("admin_manual_received_date").value = today;
+  document.getElementById("admin_manual_received_time").value = "";
+  document.getElementById("admin_manual_received_location").value = "";
 }
 
 async function loadOrderedItems() {
@@ -1071,11 +1372,49 @@ async function saveAdminOrderRequest() {
   await loadOrderRequests();
 }
 
+async function saveAdminManualReceivedItem() {
+  const receivedTime = document.getElementById("admin_manual_received_time").value.trim();
+  if (receivedTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(receivedTime)) {
+    showMessage("Received time must use HH:MM format.", "error");
+    return;
+  }
+
+  const payload = {
+    date_ordered: document.getElementById("admin_manual_received_date_ordered").value,
+    expected_delivery_date: document.getElementById("admin_manual_received_expected_delivery_date").value,
+    item_name: document.getElementById("admin_manual_received_item_name").value,
+    package_qty: document.getElementById("admin_manual_received_package_qty").value,
+    units_per_package: document.getElementById("admin_manual_received_units_per_package").value,
+    item_supplier: document.getElementById("admin_manual_received_item_supplier").value,
+    department: document.getElementById("admin_manual_received_department").value,
+    received_date: document.getElementById("admin_manual_received_date").value,
+    received_time: receivedTime,
+    received_location: document.getElementById("admin_manual_received_location").value
+  };
+
+  const res = await fetch("/ordered-items/received", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Received item save failed: " + text, "error");
+    return;
+  }
+
+  resetAdminManualReceivedForm();
+  showMessage("Received item added.", "success");
+  await loadOrderedItems();
+}
+
 function renderAdminOrderRequests() {
   const container = document.getElementById("adminOrderRequests");
+  const openRequests = allOrderRequests.filter(request => !request.ordered_item_id);
   container.innerHTML = "";
 
-  if (!allOrderRequests.length) {
+  if (!openRequests.length) {
     const empty = document.createElement("div");
     empty.className = "message";
     empty.textContent = "No item requests yet.";
@@ -1104,7 +1443,7 @@ function renderAdminOrderRequests() {
   });
   table.appendChild(headerRow);
 
-  allOrderRequests.forEach(request => {
+  openRequests.forEach(request => {
     const row = document.createElement("tr");
     appendCell(row, request.request_date, labels[0]);
     appendCell(row, request.requester_name, labels[1]);
@@ -1480,6 +1819,8 @@ async function initAdmin() {
   setDefaultCalendarMonth();
   resetOrderedForm();
   resetAdminOrderRequestForm();
+  resetAdminManualReceivedForm();
+  setupAdminTimeInput("admin_manual_received_time");
   await loadReport();
 }
 

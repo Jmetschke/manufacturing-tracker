@@ -16,6 +16,32 @@
       margin-top: 0;
     }
 
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .page-header h2 {
+      margin: 0;
+    }
+
+    .screen-link {
+      border: 1px solid #2364aa;
+      background: #2364aa;
+      color: #fff;
+      text-decoration: none;
+      padding: 9px 12px;
+      font-size: 15px;
+      line-height: 1.2;
+    }
+
+    .screen-link:visited {
+      color: #fff;
+    }
+
     .tabs {
       display: flex;
       gap: 8px;
@@ -123,6 +149,18 @@
       background: #fff;
       min-height: 110px;
       padding: 8px;
+    }
+
+    .event-list {
+      display: grid;
+      gap: 5px;
+      margin-bottom: 8px;
+    }
+
+    .event-item {
+      background: #f3eefb;
+      border-left: 3px solid #6d3bbd;
+      padding: 5px 6px;
     }
 
     .schedule-day-name {
@@ -249,6 +287,59 @@
       flex: 0 1 auto;
     }
 
+    .timer-panel {
+      border: 1px solid #d8d8d2;
+      background: #fff;
+      padding: 12px;
+      margin: 12px 0 18px;
+    }
+
+    .timer-panel h3 {
+      margin: 0 0 8px;
+    }
+
+    .timer-readout {
+      font-size: 2rem;
+      font-weight: bold;
+      letter-spacing: 0;
+    }
+
+    .timer-status {
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+
+    .timer-status.running {
+      color: #176a2c;
+    }
+
+    .timer-status.paused,
+    .timer-status.stopped {
+      color: #8a5a00;
+    }
+
+    .timer-status.ready {
+      color: #123c69;
+    }
+
+    .timer-hint,
+    .timer-context {
+      color: #555;
+      line-height: 1.4;
+      margin-bottom: 8px;
+    }
+
+    .timer-message {
+      min-height: 22px;
+      color: #176a2c;
+      font-weight: bold;
+      margin-top: 6px;
+    }
+
+    .timer-message.error {
+      color: #a00000;
+    }
+
     .table-wrap {
       overflow-x: auto;
       width: 100%;
@@ -346,6 +437,18 @@
 
       h2 {
         font-size: 1.6rem;
+      }
+
+      .page-header {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .screen-link {
+        display: block;
+        text-align: center;
+        font-size: 18px;
+        padding: 14px 12px;
       }
 
       h3 {
@@ -491,7 +594,10 @@
 </head>
 <body>
 
-<h2>Production Tracker</h2>
+<div class="page-header">
+  <h2>Production Tracker</h2>
+  <a class="screen-link" href="/admin.html">Admin Dashboard</a>
+</div>
 
 <div class="tabs">
   <button class="tab-button active" type="button" onclick="showTab('tracker')">Time Entry</button>
@@ -508,16 +614,22 @@
     <input type="date" id="work_date">
     <select id="item"></select>
     <select id="task"></select>
-    <input type="number" id="qty" placeholder="Quantity">
+    <input type="number" id="qty" min="0" step="1" placeholder="Quantity">
   </div>
 
-  <h3>Timer: <span id="timer">00:00:00</span></h3>
+  <div class="timer-panel">
+    <h3>Timer: <span id="timer" class="timer-readout">00:00:00</span></h3>
+    <div id="timerStatus" class="timer-status ready">Ready to start</div>
+    <div id="timerHint" class="timer-hint">Select employee, date, item, task, and quantity. Then tap Start Timer.</div>
+    <div id="timerContext" class="timer-context"></div>
 
-  <div class="timer-actions">
-    <button type="button" onclick="startTimer()">Start</button>
-    <button type="button" id="pauseBtn" onclick="pauseTimer()">Pause</button>
-    <button type="button" onclick="stopTimer()">Stop</button>
-    <button type="button" id="saveBtn" onclick="saveQuantity()">Save Qty</button>
+    <div class="timer-actions">
+      <button type="button" id="startBtn" onclick="startTimer()">Start Timer</button>
+      <button type="button" id="pauseBtn" onclick="pauseTimer()">Pause</button>
+      <button type="button" id="stopBtn" onclick="stopTimer()">Stop Timer</button>
+      <button type="button" id="saveBtn" onclick="saveQuantity()">Finish Entry</button>
+    </div>
+    <div id="timerMessage" class="timer-message"></div>
   </div>
 
   <div class="saved-entries">
@@ -613,6 +725,53 @@
   </div>
 
   <div class="deliveries-section">
+    <h3>Manual Received Item</h3>
+    <div class="request-form">
+      <div class="request-field">
+        <label for="manual_received_date_ordered">Date Ordered</label>
+        <input type="date" id="manual_received_date_ordered" required>
+      </div>
+      <div class="request-field">
+        <label for="manual_received_expected_delivery_date">Expected Delivery</label>
+        <input type="date" id="manual_received_expected_delivery_date" required>
+      </div>
+      <div class="request-field">
+        <label for="manual_received_item_name">Item Name</label>
+        <input type="text" id="manual_received_item_name" required>
+      </div>
+      <div class="request-field">
+        <label for="manual_received_package_qty">Package QTY</label>
+        <input type="number" id="manual_received_package_qty" min="0" step="1" required>
+      </div>
+      <div class="request-field">
+        <label for="manual_received_units_per_package">Units Per Package</label>
+        <input type="number" id="manual_received_units_per_package" min="0" step="1">
+      </div>
+      <div class="request-field">
+        <label for="manual_received_item_supplier">Retailer/Supplier</label>
+        <input type="text" id="manual_received_item_supplier" required>
+      </div>
+      <div class="request-field">
+        <label for="manual_received_department">Department</label>
+        <input type="text" id="manual_received_department" required>
+      </div>
+      <div class="request-field">
+        <label for="manual_received_date">Received Date</label>
+        <input type="date" id="manual_received_date" required>
+      </div>
+      <div class="request-field">
+        <label for="manual_received_time">Received Time</label>
+        <input type="text" id="manual_received_time" placeholder="00:00" inputmode="numeric" maxlength="5">
+      </div>
+      <div class="request-field">
+        <label for="manual_received_location">Received Location</label>
+        <input type="text" id="manual_received_location" required>
+      </div>
+    </div>
+    <div class="request-actions">
+      <button type="button" onclick="saveManualReceivedItem()">Add Received Item</button>
+    </div>
+
     <h3>Received Deliveries</h3>
     <div id="receivedDeliveries"></div>
   </div>
