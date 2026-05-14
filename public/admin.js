@@ -7,6 +7,7 @@ let allOrderRequests = [];
 let adminScheduleRows = new Map();
 let adminExpectedDeliveriesByDate = new Map();
 let adminEventsByDate = new Map();
+let adminProjectedTasksByDate = new Map();
 const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const eventCompanyOptions = ["Snackbar", "Hijnx", "Snackbar & Hijnx"];
 const hijnxBatchOptions = [
@@ -162,6 +163,25 @@ function addDays(date, days) {
 
 function dateOnly(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function isWeekend(date) {
+  return date.getDay() === 0 || date.getDay() === 6;
+}
+
+function getProjectedWorkDates(startDate, days) {
+  const dates = [];
+  let current = dateOnly(startDate);
+
+  while (dates.length < days) {
+    if (!isWeekend(current)) {
+      dates.push(current);
+    }
+
+    current = addDays(current, 1);
+  }
+
+  return dates;
 }
 
 function isWeekendIsoDate(value) {
@@ -387,6 +407,33 @@ function buildAdminEventsByDate(rows, visibleStart, visibleEnd) {
   });
 
   return eventsByDate;
+}
+
+function buildAdminProjectedTasksByDate(rows, visibleStart, visibleEnd) {
+  const tasksByDate = new Map();
+  const rangeStart = dateOnly(visibleStart);
+  const rangeEnd = dateOnly(visibleEnd);
+
+  rows.forEach(row => {
+    const [year, month, day] = row.schedule_date.split("-").map(Number);
+    const startDate = new Date(year, month - 1, day);
+    const payload = parseSchedulePayload(row.tasks);
+
+    payload.tasks.forEach(task => {
+      getProjectedWorkDates(startDate, task.days).forEach(activeDate => {
+        if (activeDate < rangeStart || activeDate > rangeEnd) return;
+
+        const isoDate = toIsoDate(activeDate);
+        if (!tasksByDate.has(isoDate)) {
+          tasksByDate.set(isoDate, []);
+        }
+
+        tasksByDate.get(isoDate).push({ text: task.text, days: task.days });
+      });
+    });
+  });
+
+  return tasksByDate;
 }
 
 function appendTestPickupList(container, payload) {
@@ -712,7 +759,7 @@ function validateEvents(events) {
 }
 
 function appendOrderedTaskList(container, tasks, className) {
-  const lines = getScheduleTasks(tasks);
+  const lines = Array.isArray(tasks) ? tasks : getScheduleTasks(tasks);
   if (!lines.length) return;
 
   const list = document.createElement("ol");
@@ -965,6 +1012,7 @@ async function loadAdminCalendar() {
   adminScheduleRows = new Map(rows.map(row => [row.schedule_date, row.tasks || ""]));
   adminExpectedDeliveriesByDate = buildAdminExpectedDeliveriesByDate(deliveries, gridStart, gridEnd);
   adminEventsByDate = buildAdminEventsByDate(rows, gridStart, gridEnd);
+  adminProjectedTasksByDate = buildAdminProjectedTasksByDate(rows, gridStart, gridEnd);
   renderAdminCalendar(firstDay, gridStart);
 }
 
@@ -1002,7 +1050,7 @@ function renderAdminCalendar(firstDay, gridStart) {
 
     const tasks = document.createElement("div");
     tasks.className = "admin-calendar-tasks";
-    appendOrderedTaskList(tasks, adminScheduleRows.get(isoDate), "admin-task-list");
+    appendOrderedTaskList(tasks, adminProjectedTasksByDate.get(isoDate) || [], "admin-task-list");
     cell.appendChild(tasks);
 
     const editButton = document.createElement("button");
