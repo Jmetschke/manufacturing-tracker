@@ -709,28 +709,39 @@ app.put("/admin/order-requests/:id/order", (req, res) => {
   });
 });
 
-app.post("/admin/ordered-items", (req, res) => {
+app.post("/admin/ordered-items", async (req, res) => {
   const dateOrdered = normalizeRequiredText(req.body.date_ordered);
   const expectedDeliveryDate = normalizeRequiredText(req.body.expected_delivery_date);
-  const itemName = normalizeRequiredText(req.body.item_name);
   const itemCompany = normalizeRequiredText(req.body.item_company) || "Manual Entry";
   const itemSupplier = normalizeRequiredText(req.body.item_supplier);
   const department = normalizeRequiredText(req.body.department);
-  const packageQty = Number(req.body.package_qty);
+  const items = Array.isArray(req.body.items)
+    ? req.body.items.map(item => ({
+        itemName: normalizeRequiredText(item && item.item_name),
+        packageQty: Number(item && item.package_qty)
+      }))
+    : [{
+        itemName: normalizeRequiredText(req.body.item_name),
+        packageQty: Number(req.body.package_qty)
+      }];
 
   if (!isIsoDate(dateOrdered) || !isIsoDate(expectedDeliveryDate)) {
     return res.status(400).send("Valid ordered and expected delivery dates are required");
   }
 
-  if (!itemName || !itemSupplier || !department) {
+  if (!itemSupplier || !department) {
+    return res.status(400).send("Supplier and department are required");
+  }
+
+  if (!items.length || items.some(item => !item.itemName)) {
     return res.status(400).send("Item name, supplier, and department are required");
   }
 
-  if (!Number.isInteger(packageQty) || packageQty < 0) {
+  if (items.some(item => !Number.isInteger(item.packageQty) || item.packageQty < 0)) {
     return res.status(400).send("Package QTY must be a whole number zero or greater");
   }
 
-  db.run(
+  const insertSql =
     `INSERT INTO ordered_items (
        date_ordered,
        expected_delivery_date,
@@ -741,21 +752,35 @@ app.post("/admin/ordered-items", (req, res) => {
        department,
        updated_at
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-    [
-      dateOrdered,
-      expectedDeliveryDate,
-      itemName,
-      itemCompany,
-      packageQty,
-      itemSupplier,
-      department
-    ],
-    function (err) {
-      if (err) return res.status(500).send(err.message);
-      res.status(201).json({ message: "Ordered item added", id: this.lastID });
+     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`;
+
+  try {
+    await runSql("BEGIN TRANSACTION");
+    const ids = [];
+
+    for (const item of items) {
+      const result = await runSql(insertSql, [
+        dateOrdered,
+        expectedDeliveryDate,
+        item.itemName,
+        itemCompany,
+        item.packageQty,
+        itemSupplier,
+        department
+      ]);
+      ids.push(result.lastID);
     }
-  );
+
+    await runSql("COMMIT");
+    res.status(201).json({ message: "Ordered delivery added", ids });
+  } catch (err) {
+    try {
+      await runSql("ROLLBACK");
+    } catch (rollbackErr) {
+      console.error("Rollback failed:", rollbackErr.message);
+    }
+    res.status(500).send(err.message);
+  }
 });
 
 app.post("/ordered-items/received", (req, res) => {

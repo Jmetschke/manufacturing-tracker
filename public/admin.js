@@ -1316,10 +1316,55 @@ async function saveScheduleDay() {
 function resetOrderedForm() {
   document.getElementById("ordered_date_ordered").value = toIsoDate(new Date());
   document.getElementById("ordered_expected_delivery_date").value = "";
-  document.getElementById("ordered_item_name").value = "";
-  document.getElementById("ordered_package_qty").value = "";
   document.getElementById("ordered_item_supplier").value = "";
   document.getElementById("ordered_department").value = "";
+  document.getElementById("orderedItemRows").innerHTML = "";
+  addOrderedItemRow();
+}
+
+function addOrderedItemRow(value = { item_name: "", package_qty: "" }) {
+  const rows = document.getElementById("orderedItemRows");
+  const row = document.createElement("div");
+  row.className = "ordered-item-row";
+
+  const itemName = document.createElement("input");
+  itemName.type = "text";
+  itemName.className = "ordered-item-name";
+  itemName.placeholder = "Item Name";
+  itemName.value = value.item_name || "";
+  row.appendChild(itemName);
+
+  const packageQty = document.createElement("input");
+  packageQty.type = "number";
+  packageQty.className = "ordered-item-package-qty";
+  packageQty.min = "0";
+  packageQty.step = "1";
+  packageQty.placeholder = "Package QTY";
+  packageQty.value = value.package_qty || "";
+  row.appendChild(packageQty);
+
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.textContent = "Remove";
+  removeButton.addEventListener("click", () => {
+    row.remove();
+    if (!rows.children.length) {
+      addOrderedItemRow();
+    }
+  });
+  row.appendChild(removeButton);
+
+  rows.appendChild(row);
+  return itemName;
+}
+
+function getOrderedItemRows() {
+  return Array.from(document.querySelectorAll(".ordered-item-row"))
+    .map(row => ({
+      item_name: row.querySelector(".ordered-item-name").value.trim(),
+      package_qty: row.querySelector(".ordered-item-package-qty").value
+    }))
+    .filter(item => item.item_name || item.package_qty);
 }
 
 function resetAdminOrderRequestForm() {
@@ -1835,11 +1880,11 @@ async function undoAdminReceivedItem(itemId) {
 }
 
 async function saveOrderedItem() {
+  const items = getOrderedItemRows();
   const payload = {
     date_ordered: document.getElementById("ordered_date_ordered").value,
     expected_delivery_date: document.getElementById("ordered_expected_delivery_date").value,
-    item_name: document.getElementById("ordered_item_name").value,
-    package_qty: document.getElementById("ordered_package_qty").value,
+    items,
     item_supplier: document.getElementById("ordered_item_supplier").value,
     department: document.getElementById("ordered_department").value
   };
@@ -1852,12 +1897,12 @@ async function saveOrderedItem() {
 
   if (!res.ok) {
     const text = await res.text();
-    showMessage("Ordered item save failed: " + text, "error");
+    showMessage("Ordered delivery save failed: " + text, "error");
     return;
   }
 
   resetOrderedForm();
-  showMessage("Ordered item added.", "success");
+  showMessage("Ordered delivery added.", "success");
   await loadOrderedItems();
 }
 
