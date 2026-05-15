@@ -316,6 +316,14 @@ function isHHMM(value) {
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
 }
 
+function hasValidOptionalEventTimes(event) {
+  return event.times.every(time => {
+    const hasStart = Boolean(time.start);
+    const hasEnd = Boolean(time.end);
+    return (!hasStart && !hasEnd) || (isHHMM(time.start) && isHHMM(time.end));
+  });
+}
+
 function normalizeEventList(value) {
   if (!Array.isArray(value)) return [];
 
@@ -341,7 +349,7 @@ function normalizeEventList(value) {
       event.title &&
       event.location &&
       event.company &&
-      event.times.every(time => isHHMM(time.start) && isHHMM(time.end))
+      hasValidOptionalEventTimes(event)
     );
 }
 
@@ -455,7 +463,8 @@ function appendEventList(container, events) {
   events.forEach(event => {
     const item = document.createElement("div");
     item.className = "event-item";
-    item.textContent = `${event.title} ${event.start}-${event.end} - ${event.location} - ${event.company}`;
+    const timeText = event.start && event.end ? ` ${event.start}-${event.end}` : "";
+    item.textContent = `${event.title}${timeText} - ${event.location} - ${event.company}`;
     eventList.appendChild(item);
   });
 

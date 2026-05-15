@@ -232,6 +232,14 @@ function isHHMM(value) {
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
 }
 
+function hasValidOptionalEventTimes(event) {
+  return event.times.every(time => {
+    const hasStart = Boolean(time.start);
+    const hasEnd = Boolean(time.end);
+    return (!hasStart && !hasEnd) || (isHHMM(time.start) && isHHMM(time.end));
+  });
+}
+
 function normalizeEventList(value) {
   if (!Array.isArray(value)) return [];
 
@@ -257,7 +265,7 @@ function normalizeEventList(value) {
       event.title &&
       event.location &&
       event.company &&
-      event.times.every(time => isHHMM(time.start) && isHHMM(time.end))
+      hasValidOptionalEventTimes(event)
     );
 }
 
@@ -367,7 +375,8 @@ function appendEventList(container, events) {
   events.forEach(event => {
     const item = document.createElement("div");
     item.className = "admin-event-item";
-    item.textContent = `${event.title} ${event.start}-${event.end} - ${event.location} - ${event.company}`;
+    const timeText = event.start && event.end ? ` ${event.start}-${event.end}` : "";
+    item.textContent = `${event.title}${timeText} - ${event.location} - ${event.company}`;
     eventList.appendChild(item);
   });
 
@@ -616,14 +625,15 @@ function setupHHMMInput(input) {
 function normalizeHHMMInput(value) {
   const text = String(value || "").trim();
   if (!text) return "";
+  const digits = text.replace(/\D/g, "");
 
   if (/^\d{1,2}:\d{2}$/.test(text)) {
     const [hour, minute] = text.split(":");
     return `${hour.padStart(2, "0")}:${minute}`;
   }
 
-  if (/^\d{3,4}$/.test(text)) {
-    const padded = text.padStart(4, "0");
+  if (/^\d{3,4}$/.test(digits)) {
+    const padded = digits.padStart(4, "0");
     return `${padded.slice(0, 2)}:${padded.slice(2)}`;
   }
 
@@ -770,11 +780,11 @@ function validateEvents(events) {
     !event.location ||
     !event.company ||
     event.times.length !== event.days ||
-    event.times.some(time => !isHHMM(time.start) || !isHHMM(time.end))
+    !hasValidOptionalEventTimes(event)
   );
 
   if (invalid) {
-    throw new Error("Each Event needs a date, title, location, company, and valid HH:MM start/end times for every day.");
+    throw new Error("Each Event needs a date, title, location, company, and valid HH:MM start/end times when times are entered.");
   }
 }
 
