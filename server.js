@@ -178,7 +178,8 @@ const itemNames = [
   "Watermelon 1g",
   "Big Stick",
   "Small Stick",
-  "Tiny Stick"
+  "Tiny Stick",
+  "Swag"
 ];
 
 const taskNames = [
@@ -206,7 +207,10 @@ const taskNames = [
   "Exit Label Stickering",
   "Packaging Labels Stickering",
   "Correction Stickering",
-  "Seal-Stickering (shooters)"
+  "Seal-Stickering (shooters)",
+  "Swag Press",
+  "Swag Assembly",
+  "Swag Counting"
 ];
 
 function runSql(sql, params = []) {
@@ -246,6 +250,12 @@ async function seedNames(table, names) {
         SELECT 1 FROM ${table} WHERE name = ?
       )
     `, [name, name]);
+  }
+}
+
+async function removeNames(table, names) {
+  for (const name of names) {
+    await runSql(`DELETE FROM ${table} WHERE name = ?`, [name]);
   }
 }
 
@@ -447,7 +457,9 @@ async function initializeDatabase() {
   await clearWeekendScheduleTasks();
 
   await seedNames("items", itemNames);
+  await removeNames("items", ["Item A", "Item B"]);
   await seedNames("tasks", taskNames);
+  await removeNames("tasks", ["Assembly"]);
   await logLookupCount("items");
   await logLookupCount("tasks");
 }
