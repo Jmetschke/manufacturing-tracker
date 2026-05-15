@@ -224,8 +224,25 @@
       margin: 0;
       width: 100%;
     }
-    .test-pickup-items {
-      min-height: 120px;
+    .test-pickup-item-picker {
+      display: grid;
+      grid-template-columns: minmax(160px, 1fr) auto;
+      gap: 6px;
+    }
+    .test-pickup-selected-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      grid-column: 1 / -1;
+      margin-top: 6px;
+    }
+    .test-pickup-selected-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border: 1px solid #d8d8d2;
+      background: #fff;
+      padding: 4px 6px;
     }
     .admin-test-pickup-list {
       display: grid;
@@ -381,6 +398,7 @@
       .batch-row,
       .schedule-task-row,
       .test-pickup-row { grid-template-columns: 28px 1fr; }
+      .test-pickup-item-picker { grid-template-columns: 1fr; }
       .ordered-item-row { grid-template-columns: 1fr; }
       .event-row-grid,
       .event-day-time-row { grid-template-columns: 1fr; }

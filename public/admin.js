@@ -608,6 +608,26 @@ function setupHHMMInput(input) {
       .replace(/^(\d{2})(\d)/, "$1:$2")
       .slice(0, 5);
   });
+  input.addEventListener("blur", () => {
+    input.value = normalizeHHMMInput(input.value);
+  });
+}
+
+function normalizeHHMMInput(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+
+  if (/^\d{1,2}:\d{2}$/.test(text)) {
+    const [hour, minute] = text.split(":");
+    return `${hour.padStart(2, "0")}:${minute}`;
+  }
+
+  if (/^\d{3,4}$/.test(text)) {
+    const padded = text.padStart(4, "0");
+    return `${padded.slice(0, 2)}:${padded.slice(2)}`;
+  }
+
+  return text;
 }
 
 function renderEventTimeRows(row, times = []) {
@@ -725,8 +745,8 @@ function populateEventRows(events) {
 
 function getEventTimesFromRow(row) {
   return Array.from(row.querySelectorAll(".event-day-time-row")).map(timeRow => ({
-    start: timeRow.querySelector(".event-start-time").value.trim(),
-    end: timeRow.querySelector(".event-end-time").value.trim()
+    start: normalizeHHMMInput(timeRow.querySelector(".event-start-time").value),
+    end: normalizeHHMMInput(timeRow.querySelector(".event-end-time").value)
   }));
 }
 
@@ -740,7 +760,7 @@ function getEventValues() {
       location: row.querySelector(".event-location").value.trim(),
       company: row.querySelector(".event-company").value
     }))
-    .filter(event => event.date || event.title || event.location || event.company || event.times.some(time => time.start || time.end));
+    .filter(event => event.title || event.location || event.company || event.times.some(time => time.start || time.end));
 }
 
 function validateEvents(events) {
@@ -1157,6 +1177,28 @@ function refreshTestPickupRows() {
   });
 }
 
+function addTestPickupSelectedItem(container, itemName) {
+  const item = String(itemName || "").trim();
+  if (!item) return;
+
+  const existingItems = Array.from(container.querySelectorAll(".test-pickup-selected-item"))
+    .map(element => element.dataset.itemName);
+  if (existingItems.includes(item)) return;
+
+  const chip = document.createElement("span");
+  chip.className = "test-pickup-selected-item";
+  chip.dataset.itemName = item;
+  chip.append(document.createTextNode(item));
+
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.textContent = "Remove";
+  removeButton.addEventListener("click", () => chip.remove());
+  chip.appendChild(removeButton);
+
+  container.appendChild(chip);
+}
+
 function addTestPickup(value = { time: "", items: [] }) {
   const rows = document.getElementById("testPickupRows");
   const row = document.createElement("div");
@@ -1183,17 +1225,43 @@ function addTestPickup(value = { time: "", items: [] }) {
   });
   row.appendChild(timeInput);
 
+  const itemPicker = document.createElement("div");
+  itemPicker.className = "test-pickup-item-picker";
+
   const itemSelect = document.createElement("select");
-  itemSelect.className = "test-pickup-items";
-  itemSelect.multiple = true;
-  allTasks.forEach(task => {
+  itemSelect.className = "test-pickup-item-select";
+
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.text = "Select item";
+  itemSelect.appendChild(placeholder);
+
+  allItems.forEach(item => {
     const option = document.createElement("option");
-    option.value = task.name;
-    option.text = task.name;
-    option.selected = Array.isArray(value.items) && value.items.includes(task.name);
+    option.value = item.name;
+    option.text = item.name;
     itemSelect.appendChild(option);
   });
-  row.appendChild(itemSelect);
+  itemPicker.appendChild(itemSelect);
+
+  const selectedItems = document.createElement("div");
+  selectedItems.className = "test-pickup-selected-items";
+
+  const addItemButton = document.createElement("button");
+  addItemButton.type = "button";
+  addItemButton.textContent = "Add Item";
+  addItemButton.addEventListener("click", () => {
+    addTestPickupSelectedItem(selectedItems, itemSelect.value);
+    itemSelect.value = "";
+  });
+  itemPicker.appendChild(addItemButton);
+  itemPicker.appendChild(selectedItems);
+
+  if (Array.isArray(value.items)) {
+    value.items.forEach(item => addTestPickupSelectedItem(selectedItems, item));
+  }
+
+  row.appendChild(itemPicker);
 
   const removeButton = document.createElement("button");
   removeButton.type = "button";
@@ -1219,8 +1287,8 @@ function getTestPickupValues() {
   return Array.from(document.querySelectorAll(".test-pickup-row"))
     .map(row => ({
       time: row.querySelector(".test-pickup-time").value.trim(),
-      items: Array.from(row.querySelector(".test-pickup-items").selectedOptions)
-        .map(option => option.value)
+      items: Array.from(row.querySelectorAll(".test-pickup-selected-item"))
+        .map(item => item.dataset.itemName)
         .filter(Boolean)
     }))
     .filter(pickup => pickup.time || pickup.items.length);
