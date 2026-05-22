@@ -849,6 +849,10 @@ function appendCell(row, value, label = "") {
   row.appendChild(cell);
 }
 
+function getEntryDataStatus(entry) {
+  return entry.data_status || (entry.work_date < "2026-05-21" ? "test data" : "live");
+}
+
 function renderTable() {
   const container = document.getElementById("table");
   container.innerHTML = "";
@@ -858,7 +862,7 @@ function renderTable() {
   const headerRow = document.createElement("tr");
   headerRow.className = "table-heading-row";
 
-  const labels = ["Date", "Employee", "Item", "Task", "Qty", "Time", "Sec/Unit", "Action"];
+  const labels = ["Date", "Status", "Employee", "Item", "Task", "Qty", "Time", "Sec/Unit", "Action"];
   labels.forEach(label => {
     const th = document.createElement("th");
     th.textContent = label === "Action" ? "" : label;
@@ -868,16 +872,24 @@ function renderTable() {
 
   reportData.forEach(entry => {
     const row = document.createElement("tr");
+    const dataStatus = getEntryDataStatus(entry);
+    if (dataStatus === "test data") {
+      row.classList.add("test-data-row");
+      row.style.backgroundColor = "#f1f1f1";
+      row.style.color = "#777";
+    }
+
     appendCell(row, entry.work_date, labels[0]);
-    appendCell(row, entry.employee, labels[1]);
-    appendCell(row, entry.item, labels[2]);
-    appendCell(row, entry.task, labels[3]);
-    appendCell(row, entry.quantity || 0, labels[4]);
-    appendCell(row, secondsToHMS(entry.duration_seconds), labels[5]);
-    appendCell(row, Math.round(entry.sec_per_unit || 0), labels[6]);
+    appendCell(row, dataStatus, labels[1]);
+    appendCell(row, entry.employee, labels[2]);
+    appendCell(row, entry.item, labels[3]);
+    appendCell(row, entry.task, labels[4]);
+    appendCell(row, entry.quantity || 0, labels[5]);
+    appendCell(row, secondsToHMS(entry.duration_seconds), labels[6]);
+    appendCell(row, Math.round(entry.sec_per_unit || 0), labels[7]);
 
     const actionCell = document.createElement("td");
-    actionCell.dataset.label = labels[7];
+    actionCell.dataset.label = labels[8];
     const editButton = document.createElement("button");
     editButton.type = "button";
     editButton.textContent = "Edit";
@@ -973,11 +985,12 @@ async function saveEntryEdit() {
 function exportCSV() {
   if (!reportData.length) return;
 
-  let csv = "Date,Employee,Item,Task,Qty,Total Time,Sec/Unit\n";
+  let csv = "Date,Status,Employee,Item,Task,Qty,Total Time,Sec/Unit\n";
 
   reportData.forEach(entry => {
     csv += [
       entry.work_date,
+      getEntryDataStatus(entry),
       entry.employee,
       entry.item,
       entry.task,

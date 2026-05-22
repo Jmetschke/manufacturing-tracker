@@ -1251,6 +1251,10 @@ app.get("/admin/entries", (req, res) => {
       COALESCE(t.name, 'Unknown Task') AS task,
       l.employee,
       l.work_date,
+      CASE
+        WHEN l.work_date < '2026-05-21' THEN 'test data'
+        ELSE 'live'
+      END AS data_status,
       COALESCE(l.quantity, 0) AS quantity,
       COALESCE(l.duration_seconds, 0) AS duration_seconds,
       CASE
@@ -1333,6 +1337,10 @@ app.get("/report", (req, res) => {
       COALESCE(t.name, 'Unknown Task') AS task,
       l.employee,
       l.work_date,
+      CASE
+        WHEN l.work_date < '2026-05-21' THEN 'test data'
+        ELSE 'live'
+      END AS data_status,
       SUM(COALESCE(l.quantity, 0)) AS total_qty,
       SUM(COALESCE(l.duration_seconds, 0)) AS total_time,
       CASE 
