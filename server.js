@@ -4,6 +4,8 @@ const express = require("express");
 const crypto = require("crypto");
 const path = require("path");
 const db = require("./db");
+const calendarDb = db.calendar || db;
+const hasSeparateCalendarDb = calendarDb !== db;
 const app = express();
 
 app.use(express.json());
@@ -213,30 +215,30 @@ const taskNames = [
   "Swag Counting"
 ];
 
-function runSql(sql, params = []) {
+function runSql(sql, params = [], database = db) {
   return new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
+    database.run(sql, params, function (err) {
       if (err) return reject(err);
       resolve(this);
     });
   });
 }
 
-function allSql(sql, params = []) {
+function allSql(sql, params = [], database = db) {
   return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
+    database.all(sql, params, (err, rows) => {
       if (err) return reject(err);
       resolve(rows);
     });
   });
 }
 
-async function addMissingColumn(table, column, definition) {
-  const columns = await allSql(`PRAGMA table_info(${table})`);
+async function addMissingColumn(table, column, definition, database = db) {
+  const columns = await allSql(`PRAGMA table_info(${table})`, [], database);
   const exists = columns.some(c => c.name === column);
   if (exists) return false;
 
-  await runSql(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  await runSql(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`, [], database);
   console.log(`Added missing column: ${table}.${column}`);
   return true;
 }
@@ -335,12 +337,73 @@ async function clearWeekendScheduleTasks() {
     if (!payload.tasks.length) continue;
 
     payload.tasks = [];
-    await runSql(
+    const updatePrimary = runSql(
       "UPDATE schedule_days SET tasks = ?, updated_at = datetime('now') WHERE schedule_date = ?",
       [JSON.stringify(payload), row.schedule_date]
     );
+
+    if (hasSeparateCalendarDb) {
+      await Promise.all([
+        updatePrimary,
+        runSql(
+          "UPDATE schedule_days SET tasks = ?, updated_at = datetime('now') WHERE schedule_date = ?",
+          [JSON.stringify(payload), row.schedule_date],
+          calendarDb
+        )
+      ]);
+    } else {
+      await updatePrimary;
+    }
+
     console.log(`Removed weekend calendar tasks from ${row.schedule_date}`);
   }
+}
+
+async function writeScheduleDayToDatabases(scheduleDate, tasks) {
+  const sql = `
+    INSERT INTO schedule_days (schedule_date, tasks, updated_at)
+    VALUES (?, ?, datetime('now'))
+    ON CONFLICT(schedule_date) DO UPDATE SET
+      tasks = excluded.tasks,
+      updated_at = excluded.updated_at
+  `;
+
+  if (hasSeparateCalendarDb) {
+    const [primaryResult] = await Promise.all([
+      runSql(sql, [scheduleDate, tasks]),
+      runSql(sql, [scheduleDate, tasks], calendarDb)
+    ]);
+    return primaryResult;
+  }
+
+  return runSql(sql, [scheduleDate, tasks]);
+}
+
+async function reconcileCalendarDatabase() {
+  if (!hasSeparateCalendarDb) return;
+
+  const rows = await allSql(`
+    SELECT schedule_date, tasks, updated_at
+    FROM schedule_days
+  `);
+
+  const sql = `
+    INSERT INTO schedule_days (schedule_date, tasks, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(schedule_date) DO UPDATE SET
+      tasks = excluded.tasks,
+      updated_at = excluded.updated_at
+  `;
+
+  for (const row of rows) {
+    await runSql(sql, [
+      row.schedule_date,
+      row.tasks || "",
+      row.updated_at || null
+    ], calendarDb);
+  }
+
+  console.log(`Reconciled ${rows.length} calendar rows from primary database to calendar database.`);
 }
 
 async function initializeDatabase() {
@@ -381,6 +444,16 @@ async function initializeDatabase() {
       updated_at TEXT
     )
   `);
+
+  if (hasSeparateCalendarDb) {
+    await runSql(`
+      CREATE TABLE IF NOT EXISTS schedule_days (
+        schedule_date TEXT PRIMARY KEY,
+        tasks TEXT DEFAULT '',
+        updated_at TEXT
+      )
+    `, [], calendarDb);
+  }
 
   await runSql(`
     CREATE TABLE IF NOT EXISTS ordered_items (
@@ -429,6 +502,12 @@ async function initializeDatabase() {
   await addMissingColumn("time_logs", "paused_seconds", "INTEGER DEFAULT 0");
   await addMissingColumn("time_logs", "pause_started_at", "TEXT");
   await addMissingColumn("time_logs", "quantity", "INTEGER");
+  await addMissingColumn("schedule_days", "tasks", "TEXT DEFAULT ''");
+  await addMissingColumn("schedule_days", "updated_at", "TEXT");
+  if (hasSeparateCalendarDb) {
+    await addMissingColumn("schedule_days", "tasks", "TEXT DEFAULT ''", calendarDb);
+    await addMissingColumn("schedule_days", "updated_at", "TEXT", calendarDb);
+  }
   await addMissingColumn("ordered_items", "date_ordered", "TEXT");
   await addMissingColumn("ordered_items", "expected_delivery_date", "TEXT");
   await addMissingColumn("ordered_items", "item_name", "TEXT");
@@ -454,6 +533,7 @@ async function initializeDatabase() {
   await addMissingColumn("order_requests", "ordered_at", "TEXT");
   await addMissingColumn("order_requests", "created_at", "TEXT");
   await addMissingColumn("order_requests", "updated_at", "TEXT");
+  await reconcileCalendarDatabase();
   await clearWeekendScheduleTasks();
 
   await seedNames("items", itemNames);
@@ -515,18 +595,11 @@ app.put("/admin/schedule/:date", (req, res) => {
 
   const savedTasks = isWeekendIsoDate(scheduleDate) ? removeScheduleTasks(tasks) : tasks;
 
-  db.run(
-    `INSERT INTO schedule_days (schedule_date, tasks, updated_at)
-     VALUES (?, ?, datetime('now'))
-     ON CONFLICT(schedule_date) DO UPDATE SET
-       tasks = excluded.tasks,
-       updated_at = excluded.updated_at`,
-    [scheduleDate, savedTasks],
-    function (err) {
-      if (err) return res.status(500).send(err.message);
+  writeScheduleDayToDatabases(scheduleDate, savedTasks)
+    .then(() => {
       res.json({ message: "Schedule updated", schedule_date: scheduleDate, tasks: savedTasks });
-    }
-  );
+    })
+    .catch(err => res.status(500).send(err.message));
 });
 
 function orderedItemsSelect(whereClause = "") {

@@ -48,11 +48,11 @@ function normalizeRow(row) {
   );
 }
 
-function createTursoDatabase(url, authToken) {
+function createTursoDatabase(url, authToken, label = "Turso") {
   const { createClient } = require("@libsql/client");
   const client = createClient({ url, authToken });
 
-  console.log("Connected to Turso database:", url);
+  console.log(`Connected to ${label} database:`, url);
 
   return {
     run(sql, params = [], callback = () => {}) {
@@ -85,7 +85,7 @@ function createTursoDatabase(url, authToken) {
   };
 }
 
-function createLocalDatabase() {
+function createLocalDatabase(fileName = "database.sqlite", label = "local SQLite") {
   const sqlite3 = require("sqlite3").verbose();
   const dataDir = path.join(__dirname, "data");
 
@@ -93,13 +93,13 @@ function createLocalDatabase() {
     fs.mkdirSync(dataDir);
   }
 
-  const dbPath = path.join(dataDir, "database.sqlite");
+  const dbPath = path.join(dataDir, fileName);
 
   return new sqlite3.Database(dbPath, err => {
     if (err) {
       console.error("DATABASE OPEN ERROR:", err.message);
     } else {
-      console.log("Connected to local SQLite database:", dbPath);
+      console.log(`Connected to ${label} database:`, dbPath);
     }
   });
 }
@@ -108,7 +108,21 @@ loadEnvFile();
 
 const tursoUrl = process.env.TURSO_DATABASE_URL;
 const tursoToken = process.env.TURSO_DATABASE_TOKEN;
+const tursoCalendarUrl = process.env.TURSO_CALENDAR_URL;
+const tursoCalendarToken = process.env.TURSO_CALENDAR_TOKEN;
 
-module.exports = tursoUrl && tursoToken
-  ? createTursoDatabase(tursoUrl, tursoToken)
-  : createLocalDatabase();
+const mainDb = tursoUrl && tursoToken
+  ? createTursoDatabase(tursoUrl, tursoToken, "Turso primary")
+  : createLocalDatabase("database.sqlite", "local SQLite primary");
+
+const calendarDb = tursoCalendarUrl && tursoCalendarToken
+  ? createTursoDatabase(tursoCalendarUrl, tursoCalendarToken, "Turso calendar")
+  : mainDb;
+
+if (!tursoCalendarUrl || !tursoCalendarToken) {
+  console.log("TURSO_CALENDAR_URL/TURSO_CALENDAR_TOKEN not set; calendar data uses the primary database.");
+}
+
+module.exports = mainDb;
+module.exports.main = mainDb;
+module.exports.calendar = calendarDb;
