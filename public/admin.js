@@ -11,38 +11,31 @@ let adminProjectedTasksByDate = new Map();
 const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const eventCompanyOptions = ["Snackbar", "Hijnx", "Snackbar & Hijnx"];
 const hijnxBatchOptions = [
-  "Alpha OG 1pks",
-  "Alpha OG 2pks",
-  "Rex OG 1pks",
-  "Rex OG 2pks",
-  "Zuul OG 1pks",
-  "Zuul OG 2pks",
-  "Sleep 1pks",
-  "Sleep 2pks",
-  "Chill 1pks",
-  "Chill 2pks",
-  "Mini 10pks",
-  "SF mini 10pks",
-  "SF 2pks",
-  "Medley - Rex",
-  "Medley - Zuul",
-  "Medley - Alpha",
-  "Whoopies",
-  "Dots",
-  "AM Tincs",
-  "PM Tincs",
-  "Shooters - TC",
-  "Shooters - SW",
-  "Shooters - SBR"
+  "Alpha Chunk - 1pk",
+  "Alpha Chunk - 2pk",
+  "Chill Chunk - 1pk",
+  "Chill Chunk - 2pk",
+  "Hijnx Sampler Medley Bag",
+  "Hijnx Shooter - Sour Blue Razz 2oz",
+  "Hijnx Shooter - Triple Citrus",
+  "Hijnx Shooter - Watermelon",
+  "MiNi's Chunks - 10pk",
+  "Micro Dots",
+  "Rex Chunk - 2pk",
+  "Sleep Chunk - 1pk",
+  "Sleep Chunk - 2pk",
+  "Sugar Free MiNi's - 10pk",
+  "Whoopie Hi",
+  "Zuul Chunk - 2pk"
 ];
 const sbBatchOptions = [
-  "Grape 1G",
-  "Mango 1G",
-  "Lemon 1G",
-  "Watermelon 1G",
-  "Strawberry 2G",
-  "Peach 2G",
-  "Cherry 2G"
+  "Snackbar Vape - Cherry Pomegranate Lemon 2g",
+  "Snackbar Vape - Grape Crush",
+  "Snackbar Vape - Lemon Yuzu",
+  "Snackbar Vape - Mango Magic",
+  "Snackbar Vape - Peach Passion Fruit 2g",
+  "Snackbar Vape - Strawberry Dragonfruit 2g",
+  "Snackbar Vape - Watermelon Lychee 1g"
 ];
 
 function showMessage(text, type = "") {
