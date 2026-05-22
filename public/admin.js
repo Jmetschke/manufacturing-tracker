@@ -37,6 +37,7 @@ const sbBatchOptions = [
   "Snackbar Vape - Strawberry Dragonfruit 2g",
   "Snackbar Vape - Watermelon Lychee 1g"
 ];
+const productionBatchOptions = [...hijnxBatchOptions, ...sbBatchOptions];
 
 function showMessage(text, type = "") {
   const message = document.getElementById("message");
@@ -1252,10 +1253,10 @@ function addTestPickup(value = { time: "", items: [] }) {
   placeholder.text = "Select item";
   itemSelect.appendChild(placeholder);
 
-  allItems.forEach(item => {
+  productionBatchOptions.forEach(itemName => {
     const option = document.createElement("option");
-    option.value = item.name;
-    option.text = item.name;
+    option.value = itemName;
+    option.text = itemName;
     itemSelect.appendChild(option);
   });
   itemPicker.appendChild(itemSelect);
