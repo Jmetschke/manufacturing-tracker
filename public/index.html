@@ -28,6 +28,13 @@
       margin: 0;
     }
 
+    .header-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
     .screen-link {
       border: 1px solid #2364aa;
       background: #2364aa;
@@ -444,6 +451,10 @@
         align-items: stretch;
       }
 
+      .header-actions {
+        flex-direction: column;
+      }
+
       .screen-link {
         display: block;
         text-align: center;
@@ -596,7 +607,10 @@
 
 <div class="page-header">
   <h2>Production Tracker</h2>
-  <a class="screen-link" href="/admin.html">Admin Dashboard</a>
+  <div class="header-actions">
+    <a class="screen-link" href="https://delivery-schedele.onrender.com" target="_blank" rel="noopener">Delivery Schedule</a>
+    <a class="screen-link" href="/admin.html">Admin Dashboard</a>
+  </div>
 </div>
 
 <div class="tabs">

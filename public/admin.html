@@ -12,6 +12,7 @@
     th { background: #eee; }
     .page-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
     .page-header h2 { margin: 0; }
+    .header-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
     .screen-link {
       border: 1px solid #2364aa;
       background: #2364aa;
@@ -333,6 +334,7 @@
       body { padding: 16px; font-size: 18px; }
       h2 { font-size: 1.6rem; }
       .page-header { flex-direction: column; align-items: stretch; }
+      .header-actions { flex-direction: column; }
       .screen-link { display: block; text-align: center; font-size: 18px; padding: 14px 12px; }
       h3 { font-size: 1.25rem; }
       input, select, button { min-height: 52px; font-size: 18px; padding: 12px; }
@@ -414,7 +416,10 @@
 
 <div class="page-header">
   <h2>Admin Dashboard</h2>
-  <a class="screen-link" href="/">Production Tracker</a>
+  <div class="header-actions">
+    <a class="screen-link" href="https://delivery-schedele.onrender.com" target="_blank" rel="noopener">Delivery Schedule</a>
+    <a class="screen-link" href="/">Production Tracker</a>
+  </div>
 </div>
 
 <div class="admin-tabs">
