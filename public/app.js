@@ -144,12 +144,31 @@ function updateTimerWorkflowUI() {
   const pauseBtn = document.getElementById("pauseBtn");
   const stopBtn = document.getElementById("stopBtn");
   const saveBtn = document.getElementById("saveBtn");
+  const readyActions = document.getElementById("readyActions");
+  const activeActions = document.getElementById("activeActions");
+  const finishEntryPanel = document.getElementById("finishEntryPanel");
   const qtyInput = document.getElementById("qty");
   const status = document.getElementById("timerStatus");
   const hint = document.getElementById("timerHint");
   const context = document.getElementById("timerContext");
+  const timerStep = document.getElementById("timerStep");
+  const finishDuration = document.getElementById("finishDuration");
 
-  if (!startBtn || !pauseBtn || !stopBtn || !saveBtn || !qtyInput || !status || !hint || !context) {
+  if (
+    !startBtn ||
+    !pauseBtn ||
+    !stopBtn ||
+    !saveBtn ||
+    !readyActions ||
+    !activeActions ||
+    !finishEntryPanel ||
+    !qtyInput ||
+    !status ||
+    !hint ||
+    !context ||
+    !timerStep ||
+    !finishDuration
+  ) {
     updatePauseButton();
     return;
   }
@@ -163,7 +182,13 @@ function updateTimerWorkflowUI() {
   pauseBtn.disabled = !running && !paused;
   stopBtn.disabled = !running && !paused;
   saveBtn.disabled = !stoppedNeedsQty;
-  qtyInput.disabled = false;
+  qtyInput.disabled = !stoppedNeedsQty;
+  readyActions.style.display = hasActiveLog ? "none" : "flex";
+  activeActions.style.display = running || paused ? "flex" : "none";
+  finishEntryPanel.classList.toggle("active", stoppedNeedsQty);
+  finishDuration.textContent = pendingEntry
+    ? formatSeconds(pendingEntry.durationSeconds || pausedElapsedSeconds || 0)
+    : document.getElementById("timer").innerText;
 
   ["employee", "work_date", "item", "task"].forEach(id => {
     const field = document.getElementById(id);
@@ -172,27 +197,33 @@ function updateTimerWorkflowUI() {
 
   if (pendingEntry) {
     context.textContent = `${pendingEntry.employee} | ${pendingEntry.item} | ${pendingEntry.task}`;
+    context.classList.add("active");
   } else {
     context.textContent = "";
+    context.classList.remove("active");
   }
 
   status.className = "timer-status";
   if (running) {
+    timerStep.textContent = "Step 2 of 3";
     status.classList.add("running");
     status.textContent = "Timer running";
-    hint.textContent = "Work is being timed. Quantity can be entered now. Use Pause for a break, or Stop Timer when done.";
+    hint.textContent = "Work is being timed. Pause if needed, or stop when the work is done.";
   } else if (paused) {
+    timerStep.textContent = "Step 2 of 3";
     status.classList.add("paused");
     status.textContent = "Timer paused";
-    hint.textContent = "Quantity can be adjusted while paused. Tap Resume to continue, or Stop Timer if done.";
+    hint.textContent = "Tap Resume to continue, or Stop Timer if the work is done.";
   } else if (stoppedNeedsQty) {
+    timerStep.textContent = "Step 3 of 3";
     status.classList.add("stopped");
     status.textContent = "Timer stopped";
-    hint.textContent = "Confirm the completed quantity, then tap Finish Entry.";
+    hint.textContent = "Enter the completed quantity, then save the entry.";
   } else {
+    timerStep.textContent = "Step 1 of 3";
     status.classList.add("ready");
     status.textContent = "Ready to start";
-    hint.textContent = "Select employee, date, item, task, and quantity. Then tap Start Timer.";
+    hint.textContent = "Choose the work details, then start the timer.";
   }
 
   updatePauseButton();
@@ -680,6 +711,16 @@ async function load() {
   itemSel.innerHTML = "";
   taskSel.innerHTML = "";
 
+  const itemPlaceholder = document.createElement("option");
+  itemPlaceholder.value = "";
+  itemPlaceholder.text = "Select Item";
+  itemSel.appendChild(itemPlaceholder);
+
+  const taskPlaceholder = document.createElement("option");
+  taskPlaceholder.value = "";
+  taskPlaceholder.text = "Select Task";
+  taskSel.appendChild(taskPlaceholder);
+
   items.forEach(i => {
     const o = document.createElement("option");
     o.value = i.id;
@@ -962,7 +1003,7 @@ async function stopTimer() {
   qtyInput.disabled = false;
   saveBtn.disabled = false;
   qtyInput.focus();
-  setTimerMessage("Timer stopped. Confirm quantity, then tap Finish Entry.");
+  setTimerMessage("Timer stopped. Enter quantity, then save the entry.");
   updateTimerWorkflowUI();
 }
 

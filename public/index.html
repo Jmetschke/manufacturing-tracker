@@ -289,6 +289,12 @@
       min-width: 0;
     }
 
+    .tracker-flow {
+      display: grid;
+      gap: 14px;
+      max-width: 980px;
+    }
+
     .timer-actions button,
     .calculator-actions button {
       flex: 0 1 auto;
@@ -303,6 +309,24 @@
 
     .timer-panel h3 {
       margin: 0 0 8px;
+    }
+
+    .timer-panel-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .timer-panel-header h3 {
+      margin: 0;
+    }
+
+    .timer-step {
+      color: #555;
+      font-weight: bold;
     }
 
     .timer-readout {
@@ -336,6 +360,13 @@
       margin-bottom: 8px;
     }
 
+    .timer-context.active {
+      border-left: 3px solid #2364aa;
+      background: #eef5fb;
+      color: #202124;
+      padding: 8px 10px;
+    }
+
     .timer-message {
       min-height: 22px;
       color: #176a2c;
@@ -345,6 +376,67 @@
 
     .timer-message.error {
       color: #a00000;
+    }
+
+    .finish-entry-panel {
+      display: none;
+      border-top: 1px solid #d8d8d2;
+      margin-top: 10px;
+      padding-top: 12px;
+    }
+
+    .finish-entry-panel.active {
+      display: block;
+    }
+
+    .finish-entry-panel label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+
+    .finish-entry-fields {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: end;
+      gap: 8px;
+    }
+
+    .finish-entry-fields > div {
+      flex: 1 1 180px;
+      min-width: 0;
+    }
+
+    .finish-entry-fields input {
+      width: 100%;
+      margin-left: 0;
+    }
+
+    .finish-entry-fields button {
+      margin-left: 0;
+    }
+
+    .finish-summary {
+      margin-bottom: 10px;
+      color: #555;
+      font-weight: bold;
+    }
+
+    .primary-action {
+      border: 1px solid #2364aa;
+      background: #2364aa;
+      color: #fff;
+    }
+
+    .saved-entries summary {
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 1.1rem;
+      margin-bottom: 8px;
+    }
+
+    #activeActions {
+      display: none;
     }
 
     .table-wrap {
@@ -477,6 +569,7 @@
       .tabs,
       .entry-fields,
       .timer-actions,
+      .finish-entry-fields,
       .calculator-actions {
         flex-direction: column;
         gap: 10px;
@@ -485,7 +578,10 @@
       .tab-button,
       .entry-fields input,
       .entry-fields select,
+      .finish-entry-fields > div,
       .timer-actions button,
+      .finish-entry-fields input,
+      .finish-entry-fields button,
       .calculator-actions button,
       .request-actions button {
         width: 100%;
@@ -496,6 +592,8 @@
       .entry-fields input,
       .entry-fields select,
       .timer-actions button,
+      .finish-entry-fields input,
+      .finish-entry-fields button,
       .calculator-actions button {
         flex: none;
       }
@@ -614,41 +712,56 @@
 </div>
 
 <div class="tabs">
-  <button class="tab-button active" type="button" onclick="showTab('tracker')">Time Entry</button>
+  <button class="tab-button active" type="button" onclick="showTab('tracker')">Timer</button>
   <button class="tab-button" type="button" onclick="showTab('calculator')">Qty Calculator</button>
   <button class="tab-button" type="button" onclick="showTab('schedule')">Schedule</button>
   <button class="tab-button" type="button" onclick="showTab('ordered')">Ordered Items</button>
 </div>
 
 <section id="trackerTab" class="tab-panel active">
-  <div class="entry-fields">
-    <select id="employee">
-      <option value="">Employee Name</option>
-    </select>
-    <input type="date" id="work_date">
-    <select id="item"></select>
-    <select id="task"></select>
-    <input type="number" id="qty" min="0" step="1" placeholder="Quantity">
-  </div>
-
-  <div class="timer-panel">
-    <h3>Timer: <span id="timer" class="timer-readout">00:00:00</span></h3>
-    <div id="timerStatus" class="timer-status ready">Ready to start</div>
-    <div id="timerHint" class="timer-hint">Select employee, date, item, task, and quantity. Then tap Start Timer.</div>
-    <div id="timerContext" class="timer-context"></div>
-
-    <div class="timer-actions">
-      <button type="button" id="startBtn" onclick="startTimer()">Start Timer</button>
-      <button type="button" id="pauseBtn" onclick="pauseTimer()">Pause</button>
-      <button type="button" id="stopBtn" onclick="stopTimer()">Stop Timer</button>
-      <button type="button" id="saveBtn" onclick="saveQuantity()">Finish Entry</button>
+  <div class="tracker-flow">
+    <div class="entry-fields">
+      <select id="employee">
+        <option value="">Employee Name</option>
+      </select>
+      <input type="date" id="work_date" aria-label="Work date">
+      <select id="item" aria-label="Item"></select>
+      <select id="task" aria-label="Task"></select>
     </div>
-    <div id="timerMessage" class="timer-message"></div>
-  </div>
 
-  <div class="saved-entries">
-    <h3>Saved Entries</h3>
-    <div id="savedEntries"></div>
+    <div class="timer-panel">
+      <div class="timer-panel-header">
+        <h3>Timer: <span id="timer" class="timer-readout">00:00:00</span></h3>
+        <div id="timerStep" class="timer-step">Step 1 of 3</div>
+      </div>
+      <div id="timerStatus" class="timer-status ready">Ready to start</div>
+      <div id="timerHint" class="timer-hint">Choose the work details, then start the timer.</div>
+      <div id="timerContext" class="timer-context"></div>
+
+      <div id="readyActions" class="timer-actions">
+        <button class="primary-action" type="button" id="startBtn" onclick="startTimer()">Start Timer</button>
+      </div>
+      <div id="activeActions" class="timer-actions">
+        <button type="button" id="pauseBtn" onclick="pauseTimer()">Pause</button>
+        <button type="button" id="stopBtn" onclick="stopTimer()">Stop Timer</button>
+      </div>
+      <div id="finishEntryPanel" class="finish-entry-panel">
+        <div class="finish-summary">Elapsed time: <span id="finishDuration">00:00:00</span></div>
+        <div class="finish-entry-fields">
+          <div>
+            <label for="qty">Completed Quantity</label>
+            <input type="number" id="qty" min="0" step="1" placeholder="Quantity">
+          </div>
+          <button class="primary-action" type="button" id="saveBtn" onclick="saveQuantity()">Save Entry</button>
+        </div>
+      </div>
+      <div id="timerMessage" class="timer-message"></div>
+    </div>
+
+    <details class="saved-entries">
+      <summary>Recent Saved Entries</summary>
+      <div id="savedEntries"></div>
+    </details>
   </div>
 </section>
 
