@@ -1070,6 +1070,31 @@ app.get("/timer-state/:id", (req, res) => {
   });
 });
 
+app.get("/active-timer", (req, res) => {
+  const { employee, work_date } = req.query;
+
+  if (!employee || !work_date) {
+    return res.status(400).send("Employee and date are required");
+  }
+
+  db.get(
+    timerStateSelect(`
+      WHERE l.employee = ?
+      AND l.work_date = ?
+      AND l.quantity IS NULL
+      ORDER BY l.id DESC
+      LIMIT 1
+    `),
+    [employee, work_date],
+    (err, row) => {
+      if (err) return res.status(500).send(err.message);
+      if (!row) return res.status(204).end();
+
+      res.json(row);
+    }
+  );
+});
+
 /* ---------- PAUSE TIMER ---------- */
 app.post("/pause", (req, res) => {
   const { log_id } = req.body;

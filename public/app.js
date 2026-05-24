@@ -1131,22 +1131,10 @@ function updateTimer() {
   document.getElementById("timer").innerText = formatSeconds(elapsed);
 }
 
-async function restorePendingTimer() {
-  const storedTimer = loadPendingTimer();
-  if (!storedTimer || !storedTimer.logId) return;
-
-  const res = await fetch(`/timer-state/${storedTimer.logId}`);
-  if (res.status === 404) {
-    clearPendingTimer();
-    return;
-  }
-
-  if (!res.ok) return;
-
-  const log = await res.json();
+function restoreTimerFromLog(log) {
   if (log.quantity !== null && log.quantity !== undefined) {
     clearPendingTimer();
-    return;
+    return false;
   }
 
   currentLogId = log.log_id;
@@ -1168,10 +1156,48 @@ async function restorePendingTimer() {
     document.getElementById("qty").disabled = false;
     document.getElementById("saveBtn").disabled = false;
     updateTimerWorkflowUI();
-    return;
+    return true;
   }
 
   applyTimerState(log);
+  return true;
+}
+
+async function fetchRecoverableTimer() {
+  const employee = document.getElementById("employee").value;
+  const workDate = document.getElementById("work_date").value;
+
+  if (!employee || !workDate) return null;
+
+  const params = new URLSearchParams({ employee, work_date: workDate });
+  const res = await fetch(`/active-timer?${params.toString()}`);
+
+  if (res.status === 204 || res.status === 404) return null;
+  if (!res.ok) return null;
+
+  return res.json();
+}
+
+async function restorePendingTimer() {
+  const storedTimer = loadPendingTimer();
+
+  if (storedTimer && storedTimer.logId) {
+    const res = await fetch(`/timer-state/${storedTimer.logId}`);
+    if (res.status === 404) {
+      clearPendingTimer();
+    } else if (res.ok) {
+      const log = await res.json();
+      if (restoreTimerFromLog(log)) return;
+    }
+  }
+
+  const recoverableLog = await fetchRecoverableTimer();
+  if (!recoverableLog) return;
+
+  if (restoreTimerFromLog(recoverableLog)) {
+    savePendingTimer({ logId: recoverableLog.log_id });
+    setTimerMessage("Recovered an unfinished timer from the database.");
+  }
 }
 
 async function loadSchedule() {
