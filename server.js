@@ -998,14 +998,10 @@ app.post("/start", (req, res) => {
     return res.status(400).send("Employee and date are required");
   }
 
-  if (!item_id || !task_id) {
-    return res.status(400).send("Item and task are required");
-  }
-
   db.run(
     `INSERT INTO time_logs (item_id, task_id, employee, work_date, start_time, paused_seconds)
      VALUES (?, ?, ?, ?, datetime('now'), 0)`,
-    [item_id, task_id, employee, work_date],
+    [item_id || null, task_id || null, employee, work_date],
     function (err) {
       if (err) {
         console.error(err);
@@ -1211,10 +1207,17 @@ app.post("/stop", (req, res) => {
 
 /* ---------- UPDATE QTY ---------- */
 app.post("/update-qty", (req, res) => {
-  let { log_id, quantity } = req.body;
+  let { log_id, item_id, task_id, quantity } = req.body;
 
   if (!log_id) {
     return res.status(400).send("Missing log_id");
+  }
+
+  item_id = Number(item_id);
+  task_id = Number(task_id);
+
+  if (!Number.isInteger(item_id) || !Number.isInteger(task_id) || item_id <= 0 || task_id <= 0) {
+    return res.status(400).send("Item and task are required");
   }
 
   quantity = parseInt(quantity);
@@ -1224,10 +1227,12 @@ app.post("/update-qty", (req, res) => {
 
   db.run(
     `UPDATE time_logs
-     SET quantity = ?
+     SET item_id = ?,
+         task_id = ?,
+         quantity = ?
      WHERE id = ?
      AND end_time IS NOT NULL`,
-    [quantity, log_id],
+    [item_id, task_id, quantity, log_id],
     function (err) {
       if (err) return res.status(500).send(err.message);
 

@@ -117,10 +117,27 @@ function buildPendingEntry(log) {
   return {
     employee: log.employee,
     workDate: log.work_date,
-    item: log.item,
-    task: log.task,
+    item: log.item_id ? log.item : "Item not selected",
+    task: log.task_id ? log.task : "Task not selected",
     durationSeconds: Number(log.duration_seconds) || 0
   };
+}
+
+function getSelectedOptionText(select) {
+  if (!select || !select.value) return "";
+  const option = select.options[select.selectedIndex];
+  return option ? option.text : "";
+}
+
+function syncPendingWorkSelection() {
+  if (!pendingEntry) return;
+
+  const itemText = getSelectedOptionText(document.getElementById("item"));
+  const taskText = getSelectedOptionText(document.getElementById("task"));
+
+  pendingEntry.item = itemText || "Item not selected";
+  pendingEntry.task = taskText || "Task not selected";
+  updateTimerWorkflowUI();
 }
 
 function updatePauseButton() {
@@ -190,7 +207,7 @@ function updateTimerWorkflowUI() {
     ? formatSeconds(pendingEntry.durationSeconds || pausedElapsedSeconds || 0)
     : document.getElementById("timer").innerText;
 
-  ["employee", "work_date", "item", "task"].forEach(id => {
+  ["employee", "work_date"].forEach(id => {
     const field = document.getElementById(id);
     if (field) field.disabled = hasActiveLog;
   });
@@ -208,22 +225,22 @@ function updateTimerWorkflowUI() {
     timerStep.textContent = "Step 2 of 3";
     status.classList.add("running");
     status.textContent = "Timer running";
-    hint.textContent = "Work is being timed. Pause if needed, or stop when the work is done.";
+    hint.textContent = "Work is being timed. Select item and task any time before saving.";
   } else if (paused) {
     timerStep.textContent = "Step 2 of 3";
     status.classList.add("paused");
     status.textContent = "Timer paused";
-    hint.textContent = "Tap Resume to continue, or Stop Timer if the work is done.";
+    hint.textContent = "Tap Resume to continue, or select item and task before saving.";
   } else if (stoppedNeedsQty) {
     timerStep.textContent = "Step 3 of 3";
     status.classList.add("stopped");
     status.textContent = "Timer stopped";
-    hint.textContent = "Enter the completed quantity, then save the entry.";
+    hint.textContent = "Select item, task, and completed quantity, then save the entry.";
   } else {
     timerStep.textContent = "Step 1 of 3";
     status.classList.add("ready");
     status.textContent = "Ready to start";
-    hint.textContent = "Choose the work details, then start the timer.";
+    hint.textContent = "Choose employee/date, then start the timer. Item and task can be selected before saving.";
   }
 
   updatePauseButton();
@@ -735,6 +752,9 @@ async function load() {
     taskSel.appendChild(o);
   });
 
+  itemSel.addEventListener("change", syncPendingWorkSelection);
+  taskSel.addEventListener("change", syncPendingWorkSelection);
+
   setupDailyEntryDefaults();
   applyDailyEntryDefaults();
   document.getElementById("qty").disabled = true;
@@ -919,23 +939,21 @@ async function startTimer() {
   const work_date = document.getElementById("work_date").value;
   const itemSel = document.getElementById("item");
   const taskSel = document.getElementById("task");
-  const item_id = itemSel.value;
-  const task_id = taskSel.value;
 
   if (!employee || !work_date) {
     setTimerMessage("Select an employee and date before starting.", "error");
     return;
   }
 
-  if (!item_id || !task_id) {
-    setTimerMessage("Select an item and task before starting.", "error");
-    return;
-  }
-
   const res = await fetch("/start", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ item_id, task_id, employee, work_date })
+    body: JSON.stringify({
+      item_id: itemSel.value || null,
+      task_id: taskSel.value || null,
+      employee,
+      work_date
+    })
   });
 
   if (!res.ok) {
@@ -954,8 +972,8 @@ async function startTimer() {
   pendingEntry = {
     employee,
     workDate: work_date,
-    item: itemSel.options[itemSel.selectedIndex].text,
-    task: taskSel.options[taskSel.selectedIndex].text,
+    item: getSelectedOptionText(itemSel) || "Item not selected",
+    task: getSelectedOptionText(taskSel) || "Task not selected",
     durationSeconds: 0
   };
   savePendingTimer({ logId: currentLogId });
@@ -1045,9 +1063,18 @@ async function saveQuantity() {
   const qtyInput = document.getElementById("qty");
   const saveBtn = document.getElementById("saveBtn");
   const quantity = qtyInput.value;
+  const itemSel = document.getElementById("item");
+  const taskSel = document.getElementById("task");
+  const item_id = itemSel.value;
+  const task_id = taskSel.value;
 
   if (!currentLogId) {
     setTimerMessage("No stopped timer is waiting for quantity.", "error");
+    return;
+  }
+
+  if (!item_id || !task_id) {
+    setTimerMessage("Select item and task before saving the entry.", "error");
     return;
   }
 
@@ -1061,6 +1088,8 @@ async function saveQuantity() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       log_id: currentLogId,
+      item_id,
+      task_id,
       quantity
     })
   });
@@ -1073,6 +1102,8 @@ async function saveQuantity() {
 
   savedEntries.unshift({
     ...pendingEntry,
+    item: getSelectedOptionText(itemSel),
+    task: getSelectedOptionText(taskSel),
     quantity
   });
   renderSavedEntries();
