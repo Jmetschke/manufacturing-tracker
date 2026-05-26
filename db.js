@@ -51,10 +51,17 @@ function normalizeRow(row) {
 function createTursoDatabase(url, authToken, label = "Turso") {
   const { createClient } = require("@libsql/client");
   const client = createClient({ url, authToken });
+  const info = {
+    provider: "turso",
+    label,
+    url
+  };
 
   console.log(`Connected to ${label} database:`, url);
 
   return {
+    info,
+
     run(sql, params = [], callback = () => {}) {
       client.execute({ sql, args: params })
         .then(result => {
@@ -94,14 +101,22 @@ function createLocalDatabase(fileName = "database.sqlite", label = "local SQLite
   }
 
   const dbPath = path.join(dataDir, fileName);
+  const info = {
+    provider: "sqlite",
+    label,
+    path: dbPath
+  };
 
-  return new sqlite3.Database(dbPath, err => {
+  const database = new sqlite3.Database(dbPath, err => {
     if (err) {
       console.error("DATABASE OPEN ERROR:", err.message);
     } else {
       console.log(`Connected to ${label} database:`, dbPath);
     }
   });
+
+  database.info = info;
+  return database;
 }
 
 loadEnvFile();

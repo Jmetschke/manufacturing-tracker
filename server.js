@@ -1363,6 +1363,23 @@ app.put("/admin/entries/:id", (req, res) => {
   );
 });
 
+app.get("/admin/database-status", async (req, res) => {
+  try {
+    const [entryCountRows, incompleteRows] = await Promise.all([
+      allSql("SELECT COUNT(*) AS count FROM time_logs"),
+      allSql("SELECT COUNT(*) AS count FROM time_logs WHERE quantity IS NULL")
+    ]);
+
+    res.json({
+      database: db.info || { provider: "unknown" },
+      time_logs: Number(entryCountRows[0] && entryCountRows[0].count) || 0,
+      incomplete_time_logs: Number(incompleteRows[0] && incompleteRows[0].count) || 0
+    });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
 /* ---------- LOGS (DEBUG) ---------- */
 app.get("/logs", (req, res) => {
   db.all("SELECT * FROM time_logs", [], (err, rows) => {
