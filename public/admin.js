@@ -46,6 +46,27 @@ function showMessage(text, type = "") {
   message.className = type ? `message ${type}` : "message";
 }
 
+function redirectToAdminAccess() {
+  window.location.href = `/access?next=${encodeURIComponent("/admin.html")}`;
+}
+
+function handleAdminAccessResponse(res) {
+  if (res.status === 401 || res.status === 403 || res.redirected && res.url.includes("/access")) {
+    redirectToAdminAccess();
+    return true;
+  }
+
+  return false;
+}
+
+async function adminFetch(url, options = {}) {
+  const res = await fetch(url, options);
+  if (handleAdminAccessResponse(res)) {
+    return new Response("Admin access code required", { status: 403 });
+  }
+  return res;
+}
+
 function fillSelect(select, options, placeholder = "") {
   select.innerHTML = "";
 
@@ -862,7 +883,14 @@ function showAdminTab(tabName) {
 }
 
 async function loadReport() {
-  const data = await fetch("/admin/entries").then(r => r.json());
+  const entriesRes = await adminFetch("/admin/entries");
+  if (!entriesRes.ok) {
+    const text = await entriesRes.text();
+    showMessage("Entries load failed: " + text, "error");
+    return;
+  }
+
+  const data = await entriesRes.json();
 
   const from = document.getElementById("from_date").value;
   const to = document.getElementById("to_date").value;
@@ -1009,7 +1037,7 @@ async function saveEntryEdit() {
     duration_seconds: durationSeconds
   };
 
-  const res = await fetch(`/admin/entries/${logId}`, {
+  const res = await adminFetch(`/admin/entries/${logId}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
@@ -1427,7 +1455,7 @@ async function saveScheduleDay() {
 
   if (!scheduleDate) return;
 
-  const res = await fetch(`/admin/schedule/${scheduleDate}`, {
+  const res = await adminFetch(`/admin/schedule/${scheduleDate}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tasks })
@@ -1769,7 +1797,7 @@ function showRequestOrderForm(request, cell, checkbox) {
 }
 
 async function markRequestOrdered(requestId, payload) {
-  const res = await fetch(`/admin/order-requests/${requestId}/order`, {
+  const res = await adminFetch(`/admin/order-requests/${requestId}/order`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
@@ -2020,7 +2048,7 @@ async function saveOrderedItem() {
     department: document.getElementById("ordered_department").value
   };
 
-  const res = await fetch("/admin/ordered-items", {
+  const res = await adminFetch("/admin/ordered-items", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
