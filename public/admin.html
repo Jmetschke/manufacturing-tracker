@@ -469,9 +469,9 @@
 
 <section id="calendarPanel" class="admin-panel">
   <div class="calendar-tools">
-    <button type="button" onclick="changeAdminCalendarMonth(-1)">Previous</button>
-    <input type="month" id="calendar_month" onchange="loadAdminCalendar()">
-    <button type="button" onclick="changeAdminCalendarMonth(1)">Next</button>
+    <button type="button" onclick="changeAdminCalendarWeeks(-1)">Previous 2 Weeks</button>
+    <span id="calendar_range_label"></span>
+    <button type="button" onclick="changeAdminCalendarWeeks(1)">Next 2 Weeks</button>
   </div>
 
   <div id="adminCalendar" class="admin-calendar-grid"></div>

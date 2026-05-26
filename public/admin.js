@@ -8,6 +8,7 @@ let adminScheduleRows = new Map();
 let adminExpectedDeliveriesByDate = new Map();
 let adminEventsByDate = new Map();
 let adminProjectedTasksByDate = new Map();
+let adminCalendarStartDate = null;
 const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const eventCompanyOptions = ["Snackbar", "Hijnx", "Snackbar & Hijnx"];
 const hijnxBatchOptions = [
@@ -224,6 +225,11 @@ function monthStart(monthValue) {
 
 function monthGridStart(date) {
   return addDays(date, -date.getDay());
+}
+
+function startOfWeek(date) {
+  const start = dateOnly(date);
+  return addDays(start, -start.getDay());
 }
 
 function formatDisplayDate(isoDate) {
@@ -1049,26 +1055,30 @@ function exportCSV() {
   URL.revokeObjectURL(url);
 }
 
-function setDefaultCalendarMonth() {
-  document.getElementById("calendar_month").value = toMonthValue(new Date());
+function setDefaultCalendarRange() {
+  adminCalendarStartDate = startOfWeek(new Date());
 }
 
-function changeAdminCalendarMonth(offset) {
-  const monthInput = document.getElementById("calendar_month");
-  const current = monthStart(monthInput.value || toMonthValue(new Date()));
-  current.setMonth(current.getMonth() + offset);
-  monthInput.value = toMonthValue(current);
+function updateCalendarRangeLabel(gridStart, gridEnd) {
+  document.getElementById("calendar_range_label").textContent =
+    `${formatDisplayDate(toIsoDate(gridStart))} - ${formatDisplayDate(toIsoDate(gridEnd))}`;
+}
+
+function changeAdminCalendarWeeks(offset) {
+  if (!adminCalendarStartDate) {
+    setDefaultCalendarRange();
+  }
+
+  adminCalendarStartDate = addDays(adminCalendarStartDate, offset * 14);
   loadAdminCalendar();
 }
 
 async function loadAdminCalendar() {
-  const monthInput = document.getElementById("calendar_month");
-  if (!monthInput.value) {
-    setDefaultCalendarMonth();
+  if (!adminCalendarStartDate) {
+    setDefaultCalendarRange();
   }
 
-  const firstDay = monthStart(monthInput.value);
-  const gridStart = monthGridStart(firstDay);
+  const gridStart = dateOnly(adminCalendarStartDate);
   const gridEnd = addDays(gridStart, 41);
   const from = toIsoDate(addDays(gridStart, -180));
   const to = toIsoDate(gridEnd);
@@ -1088,10 +1098,11 @@ async function loadAdminCalendar() {
   adminExpectedDeliveriesByDate = buildAdminExpectedDeliveriesByDate(deliveries, gridStart, gridEnd);
   adminEventsByDate = buildAdminEventsByDate(rows, gridStart, gridEnd);
   adminProjectedTasksByDate = buildAdminProjectedTasksByDate(rows, gridStart, gridEnd);
-  renderAdminCalendar(firstDay, gridStart);
+  updateCalendarRangeLabel(gridStart, gridEnd);
+  renderAdminCalendar(gridStart);
 }
 
-function renderAdminCalendar(firstDay, gridStart) {
+function renderAdminCalendar(gridStart) {
   const calendar = document.getElementById("adminCalendar");
   calendar.innerHTML = "";
 
@@ -1107,13 +1118,10 @@ function renderAdminCalendar(firstDay, gridStart) {
     const isoDate = toIsoDate(date);
     const cell = document.createElement("div");
     cell.className = "admin-calendar-day";
-    if (date.getMonth() !== firstDay.getMonth()) {
-      cell.classList.add("outside-month");
-    }
 
     const dateLabel = document.createElement("div");
     dateLabel.className = "admin-calendar-date";
-    dateLabel.textContent = date.getDate();
+    dateLabel.textContent = `${date.getMonth() + 1}/${date.getDate()}`;
     cell.appendChild(dateLabel);
 
     appendEventList(cell, adminEventsByDate.get(isoDate) || []);
@@ -2032,7 +2040,7 @@ async function saveOrderedItem() {
 async function initAdmin() {
   loadEmployeeSelects();
   await loadLookups();
-  setDefaultCalendarMonth();
+  setDefaultCalendarRange();
   resetOrderedForm();
   resetAdminOrderRequestForm();
   resetAdminManualReceivedForm();
