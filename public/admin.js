@@ -63,6 +63,35 @@ function fillSelect(select, options, placeholder = "") {
   });
 }
 
+function getSelectText(select) {
+  if (!select || !select.value) return "";
+  const option = select.options[select.selectedIndex];
+  return option ? option.text : "";
+}
+
+function setupAdminDispensaryLocations() {
+  const datalist = document.getElementById("adminDispensaryLocations");
+  if (!datalist) return;
+
+  datalist.innerHTML = "";
+  (window.dispensaryLocations || []).forEach(location => {
+    const option = document.createElement("option");
+    option.value = location;
+    datalist.appendChild(option);
+  });
+}
+
+function updateAdminDispensaryField() {
+  const input = document.getElementById("edit_dispensary_name");
+  const itemSelect = document.getElementById("edit_item");
+  if (!input || !itemSelect) return;
+
+  const isDeliveryOrder = getSelectText(itemSelect).toLowerCase() === "delivery order";
+  input.style.display = isDeliveryOrder ? "" : "none";
+  input.disabled = !isDeliveryOrder;
+  if (!isDeliveryOrder) input.value = "";
+}
+
 async function loadLookups() {
   const [items, tasks] = await Promise.all([
     fetch("/items").then(r => r.json()),
@@ -82,11 +111,15 @@ async function loadLookups() {
     document.getElementById("edit_item"),
     allItems.map(item => ({ value: item.id, text: item.name }))
   );
+  document.getElementById("edit_item").addEventListener("change", updateAdminDispensaryField);
 
   fillSelect(
     document.getElementById("edit_task"),
     allTasks.map(task => ({ value: task.id, text: task.name }))
   );
+
+  setupAdminDispensaryLocations();
+  updateAdminDispensaryField();
 }
 
 function loadEmployeeSelects() {
@@ -863,7 +896,7 @@ function renderTable() {
   const headerRow = document.createElement("tr");
   headerRow.className = "table-heading-row";
 
-  const labels = ["Date", "Status", "Employee", "Item", "Task", "Qty", "Time", "Sec/Unit", "Action"];
+  const labels = ["Date", "Status", "Employee", "Item", "Dispensary", "Task", "Qty", "Time", "Sec/Unit", "Action"];
   labels.forEach(label => {
     const th = document.createElement("th");
     th.textContent = label === "Action" ? "" : label;
@@ -884,13 +917,14 @@ function renderTable() {
     appendCell(row, dataStatus, labels[1]);
     appendCell(row, entry.employee, labels[2]);
     appendCell(row, entry.item, labels[3]);
-    appendCell(row, entry.task, labels[4]);
-    appendCell(row, entry.quantity || 0, labels[5]);
-    appendCell(row, secondsToHMS(entry.duration_seconds), labels[6]);
-    appendCell(row, Math.round(entry.sec_per_unit || 0), labels[7]);
+    appendCell(row, entry.dispensary_name || "", labels[4]);
+    appendCell(row, entry.task, labels[5]);
+    appendCell(row, entry.quantity || 0, labels[6]);
+    appendCell(row, secondsToHMS(entry.duration_seconds), labels[7]);
+    appendCell(row, Math.round(entry.sec_per_unit || 0), labels[8]);
 
     const actionCell = document.createElement("td");
-    actionCell.dataset.label = labels[8];
+    actionCell.dataset.label = labels[9];
     const editButton = document.createElement("button");
     editButton.type = "button";
     editButton.textContent = "Edit";
@@ -933,6 +967,8 @@ function editEntry(logId) {
   document.getElementById("edit_employee").value = entry.employee;
   document.getElementById("edit_item").value = String(entry.item_id);
   document.getElementById("edit_task").value = String(entry.task_id);
+  document.getElementById("edit_dispensary_name").value = entry.dispensary_name || "";
+  updateAdminDispensaryField();
   document.getElementById("edit_quantity").value = entry.quantity || 0;
   document.getElementById("edit_time").value = secondsToHMS(entry.duration_seconds);
   document.getElementById("editPanel").classList.add("active");
@@ -962,6 +998,7 @@ async function saveEntryEdit() {
     employee: document.getElementById("edit_employee").value,
     item_id: document.getElementById("edit_item").value,
     task_id: document.getElementById("edit_task").value,
+    dispensary_name: document.getElementById("edit_dispensary_name").value,
     quantity: document.getElementById("edit_quantity").value,
     duration_seconds: durationSeconds
   };
@@ -986,7 +1023,7 @@ async function saveEntryEdit() {
 function exportCSV() {
   if (!reportData.length) return;
 
-  let csv = "Date,Status,Employee,Item,Task,Qty,Total Time,Sec/Unit\n";
+  let csv = "Date,Status,Employee,Item,Dispensary,Task,Qty,Total Time,Sec/Unit\n";
 
   reportData.forEach(entry => {
     csv += [
@@ -994,6 +1031,7 @@ function exportCSV() {
       getEntryDataStatus(entry),
       entry.employee,
       entry.item,
+      entry.dispensary_name || "",
       entry.task,
       entry.quantity,
       entry.duration_seconds,

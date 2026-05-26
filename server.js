@@ -181,7 +181,8 @@ const itemNames = [
   "Big Stick",
   "Small Stick",
   "Tiny Stick",
-  "Swag"
+  "Swag",
+  "Delivery Order"
 ];
 
 const taskNames = [
@@ -212,7 +213,9 @@ const taskNames = [
   "Seal-Stickering (shooters)",
   "Swag Press",
   "Swag Assembly",
-  "Swag Counting"
+  "Swag Counting",
+  "Pulling/Seperating Order",
+  "Counting/Verifying Order"
 ];
 
 function runSql(sql, params = [], database = db) {
@@ -433,7 +436,8 @@ async function initializeDatabase() {
       duration_seconds INTEGER,
       paused_seconds INTEGER DEFAULT 0,
       pause_started_at TEXT,
-      quantity INTEGER
+      quantity INTEGER,
+      dispensary_name TEXT
     )
   `);
 
@@ -502,6 +506,7 @@ async function initializeDatabase() {
   await addMissingColumn("time_logs", "paused_seconds", "INTEGER DEFAULT 0");
   await addMissingColumn("time_logs", "pause_started_at", "TEXT");
   await addMissingColumn("time_logs", "quantity", "INTEGER");
+  await addMissingColumn("time_logs", "dispensary_name", "TEXT");
   await addMissingColumn("schedule_days", "tasks", "TEXT DEFAULT ''");
   await addMissingColumn("schedule_days", "updated_at", "TEXT");
   if (hasSeparateCalendarDb) {
@@ -993,15 +998,16 @@ app.put("/ordered-items/:id/undo-receive", (req, res) => {
 /* ---------- START TIMER ---------- */
 app.post("/start", (req, res) => {
   const { item_id, task_id, employee, work_date } = req.body;
+  const dispensaryName = normalizeRequiredText(req.body.dispensary_name);
 
   if (!employee || !work_date) {
     return res.status(400).send("Employee and date are required");
   }
 
   db.run(
-    `INSERT INTO time_logs (item_id, task_id, employee, work_date, start_time, paused_seconds)
-     VALUES (?, ?, ?, ?, datetime('now'), 0)`,
-    [item_id || null, task_id || null, employee, work_date],
+    `INSERT INTO time_logs (item_id, task_id, employee, work_date, start_time, paused_seconds, dispensary_name)
+     VALUES (?, ?, ?, ?, datetime('now'), 0, ?)`,
+    [item_id || null, task_id || null, employee, work_date, dispensaryName || null],
     function (err) {
       if (err) {
         console.error(err);
@@ -1041,6 +1047,7 @@ function timerStateSelect(whereClause) {
       l.duration_seconds,
       COALESCE(l.paused_seconds, 0) AS paused_seconds,
       l.pause_started_at,
+      COALESCE(l.dispensary_name, '') AS dispensary_name,
       l.quantity,
       strftime('%s', l.start_time) AS start_epoch,
       strftime('%s', l.pause_started_at) AS pause_started_epoch,
@@ -1233,6 +1240,7 @@ app.post("/stop", (req, res) => {
 /* ---------- UPDATE QTY ---------- */
 app.post("/update-qty", (req, res) => {
   let { log_id, item_id, task_id, quantity } = req.body;
+  const dispensaryName = normalizeRequiredText(req.body.dispensary_name);
 
   if (!log_id) {
     return res.status(400).send("Missing log_id");
@@ -1254,10 +1262,11 @@ app.post("/update-qty", (req, res) => {
     `UPDATE time_logs
      SET item_id = ?,
          task_id = ?,
-         quantity = ?
+         quantity = ?,
+         dispensary_name = ?
      WHERE id = ?
      AND end_time IS NOT NULL`,
-    [item_id, task_id, quantity, log_id],
+    [item_id, task_id, quantity, dispensaryName || null, log_id],
     function (err) {
       if (err) return res.status(500).send(err.message);
 
@@ -1277,6 +1286,7 @@ app.get("/admin/entries", (req, res) => {
       l.id AS log_id,
       l.item_id,
       l.task_id,
+      COALESCE(l.dispensary_name, '') AS dispensary_name,
       COALESCE(i.name, 'Unknown Item') AS item,
       COALESCE(t.name, 'Unknown Task') AS task,
       l.employee,
@@ -1306,6 +1316,7 @@ app.put("/admin/entries/:id", (req, res) => {
   const { employee, work_date } = req.body;
   let { item_id, task_id } = req.body;
   let { quantity, duration_seconds } = req.body;
+  const dispensaryName = normalizeRequiredText(req.body.dispensary_name);
 
   if (!employee || !work_date || !item_id || !task_id) {
     return res.status(400).send("Employee, date, item, and task are required");
@@ -1335,10 +1346,11 @@ app.put("/admin/entries/:id", (req, res) => {
          employee = ?,
          work_date = ?,
          quantity = ?,
-         duration_seconds = ?
+         duration_seconds = ?,
+         dispensary_name = ?
      WHERE id = ?
      AND end_time IS NOT NULL`,
-    [item_id, task_id, employee, work_date, quantity, duration_seconds, req.params.id],
+    [item_id, task_id, employee, work_date, quantity, duration_seconds, dispensaryName || null, req.params.id],
     function (err) {
       if (err) return res.status(500).send(err.message);
 

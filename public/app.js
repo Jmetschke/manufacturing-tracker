@@ -119,6 +119,7 @@ function buildPendingEntry(log) {
     workDate: log.work_date,
     item: log.item_id ? log.item : "Item not selected",
     task: log.task_id ? log.task : "Task not selected",
+    dispensaryName: log.dispensary_name || "",
     durationSeconds: Number(log.duration_seconds) || 0
   };
 }
@@ -129,6 +130,34 @@ function getSelectedOptionText(select) {
   return option ? option.text : "";
 }
 
+function isDeliveryOrderSelected(select = document.getElementById("item")) {
+  return getSelectedOptionText(select).toLowerCase() === "delivery order";
+}
+
+function setupDispensaryLocations() {
+  const datalist = document.getElementById("dispensaryLocations");
+  if (!datalist) return;
+
+  datalist.innerHTML = "";
+  (window.dispensaryLocations || []).forEach(location => {
+    const option = document.createElement("option");
+    option.value = location;
+    datalist.appendChild(option);
+  });
+}
+
+function updateDispensaryField() {
+  const field = document.getElementById("dispensaryField");
+  const input = document.getElementById("dispensary_name");
+  const itemSel = document.getElementById("item");
+  if (!field || !input || !itemSel) return;
+
+  const isDeliveryOrder = isDeliveryOrderSelected(itemSel);
+  field.classList.toggle("active", isDeliveryOrder);
+  input.disabled = !isDeliveryOrder;
+  if (!isDeliveryOrder) input.value = "";
+}
+
 function syncPendingWorkSelection() {
   if (!pendingEntry) return;
 
@@ -137,6 +166,7 @@ function syncPendingWorkSelection() {
 
   pendingEntry.item = itemText || "Item not selected";
   pendingEntry.task = taskText || "Task not selected";
+  pendingEntry.dispensaryName = document.getElementById("dispensary_name").value.trim();
   updateTimerWorkflowUI();
 }
 
@@ -211,9 +241,13 @@ function updateTimerWorkflowUI() {
     const field = document.getElementById(id);
     if (field) field.disabled = hasActiveLog;
   });
+  updateDispensaryField();
 
   if (pendingEntry) {
-    context.textContent = `${pendingEntry.employee} | ${pendingEntry.item} | ${pendingEntry.task}`;
+    const dispensaryText = pendingEntry.dispensaryName
+      ? ` | ${pendingEntry.dispensaryName}`
+      : "";
+    context.textContent = `${pendingEntry.employee} | ${pendingEntry.item} | ${pendingEntry.task}${dispensaryText}`;
     context.classList.add("active");
   } else {
     context.textContent = "";
@@ -666,7 +700,7 @@ function renderSavedEntries() {
   table.className = "mobile-stack";
   const thead = document.createElement("thead");
   const headerRow = document.createElement("tr");
-  const labels = ["Date", "Employee", "Item", "Task", "Qty", "Time"];
+  const labels = ["Date", "Employee", "Item", "Dispensary", "Task", "Qty", "Time"];
   labels.forEach(label => {
     const th = document.createElement("th");
     th.textContent = label;
@@ -682,6 +716,7 @@ function renderSavedEntries() {
       entry.workDate,
       entry.employee,
       entry.item,
+      entry.dispensaryName || "",
       entry.task,
       entry.quantity,
       formatSeconds(entry.durationSeconds)
@@ -752,8 +787,15 @@ async function load() {
     taskSel.appendChild(o);
   });
 
-  itemSel.addEventListener("change", syncPendingWorkSelection);
+  setupDispensaryLocations();
+  updateDispensaryField();
+
+  itemSel.addEventListener("change", () => {
+    updateDispensaryField();
+    syncPendingWorkSelection();
+  });
   taskSel.addEventListener("change", syncPendingWorkSelection);
+  document.getElementById("dispensary_name").addEventListener("input", syncPendingWorkSelection);
 
   setupDailyEntryDefaults();
   applyDailyEntryDefaults();
@@ -939,6 +981,9 @@ async function startTimer() {
   const work_date = document.getElementById("work_date").value;
   const itemSel = document.getElementById("item");
   const taskSel = document.getElementById("task");
+  const dispensaryName = isDeliveryOrderSelected(itemSel)
+    ? document.getElementById("dispensary_name").value.trim()
+    : "";
 
   if (!employee || !work_date) {
     setTimerMessage("Select an employee and date before starting.", "error");
@@ -951,6 +996,7 @@ async function startTimer() {
     body: JSON.stringify({
       item_id: itemSel.value || null,
       task_id: taskSel.value || null,
+      dispensary_name: dispensaryName,
       employee,
       work_date
     })
@@ -974,6 +1020,7 @@ async function startTimer() {
     workDate: work_date,
     item: getSelectedOptionText(itemSel) || "Item not selected",
     task: getSelectedOptionText(taskSel) || "Task not selected",
+    dispensaryName,
     durationSeconds: 0
   };
   savePendingTimer({ logId: currentLogId });
@@ -1067,6 +1114,9 @@ async function saveQuantity() {
   const taskSel = document.getElementById("task");
   const item_id = itemSel.value;
   const task_id = taskSel.value;
+  const dispensaryName = isDeliveryOrderSelected(itemSel)
+    ? document.getElementById("dispensary_name").value.trim()
+    : "";
 
   if (!currentLogId) {
     setTimerMessage("No stopped timer is waiting for quantity.", "error");
@@ -1090,6 +1140,7 @@ async function saveQuantity() {
       log_id: currentLogId,
       item_id,
       task_id,
+      dispensary_name: dispensaryName,
       quantity
     })
   });
@@ -1104,6 +1155,7 @@ async function saveQuantity() {
     ...pendingEntry,
     item: getSelectedOptionText(itemSel),
     task: getSelectedOptionText(taskSel),
+    dispensaryName,
     quantity
   });
   renderSavedEntries();
@@ -1116,6 +1168,7 @@ async function saveQuantity() {
   pausedElapsedSeconds = 0;
   clearPendingTimer();
   qtyInput.value = "";
+  document.getElementById("dispensary_name").value = "";
   qtyInput.disabled = true;
   saveBtn.disabled = true;
   document.getElementById("timer").innerText = "00:00:00";
@@ -1144,6 +1197,8 @@ function restoreTimerFromLog(log) {
   selectValue("work_date", log.work_date);
   selectValue("item", log.item_id);
   selectValue("task", log.task_id);
+  selectValue("dispensary_name", log.dispensary_name);
+  updateDispensaryField();
 
   if (log.end_time) {
     startTime = null;

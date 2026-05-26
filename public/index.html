@@ -289,6 +289,25 @@
       min-width: 0;
     }
 
+    .dispensary-field {
+      display: none;
+      flex: 1 1 220px;
+    }
+
+    .dispensary-field.active {
+      display: block;
+    }
+
+    .dispensary-field label {
+      display: block;
+      font-weight: bold;
+      margin: 0 4px 2px;
+    }
+
+    .dispensary-field input {
+      width: 100%;
+    }
+
     .tracker-flow {
       display: grid;
       gap: 14px;
@@ -727,6 +746,11 @@
       <input type="date" id="work_date" aria-label="Work date">
       <select id="item" aria-label="Item"></select>
       <select id="task" aria-label="Task"></select>
+      <div id="dispensaryField" class="dispensary-field">
+        <label for="dispensary_name">Dispensary Name</label>
+        <input type="text" id="dispensary_name" list="dispensaryLocations" autocomplete="off">
+      </div>
+      <datalist id="dispensaryLocations"></datalist>
     </div>
 
     <div class="timer-panel">
@@ -905,6 +929,7 @@
 </section>
 
 <script src="employees.js"></script>
+<script src="dispensary-locations.js"></script>
 <script src="app.js"></script>
 
 </body>
