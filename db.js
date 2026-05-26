@@ -110,6 +110,18 @@ const tursoUrl = process.env.TURSO_DATABASE_URL;
 const tursoToken = process.env.TURSO_DATABASE_TOKEN;
 const tursoCalendarUrl = process.env.TURSO_CALENDAR_URL;
 const tursoCalendarToken = process.env.TURSO_CALENDAR_TOKEN;
+const isProductionRuntime = process.env.NODE_ENV === "production" || Boolean(process.env.RENDER);
+
+if (isProductionRuntime && (!tursoUrl || !tursoToken)) {
+  throw new Error(
+    "TURSO_DATABASE_URL and TURSO_DATABASE_TOKEN are required in production. " +
+    "Refusing to start with local SQLite so production entry data is not lost."
+  );
+}
+
+if (Boolean(tursoCalendarUrl) !== Boolean(tursoCalendarToken)) {
+  throw new Error("Set both TURSO_CALENDAR_URL and TURSO_CALENDAR_TOKEN, or leave both unset.");
+}
 
 const mainDb = tursoUrl && tursoToken
   ? createTursoDatabase(tursoUrl, tursoToken, "Turso primary")
