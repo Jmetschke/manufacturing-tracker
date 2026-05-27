@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "start:local": "ALLOW_LOCAL_SQLITE=true node server.js",
+    "backup:sqlite-to-turso": "node scripts/backup-sqlite-to-turso.js"
   },
   "dependencies": {
     "@libsql/client": "^0.17.3",

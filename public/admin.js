@@ -1665,8 +1665,12 @@ async function saveAdminManualReceivedItem() {
 
 function renderAdminOrderRequests() {
   const container = document.getElementById("adminOrderRequests");
+  const count = document.getElementById("adminOrderRequestsCount");
   const openRequests = allOrderRequests.filter(request => !request.ordered_item_id);
   container.innerHTML = "";
+  if (count) {
+    count.textContent = `${openRequests.length} open`;
+  }
 
   if (!openRequests.length) {
     const empty = document.createElement("div");
@@ -1869,8 +1873,12 @@ function appendDeliveryHeader(table, extraLabels = []) {
 
 function renderExpectedDeliveriesTable() {
   const container = document.getElementById("adminExpectedDeliveries");
+  const count = document.getElementById("adminExpectedDeliveriesCount");
   container.innerHTML = "";
   const expectedDeliveries = allOrderedItems.filter(item => !item.received_date);
+  if (count) {
+    count.textContent = `${expectedDeliveries.length} expected`;
+  }
 
   if (!expectedDeliveries.length) {
     const empty = document.createElement("div");
@@ -1990,8 +1998,12 @@ async function saveAdminReceivedItem(itemId, payload) {
 
 function renderReceivedDeliveriesTable() {
   const container = document.getElementById("adminReceivedDeliveries");
+  const count = document.getElementById("adminReceivedDeliveriesCount");
   container.innerHTML = "";
   const receivedDeliveries = allOrderedItems.filter(item => item.received_date);
+  if (count) {
+    count.textContent = `${receivedDeliveries.length} received`;
+  }
 
   if (!receivedDeliveries.length) {
     const empty = document.createElement("div");

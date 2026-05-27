@@ -62,6 +62,50 @@ function createTursoDatabase(url, authToken, label = "Turso") {
   return {
     info,
 
+    async transaction(mode = "write") {
+      const transaction = await client.transaction(mode);
+
+      return {
+        info,
+
+        run(sql, params = [], callback = () => {}) {
+          transaction.execute({ sql, args: params })
+            .then(result => {
+              const context = {
+                lastID: normalizeValue(result.lastInsertRowid),
+                changes: Number(result.rowsAffected || 0)
+              };
+
+              callback.call(context, null);
+            })
+            .catch(err => callback(err));
+        },
+
+        all(sql, params = [], callback = () => {}) {
+          transaction.execute({ sql, args: params })
+            .then(result => callback(null, result.rows.map(normalizeRow)))
+            .catch(err => callback(err));
+        },
+
+        get(sql, params = [], callback = () => {}) {
+          transaction.execute({ sql, args: params })
+            .then(result => {
+              const row = result.rows[0] ? normalizeRow(result.rows[0]) : undefined;
+              callback(null, row);
+            })
+            .catch(err => callback(err));
+        },
+
+        commit() {
+          return transaction.commit();
+        },
+
+        rollback() {
+          return transaction.rollback();
+        }
+      };
+    },
+
     run(sql, params = [], callback = () => {}) {
       client.execute({ sql, args: params })
         .then(result => {
@@ -126,11 +170,19 @@ const tursoToken = process.env.TURSO_DATABASE_TOKEN;
 const tursoCalendarUrl = process.env.TURSO_CALENDAR_URL;
 const tursoCalendarToken = process.env.TURSO_CALENDAR_TOKEN;
 const isProductionRuntime = process.env.NODE_ENV === "production" || Boolean(process.env.RENDER);
+const allowLocalSqlite = process.env.ALLOW_LOCAL_SQLITE === "true";
 
 if (isProductionRuntime && (!tursoUrl || !tursoToken)) {
   throw new Error(
     "TURSO_DATABASE_URL and TURSO_DATABASE_TOKEN are required in production. " +
     "Refusing to start with local SQLite so production entry data is not lost."
+  );
+}
+
+if ((!tursoUrl || !tursoToken) && !allowLocalSqlite) {
+  throw new Error(
+    "TURSO_DATABASE_URL and TURSO_DATABASE_TOKEN are required. " +
+    "Set ALLOW_LOCAL_SQLITE=true only for local/offline development."
   );
 }
 

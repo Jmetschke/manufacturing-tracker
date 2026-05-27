@@ -1,5 +1,5 @@
 node_modules/
-data/database.sqlite
-data/*.sqlite
-data/*.sqlite-*
+data/
+.env*
+!.env.example
 .env

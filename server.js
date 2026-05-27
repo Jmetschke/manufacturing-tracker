@@ -227,6 +227,40 @@ function runSql(sql, params = [], database = db) {
   });
 }
 
+async function withTransaction(operation, database = db) {
+  if (typeof database.transaction === "function") {
+    const transaction = await database.transaction("write");
+
+    try {
+      const result = await operation(transaction);
+      await transaction.commit();
+      return result;
+    } catch (err) {
+      try {
+        await transaction.rollback();
+      } catch (rollbackErr) {
+        console.error("Rollback failed:", rollbackErr.message);
+      }
+      throw err;
+    }
+  }
+
+  await runSql("BEGIN TRANSACTION", [], database);
+
+  try {
+    const result = await operation(database);
+    await runSql("COMMIT", [], database);
+    return result;
+  } catch (err) {
+    try {
+      await runSql("ROLLBACK", [], database);
+    } catch (rollbackErr) {
+      console.error("Rollback failed:", rollbackErr.message);
+    }
+    throw err;
+  }
+}
+
 function allSql(sql, params = [], database = db) {
   return new Promise((resolve, reject) => {
     database.all(sql, params, (err, rows) => {
@@ -1047,30 +1081,27 @@ app.post("/admin/ordered-items", async (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`;
 
   try {
-    await runSql("BEGIN TRANSACTION");
-    const ids = [];
+    const ids = await withTransaction(async transaction => {
+      const insertedIds = [];
 
-    for (const item of items) {
-      const result = await runSql(insertSql, [
-        dateOrdered,
-        expectedDeliveryDate,
-        item.itemName,
-        itemCompany,
-        item.packageQty,
-        itemSupplier,
-        department
-      ]);
-      ids.push(result.lastID);
-    }
+      for (const item of items) {
+        const result = await runSql(insertSql, [
+          dateOrdered,
+          expectedDeliveryDate,
+          item.itemName,
+          itemCompany,
+          item.packageQty,
+          itemSupplier,
+          department
+        ], transaction);
+        insertedIds.push(result.lastID);
+      }
 
-    await runSql("COMMIT");
+      return insertedIds;
+    });
+
     res.status(201).json({ message: "Ordered delivery added", ids });
   } catch (err) {
-    try {
-      await runSql("ROLLBACK");
-    } catch (rollbackErr) {
-      console.error("Rollback failed:", rollbackErr.message);
-    }
     res.status(500).send(err.message);
   }
 });
@@ -1105,24 +1136,26 @@ app.post("/admin/ordered-items/import-pdf", express.raw({ type: "application/pdf
      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`;
 
   try {
-    await runSql("BEGIN TRANSACTION");
-    const ids = [];
     const itemCompany = parsed.order_number ? `Amazon Order ${parsed.order_number}` : "Amazon Order";
+    const ids = await withTransaction(async transaction => {
+      const insertedIds = [];
 
-    for (const item of parsed.items) {
-      const result = await runSql(insertSql, [
-        parsed.date_ordered,
-        item.expected_delivery_date,
-        item.item_name,
-        itemCompany,
-        item.package_qty,
-        item.item_supplier,
-        department
-      ]);
-      ids.push(result.lastID);
-    }
+      for (const item of parsed.items) {
+        const result = await runSql(insertSql, [
+          parsed.date_ordered,
+          item.expected_delivery_date,
+          item.item_name,
+          itemCompany,
+          item.package_qty,
+          item.item_supplier,
+          department
+        ], transaction);
+        insertedIds.push(result.lastID);
+      }
 
-    await runSql("COMMIT");
+      return insertedIds;
+    });
+
     res.status(201).json({
       message: "Order PDF imported",
       ids,
@@ -1131,11 +1164,6 @@ app.post("/admin/ordered-items/import-pdf", express.raw({ type: "application/pdf
       items: parsed.items
     });
   } catch (err) {
-    try {
-      await runSql("ROLLBACK");
-    } catch (rollbackErr) {
-      console.error("Rollback failed:", rollbackErr.message);
-    }
     res.status(500).send(err.message);
   }
 });

@@ -290,6 +290,56 @@
     .ordered-actions {
       margin-bottom: 16px;
     }
+    .ordered-workspace {
+      display: grid;
+      gap: 18px;
+    }
+    .ordered-entry-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+      align-items: start;
+    }
+    .ordered-card,
+    .ordered-section {
+      border: 1px solid #d8d8d8;
+      background: #fff;
+      padding: 14px;
+    }
+    .ordered-card h3,
+    .ordered-section h3 {
+      margin: 0 0 12px;
+    }
+    .ordered-card .ordered-actions,
+    .ordered-section .ordered-actions {
+      margin: 0;
+    }
+    .ordered-section {
+      background: #fafafa;
+    }
+    .ordered-status-grid {
+      display: grid;
+      grid-template-columns: minmax(280px, 1.3fr) minmax(280px, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+    .ordered-section-full {
+      grid-column: 1 / -1;
+    }
+    .ordered-section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .ordered-section-header h3 {
+      margin: 0;
+    }
+    .ordered-section-count {
+      color: #555;
+      font-size: 0.92rem;
+    }
     .ordered-import-result {
       margin: 0 0 16px;
       line-height: 1.4;
@@ -412,6 +462,10 @@
       .batch-row button,
       .schedule-task-row button { width: auto; }
       .ordered-form { grid-template-columns: 1fr; }
+      .ordered-entry-grid,
+      .ordered-status-grid { grid-template-columns: 1fr; }
+      .ordered-section-header { display: block; }
+      .ordered-section-count { display: block; margin-top: 4px; }
       .ordered-actions button { width: 100%; margin-left: 0; margin-right: 0; }
       .request-order-form { grid-template-columns: 1fr; }
     }
@@ -520,138 +574,164 @@
 </section>
 
 <section id="orderedPanel" class="admin-panel">
-  <h3>Request Item</h3>
-  <div class="ordered-form">
-    <div class="ordered-field">
-      <label for="admin_request_date">Date</label>
-      <input type="date" id="admin_request_date" required>
-    </div>
-    <div class="ordered-field">
-      <label for="admin_requester_name">Name</label>
-      <input type="text" id="admin_requester_name" required>
-    </div>
-    <div class="ordered-field">
-      <label for="admin_request_department">Department</label>
-      <input type="text" id="admin_request_department">
-    </div>
-    <div class="ordered-field">
-      <label for="admin_request_item_needed">Item Needed</label>
-      <input type="text" id="admin_request_item_needed" required>
-    </div>
-    <div class="ordered-field">
-      <label for="admin_request_qty_needed">QTY Needed</label>
-      <input type="number" id="admin_request_qty_needed" min="1" step="1" required>
-    </div>
-    <div class="ordered-field">
-      <label for="admin_request_suggested_retailer">Suggested Retailer</label>
-      <input type="text" id="admin_request_suggested_retailer">
-    </div>
-  </div>
-  <div class="ordered-actions">
-    <button type="button" onclick="saveAdminOrderRequest()">Submit Request</button>
-  </div>
+  <div class="ordered-workspace">
+    <div class="ordered-entry-grid">
+      <section class="ordered-card">
+        <h3>Request Item</h3>
+        <div class="ordered-form">
+          <div class="ordered-field">
+            <label for="admin_request_date">Date</label>
+            <input type="date" id="admin_request_date" required>
+          </div>
+          <div class="ordered-field">
+            <label for="admin_requester_name">Name</label>
+            <input type="text" id="admin_requester_name" required>
+          </div>
+          <div class="ordered-field">
+            <label for="admin_request_department">Department</label>
+            <input type="text" id="admin_request_department">
+          </div>
+          <div class="ordered-field">
+            <label for="admin_request_item_needed">Item Needed</label>
+            <input type="text" id="admin_request_item_needed" required>
+          </div>
+          <div class="ordered-field">
+            <label for="admin_request_qty_needed">QTY Needed</label>
+            <input type="number" id="admin_request_qty_needed" min="1" step="1" required>
+          </div>
+          <div class="ordered-field">
+            <label for="admin_request_suggested_retailer">Suggested Retailer</label>
+            <input type="text" id="admin_request_suggested_retailer">
+          </div>
+        </div>
+        <div class="ordered-actions">
+          <button type="button" onclick="saveAdminOrderRequest()">Submit Request</button>
+        </div>
+      </section>
 
-  <h3>Item Requests</h3>
-  <div id="adminOrderRequests"></div>
+      <section class="ordered-card">
+        <h3>Import Order PDF</h3>
+        <div class="ordered-form">
+          <div class="ordered-field">
+            <label for="ordered_import_pdf">Order Details PDF</label>
+            <input type="file" id="ordered_import_pdf" accept="application/pdf">
+          </div>
+          <div class="ordered-field">
+            <label for="ordered_import_department">Department</label>
+            <input type="text" id="ordered_import_department">
+          </div>
+        </div>
+        <div class="ordered-actions">
+          <button type="button" onclick="importOrderedPdf()">Import PDF</button>
+        </div>
+        <div id="orderedImportResult" class="ordered-import-result"></div>
+      </section>
 
-  <h3>Import Order PDF</h3>
-  <div class="ordered-form">
-    <div class="ordered-field">
-      <label for="ordered_import_pdf">Order Details PDF</label>
-      <input type="file" id="ordered_import_pdf" accept="application/pdf">
+      <section class="ordered-card">
+        <h3>Add Ordered Item</h3>
+        <div class="ordered-form">
+          <div class="ordered-field">
+            <label for="ordered_date_ordered">Date Ordered</label>
+            <input type="date" id="ordered_date_ordered">
+          </div>
+          <div class="ordered-field">
+            <label for="ordered_expected_delivery_date">Expected Delivery Date</label>
+            <input type="date" id="ordered_expected_delivery_date">
+          </div>
+          <div class="ordered-field">
+            <label for="ordered_item_supplier">Item Supplier</label>
+            <input type="text" id="ordered_item_supplier">
+          </div>
+          <div class="ordered-field">
+            <label for="ordered_department">Department</label>
+            <input type="text" id="ordered_department">
+          </div>
+          <div class="ordered-field ordered-items-field">
+            <label>Ordered Items</label>
+            <div id="orderedItemRows" class="ordered-item-rows"></div>
+            <button type="button" onclick="addOrderedItemRow()">Add Another Item</button>
+          </div>
+        </div>
+        <div class="ordered-actions">
+          <button type="button" onclick="saveOrderedItem()">Add Ordered Delivery</button>
+        </div>
+      </section>
     </div>
-    <div class="ordered-field">
-      <label for="ordered_import_department">Department</label>
-      <input type="text" id="ordered_import_department">
-    </div>
-  </div>
-  <div class="ordered-actions">
-    <button type="button" onclick="importOrderedPdf()">Import PDF</button>
-  </div>
-  <div id="orderedImportResult" class="ordered-import-result"></div>
 
-  <h3>Add Ordered Item</h3>
-  <div class="ordered-form">
-    <div class="ordered-field">
-      <label for="ordered_date_ordered">Date Ordered</label>
-      <input type="date" id="ordered_date_ordered">
-    </div>
-    <div class="ordered-field">
-      <label for="ordered_expected_delivery_date">Expected Delivery Date</label>
-      <input type="date" id="ordered_expected_delivery_date">
-    </div>
-    <div class="ordered-field">
-      <label for="ordered_item_supplier">Item Supplier</label>
-      <input type="text" id="ordered_item_supplier">
-    </div>
-    <div class="ordered-field">
-      <label for="ordered_department">Department</label>
-      <input type="text" id="ordered_department">
-    </div>
-    <div class="ordered-field ordered-items-field">
-      <label>Ordered Items</label>
-      <div id="orderedItemRows" class="ordered-item-rows"></div>
-      <button type="button" onclick="addOrderedItemRow()">Add Another Item</button>
-    </div>
-  </div>
-  <div class="ordered-actions">
-    <button type="button" onclick="saveOrderedItem()">Add Ordered Delivery</button>
-  </div>
+    <div class="ordered-status-grid">
+      <section class="ordered-section ordered-section-full">
+        <div class="ordered-section-header">
+          <h3>Item Requests</h3>
+          <span id="adminOrderRequestsCount" class="ordered-section-count"></span>
+        </div>
+        <div id="adminOrderRequests"></div>
+      </section>
 
-  <div class="admin-delivery-section">
-    <h3>Expected Deliveries</h3>
-    <div id="adminExpectedDeliveries"></div>
-  </div>
+      <section class="ordered-section">
+        <div class="ordered-section-header">
+          <h3>Expected Deliveries</h3>
+          <span id="adminExpectedDeliveriesCount" class="ordered-section-count"></span>
+        </div>
+        <div id="adminExpectedDeliveries"></div>
+      </section>
 
-  <div class="admin-delivery-section">
-    <h3>Received Deliveries</h3>
-    <h3>Manual Received Item</h3>
-    <div class="ordered-form">
-      <div class="ordered-field">
-        <label for="admin_manual_received_date_ordered">Date Ordered</label>
-        <input type="date" id="admin_manual_received_date_ordered" required>
-      </div>
-      <div class="ordered-field">
-        <label for="admin_manual_received_expected_delivery_date">Expected Delivery</label>
-        <input type="date" id="admin_manual_received_expected_delivery_date" required>
-      </div>
-      <div class="ordered-field">
-        <label for="admin_manual_received_item_name">Item Name</label>
-        <input type="text" id="admin_manual_received_item_name" required>
-      </div>
-      <div class="ordered-field">
-        <label for="admin_manual_received_package_qty">Package QTY</label>
-        <input type="number" id="admin_manual_received_package_qty" min="0" step="1" required>
-      </div>
-      <div class="ordered-field">
-        <label for="admin_manual_received_units_per_package">Units Per Package</label>
-        <input type="number" id="admin_manual_received_units_per_package" min="0" step="1">
-      </div>
-      <div class="ordered-field">
-        <label for="admin_manual_received_item_supplier">Retailer/Supplier</label>
-        <input type="text" id="admin_manual_received_item_supplier" required>
-      </div>
-      <div class="ordered-field">
-        <label for="admin_manual_received_department">Department</label>
-        <input type="text" id="admin_manual_received_department" required>
-      </div>
-      <div class="ordered-field">
-        <label for="admin_manual_received_date">Received Date</label>
-        <input type="date" id="admin_manual_received_date" required>
-      </div>
-      <div class="ordered-field">
-        <label for="admin_manual_received_time">Received Time</label>
-        <input type="text" id="admin_manual_received_time" placeholder="00:00" inputmode="numeric" maxlength="5">
-      </div>
-      <div class="ordered-field">
-        <label for="admin_manual_received_location">Received Location</label>
-        <input type="text" id="admin_manual_received_location" required>
-      </div>
+      <section class="ordered-section">
+        <h3>Manual Received Item</h3>
+        <div class="ordered-form">
+          <div class="ordered-field">
+            <label for="admin_manual_received_date_ordered">Date Ordered</label>
+            <input type="date" id="admin_manual_received_date_ordered" required>
+          </div>
+          <div class="ordered-field">
+            <label for="admin_manual_received_expected_delivery_date">Expected Delivery</label>
+            <input type="date" id="admin_manual_received_expected_delivery_date" required>
+          </div>
+          <div class="ordered-field">
+            <label for="admin_manual_received_item_name">Item Name</label>
+            <input type="text" id="admin_manual_received_item_name" required>
+          </div>
+          <div class="ordered-field">
+            <label for="admin_manual_received_package_qty">Package QTY</label>
+            <input type="number" id="admin_manual_received_package_qty" min="0" step="1" required>
+          </div>
+          <div class="ordered-field">
+            <label for="admin_manual_received_units_per_package">Units Per Package</label>
+            <input type="number" id="admin_manual_received_units_per_package" min="0" step="1">
+          </div>
+          <div class="ordered-field">
+            <label for="admin_manual_received_item_supplier">Retailer/Supplier</label>
+            <input type="text" id="admin_manual_received_item_supplier" required>
+          </div>
+          <div class="ordered-field">
+            <label for="admin_manual_received_department">Department</label>
+            <input type="text" id="admin_manual_received_department" required>
+          </div>
+          <div class="ordered-field">
+            <label for="admin_manual_received_date">Received Date</label>
+            <input type="date" id="admin_manual_received_date" required>
+          </div>
+          <div class="ordered-field">
+            <label for="admin_manual_received_time">Received Time</label>
+            <input type="text" id="admin_manual_received_time" placeholder="00:00" inputmode="numeric" maxlength="5">
+          </div>
+          <div class="ordered-field">
+            <label for="admin_manual_received_location">Received Location</label>
+            <input type="text" id="admin_manual_received_location" required>
+          </div>
+        </div>
+        <div class="ordered-actions">
+          <button type="button" onclick="saveAdminManualReceivedItem()">Add Received Item</button>
+        </div>
+      </section>
+
+      <section class="ordered-section ordered-section-full">
+        <div class="ordered-section-header">
+          <h3>Received Deliveries</h3>
+          <span id="adminReceivedDeliveriesCount" class="ordered-section-count"></span>
+        </div>
+        <div id="adminReceivedDeliveries"></div>
+      </section>
     </div>
-    <div class="ordered-actions">
-      <button type="button" onclick="saveAdminManualReceivedItem()">Add Received Item</button>
-    </div>
-    <div id="adminReceivedDeliveries"></div>
   </div>
 </section>
 
