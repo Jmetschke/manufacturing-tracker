@@ -640,6 +640,208 @@ function normalizeRequiredText(value) {
   return String(value || "").trim();
 }
 
+function decodePdfString(value) {
+  let decoded = "";
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (char !== "\\") {
+      decoded += char;
+      continue;
+    }
+
+    const next = value[index + 1];
+    index += 1;
+
+    if (next === "n") decoded += "\n";
+    else if (next === "r") decoded += "\r";
+    else if (next === "t") decoded += "\t";
+    else if (next === "b") decoded += "\b";
+    else if (next === "f") decoded += "\f";
+    else if (/[0-7]/.test(next || "")) {
+      let octal = next;
+      while (octal.length < 3 && /[0-7]/.test(value[index + 1] || "")) {
+        octal += value[index + 1];
+        index += 1;
+      }
+      decoded += String.fromCharCode(parseInt(octal, 8));
+    } else {
+      decoded += next || "";
+    }
+  }
+
+  return decoded;
+}
+
+function extractPdfTextLines(buffer) {
+  const zlib = require("zlib");
+  const binary = buffer.toString("binary");
+  const streamPattern = /<<(.*?)>>\s*stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  const lines = [];
+  let match;
+
+  while ((match = streamPattern.exec(binary))) {
+    if (!/FlateDecode/.test(match[1])) continue;
+
+    let content;
+    try {
+      content = zlib.inflateSync(Buffer.from(match[2], "binary")).toString("latin1");
+    } catch (err) {
+      continue;
+    }
+
+    if (!/\bT[Jj]\b/.test(content)) continue;
+
+    const textPattern = /\[((?:[^\[\]]|\([^()\\]*(?:\\.[^()\\]*)*\))*)\]\s*TJ|\(([^()\\]*(?:\\.[^()\\]*)*)\)\s*Tj/g;
+    let textMatch;
+    while ((textMatch = textPattern.exec(content))) {
+      const text = textMatch[1]
+        ? Array.from(textMatch[1].matchAll(/\(([^()\\]*(?:\\.[^()\\]*)*)\)/g))
+            .map(part => decodePdfString(part[1]))
+            .join("")
+        : decodePdfString(textMatch[2]);
+
+      const cleaned = text.replace(/\s+/g, " ").trim();
+      if (cleaned) lines.push(cleaned);
+    }
+  }
+
+  return lines;
+}
+
+function parseAmazonDate(value, fallbackYear = new Date().getFullYear()) {
+  const text = String(value || "").replace(/,/g, "").trim();
+  const match = text.match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2})(?:\s+(\d{4}))?/i);
+  const numericMatch = text.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+  if (!match && !numericMatch) return "";
+
+  if (numericMatch) {
+    const month = Number(numericMatch[1]) - 1;
+    const day = Number(numericMatch[2]);
+    const rawYear = numericMatch[3] ? Number(numericMatch[3]) : fallbackYear;
+    const year = rawYear < 100 ? 2000 + rawYear : rawYear;
+    return isoDateFromParts(year, month, day);
+  }
+
+  const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+  const month = monthNames.findIndex(name => match[1].toLowerCase().startsWith(name));
+  const day = Number(match[2]);
+  const year = Number(match[3] || fallbackYear);
+  if (month < 0 || !Number.isInteger(day) || !Number.isInteger(year)) return "";
+
+  return isoDateFromParts(year, month, day);
+}
+
+function isoDateFromParts(year, monthIndex, day) {
+  if (!Number.isInteger(year) || !Number.isInteger(monthIndex) || !Number.isInteger(day)) return "";
+
+  const date = new Date(year, monthIndex, day);
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== monthIndex ||
+    date.getDate() !== day
+  ) {
+    return "";
+  }
+
+  return `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function addIsoDays(isoDate, days) {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + days);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function parseWeekdayDeliveryDate(line, orderDate) {
+  if (!orderDate) return "";
+
+  const weekdayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  const text = String(line || "").toLowerCase();
+  const weekdayIndex = weekdayNames.findIndex(day => new RegExp(`\\b${day}\\b`).test(text));
+  if (weekdayIndex < 0) return "";
+
+  const [year, month, day] = orderDate.split("-").map(Number);
+  const order = new Date(year, month - 1, day);
+  const daysAhead = (weekdayIndex - order.getDay() + 7) % 7 || 7;
+  return addIsoDays(orderDate, daysAhead);
+}
+
+function parseAmazonDeliveryDate(line, orderDate) {
+  const text = String(line || "").toLowerCase();
+  if ((text.includes("tomorrow") || text.includes("tommorow")) && orderDate) return addIsoDays(orderDate, 1);
+  if (text.includes("today") && orderDate) return orderDate;
+
+  const fallbackYear = orderDate ? Number(orderDate.slice(0, 4)) : new Date().getFullYear();
+  let parsed = parseAmazonDate(line, fallbackYear);
+  if (parsed && orderDate && parsed < orderDate) {
+    parsed = parseAmazonDate(line, fallbackYear + 1);
+  }
+
+  return parsed || parseWeekdayDeliveryDate(line, orderDate) || orderDate || "";
+}
+
+function isDeliveryStatusLine(value) {
+  return /^(Arriving|Delivered|Delivery|Expected delivery)\b/i.test(String(value || ""));
+}
+
+function parseAmazonOrderPdf(buffer) {
+  const lines = extractPdfTextLines(buffer)
+    .filter(line =>
+      !line.startsWith("https://") &&
+      !line.startsWith("Page ") &&
+      !["Back to top", "Conditions of Use", "Privacy Notice"].includes(line)
+    );
+
+  const orderPlacedIndex = lines.findIndex(line => /^Order placed$/i.test(line));
+  const orderNumberIndex = lines.findIndex(line => /^Order #$/i.test(line));
+  const dateOrdered = orderPlacedIndex >= 0 ? parseAmazonDate(lines[orderPlacedIndex + 1]) : "";
+  const orderNumber = orderNumberIndex >= 0 ? normalizeRequiredText(lines[orderNumberIndex + 1]) : "";
+  const items = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!isDeliveryStatusLine(lines[index])) continue;
+
+    const expectedDeliveryDate = parseAmazonDeliveryDate(lines[index], dateOrdered);
+    const itemLines = [];
+    let supplier = "Amazon";
+    let cursor = index + 1;
+
+    while (cursor < lines.length) {
+      const line = lines[cursor];
+      if (isDeliveryStatusLine(line)) break;
+      if (/^Sold by:/i.test(line)) {
+        const inlineSupplier = line.replace(/^Sold by:\s*/i, "").trim();
+        supplier = inlineSupplier || normalizeRequiredText(lines[cursor + 1]) || supplier;
+        break;
+      }
+      if (/^Supplied by:/i.test(line) || /^Other$/i.test(line) || /^\$/.test(line)) {
+        cursor += 1;
+        continue;
+      }
+      itemLines.push(line);
+      cursor += 1;
+    }
+
+    const itemName = itemLines.join(" ").replace(/\s+/g, " ").trim();
+    if (itemName && expectedDeliveryDate) {
+      items.push({
+        item_name: itemName,
+        package_qty: 1,
+        item_supplier: supplier,
+        expected_delivery_date: expectedDeliveryDate
+      });
+    }
+  }
+
+  return {
+    date_ordered: dateOrdered,
+    order_number: orderNumber,
+    items
+  };
+}
+
 /* ---------- ORDERED ITEMS ---------- */
 app.get("/ordered-items", (req, res) => {
   db.all(orderedItemsSelect(), [], (err, rows) => {
@@ -863,6 +1065,71 @@ app.post("/admin/ordered-items", async (req, res) => {
 
     await runSql("COMMIT");
     res.status(201).json({ message: "Ordered delivery added", ids });
+  } catch (err) {
+    try {
+      await runSql("ROLLBACK");
+    } catch (rollbackErr) {
+      console.error("Rollback failed:", rollbackErr.message);
+    }
+    res.status(500).send(err.message);
+  }
+});
+
+app.post("/admin/ordered-items/import-pdf", express.raw({ type: "application/pdf", limit: "10mb" }), async (req, res) => {
+  const department = normalizeRequiredText(req.query.department || req.headers["x-order-department"]);
+
+  if (!department) {
+    return res.status(400).send("Department is required for imported order items");
+  }
+
+  if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+    return res.status(400).send("Upload a PDF order details file");
+  }
+
+  const parsed = parseAmazonOrderPdf(req.body);
+  if (!isIsoDate(parsed.date_ordered) || !parsed.items.length) {
+    return res.status(400).send("Could not find ordered items in this PDF");
+  }
+
+  const insertSql =
+    `INSERT INTO ordered_items (
+       date_ordered,
+       expected_delivery_date,
+       item_name,
+       item_company,
+       package_qty,
+       item_supplier,
+       department,
+       updated_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`;
+
+  try {
+    await runSql("BEGIN TRANSACTION");
+    const ids = [];
+    const itemCompany = parsed.order_number ? `Amazon Order ${parsed.order_number}` : "Amazon Order";
+
+    for (const item of parsed.items) {
+      const result = await runSql(insertSql, [
+        parsed.date_ordered,
+        item.expected_delivery_date,
+        item.item_name,
+        itemCompany,
+        item.package_qty,
+        item.item_supplier,
+        department
+      ]);
+      ids.push(result.lastID);
+    }
+
+    await runSql("COMMIT");
+    res.status(201).json({
+      message: "Order PDF imported",
+      ids,
+      date_ordered: parsed.date_ordered,
+      order_number: parsed.order_number,
+      items: parsed.items
+    });
   } catch (err) {
     try {
       await runSql("ROLLBACK");

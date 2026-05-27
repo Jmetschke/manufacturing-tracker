@@ -290,6 +290,11 @@
     .ordered-actions {
       margin-bottom: 16px;
     }
+    .ordered-import-result {
+      margin: 0 0 16px;
+      line-height: 1.4;
+      white-space: pre-line;
+    }
     .summary-line {
       display: flex;
       flex-wrap: wrap;
@@ -548,6 +553,22 @@
 
   <h3>Item Requests</h3>
   <div id="adminOrderRequests"></div>
+
+  <h3>Import Order PDF</h3>
+  <div class="ordered-form">
+    <div class="ordered-field">
+      <label for="ordered_import_pdf">Order Details PDF</label>
+      <input type="file" id="ordered_import_pdf" accept="application/pdf">
+    </div>
+    <div class="ordered-field">
+      <label for="ordered_import_department">Department</label>
+      <input type="text" id="ordered_import_department">
+    </div>
+  </div>
+  <div class="ordered-actions">
+    <button type="button" onclick="importOrderedPdf()">Import PDF</button>
+  </div>
+  <div id="orderedImportResult" class="ordered-import-result"></div>
 
   <h3>Add Ordered Item</h3>
   <div class="ordered-form">

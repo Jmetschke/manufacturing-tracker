@@ -1477,6 +1477,8 @@ function resetOrderedForm() {
   document.getElementById("ordered_expected_delivery_date").value = "";
   document.getElementById("ordered_item_supplier").value = "";
   document.getElementById("ordered_department").value = "";
+  document.getElementById("ordered_import_pdf").value = "";
+  document.getElementById("orderedImportResult").textContent = "";
   document.getElementById("orderedItemRows").innerHTML = "";
   addOrderedItemRow();
 }
@@ -2063,6 +2065,49 @@ async function saveOrderedItem() {
   resetOrderedForm();
   showMessage("Ordered delivery added.", "success");
   await loadOrderedItems();
+}
+
+async function importOrderedPdf() {
+  const fileInput = document.getElementById("ordered_import_pdf");
+  const departmentInput = document.getElementById("ordered_import_department");
+  const result = document.getElementById("orderedImportResult");
+  const file = fileInput.files[0];
+  const department = departmentInput.value.trim();
+
+  result.textContent = "";
+
+  if (!file) {
+    showMessage("Choose an order details PDF to import.", "error");
+    return;
+  }
+
+  if (!department) {
+    showMessage("Department is required for imported order items.", "error");
+    departmentInput.focus();
+    return;
+  }
+
+  const res = await adminFetch(`/admin/ordered-items/import-pdf?department=${encodeURIComponent(department)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/pdf" },
+    body: file
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("PDF import failed: " + text, "error");
+    return;
+  }
+
+  const imported = await res.json();
+  fileInput.value = "";
+  showMessage(`Imported ${imported.items.length} order item${imported.items.length === 1 ? "" : "s"}.`, "success");
+  result.textContent = imported.items
+    .map(item => `${item.expected_delivery_date}: ${item.item_name} - QTY ${item.package_qty}`)
+    .join("\n");
+
+  await loadOrderedItems();
+  await loadAdminCalendar();
 }
 
 async function initAdmin() {
