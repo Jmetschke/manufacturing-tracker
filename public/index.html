@@ -543,6 +543,123 @@
       margin: 0;
     }
 
+    .ordered-workspace {
+      display: grid;
+      gap: 18px;
+    }
+
+    .ordered-entry-grid,
+    .ordered-status-grid {
+      display: grid;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .ordered-entry-grid {
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    }
+
+    .ordered-status-grid {
+      grid-template-columns: minmax(280px, 1.3fr) minmax(280px, 1fr);
+    }
+
+    .ordered-card,
+    .ordered-section {
+      border: 1px solid #d8d8d2;
+      background: #fff;
+      padding: 14px;
+    }
+
+    .ordered-section {
+      background: #fafafa;
+    }
+
+    .ordered-section-full {
+      grid-column: 1 / -1;
+    }
+
+    .ordered-card h3,
+    .ordered-section h3 {
+      margin: 0 0 12px;
+    }
+
+    .ordered-section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .ordered-section-header h3 {
+      margin: 0;
+    }
+
+    .ordered-section-tools {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .ordered-section-count {
+      color: #555;
+      font-size: 0.92rem;
+      white-space: nowrap;
+    }
+
+    .ordered-import-result {
+      margin: 0;
+      line-height: 1.4;
+      white-space: pre-line;
+    }
+
+    .ordered-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 24px;
+      overflow-y: auto;
+      background: rgba(32, 33, 36, 0.55);
+    }
+
+    .ordered-modal[hidden] {
+      display: none;
+    }
+
+    .ordered-modal-window {
+      width: min(920px, 100%);
+      border: 1px solid #c9c9c2;
+      background: #fff;
+      padding: 16px;
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
+    }
+
+    .ordered-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .ordered-modal-header h3 {
+      margin: 0;
+    }
+
+    .ordered-modal-close {
+      min-width: 44px;
+      margin: 0;
+    }
+
+    .ordered-modal .request-actions {
+      margin-bottom: 0;
+    }
+
     @media (max-width: 640px) {
       html {
         font-size: 18px;
@@ -625,6 +742,41 @@
       .request-form,
       .delivery-details {
         grid-template-columns: 1fr;
+      }
+
+      .ordered-entry-grid,
+      .ordered-status-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .ordered-section-header {
+        display: block;
+      }
+
+      .ordered-section-tools {
+        justify-content: stretch;
+        margin-top: 8px;
+      }
+
+      .ordered-section-tools button,
+      .ordered-card .request-actions button,
+      .ordered-modal .request-actions button {
+        width: 100%;
+        margin-left: 0;
+        margin-right: 0;
+      }
+
+      .ordered-section-count {
+        display: block;
+        margin-bottom: 8px;
+      }
+
+      .ordered-modal {
+        padding: 12px;
+      }
+
+      .ordered-modal-window {
+        padding: 12px;
       }
 
       .table-wrap,
@@ -832,99 +984,157 @@
 </section>
 
 <section id="orderedTab" class="tab-panel">
-  <div class="deliveries-section">
-    <h3>Request Item</h3>
-    <div class="request-form">
-      <div class="request-field">
-        <label for="request_date">Date</label>
-        <input type="date" id="request_date" required>
-      </div>
-      <div class="request-field">
-        <label for="requester_name">Name</label>
-        <input type="text" id="requester_name" required>
-      </div>
-      <div class="request-field">
-        <label for="request_department">Department</label>
-        <input type="text" id="request_department">
-      </div>
-      <div class="request-field">
-        <label for="request_item_needed">Item Needed</label>
-        <input type="text" id="request_item_needed" required>
-      </div>
-      <div class="request-field">
-        <label for="request_qty_needed">QTY Needed</label>
-        <input type="number" id="request_qty_needed" min="1" step="1" required>
-      </div>
-      <div class="request-field">
-        <label for="request_suggested_retailer">Suggested Retailer</label>
-        <input type="text" id="request_suggested_retailer">
-      </div>
+  <div class="ordered-workspace">
+    <div class="ordered-entry-grid">
+      <section class="ordered-card">
+        <h3>Request Item</h3>
+        <div class="request-form">
+          <div class="request-field">
+            <label for="request_date">Date</label>
+            <input type="date" id="request_date" required>
+          </div>
+          <div class="request-field">
+            <label for="requester_name">Name</label>
+            <input type="text" id="requester_name" required>
+          </div>
+          <div class="request-field">
+            <label for="request_department">Department</label>
+            <input type="text" id="request_department">
+          </div>
+          <div class="request-field">
+            <label for="request_item_needed">Item Needed</label>
+            <input type="text" id="request_item_needed" required>
+          </div>
+          <div class="request-field">
+            <label for="request_qty_needed">QTY Needed</label>
+            <input type="number" id="request_qty_needed" min="1" step="1" required>
+          </div>
+          <div class="request-field">
+            <label for="request_suggested_retailer">Suggested Retailer</label>
+            <input type="text" id="request_suggested_retailer">
+          </div>
+        </div>
+        <div class="request-actions">
+          <button type="button" onclick="saveOrderRequest()">Submit Request</button>
+        </div>
+      </section>
+
+      <section class="ordered-card">
+        <h3>Manual Received Item</h3>
+        <div class="request-actions">
+          <button type="button" onclick="openManualReceivedWindow()">Open Manual Received Item</button>
+        </div>
+      </section>
+
+      <section class="ordered-card">
+        <h3>Import PDF</h3>
+        <div class="request-form">
+          <div class="request-field">
+            <label for="main_ordered_import_pdf">Invoice or Order PDF</label>
+            <input type="file" id="main_ordered_import_pdf" accept="application/pdf">
+          </div>
+          <div class="request-field">
+            <label for="main_ordered_import_department">Department</label>
+            <input type="text" id="main_ordered_import_department">
+          </div>
+        </div>
+        <div class="request-actions">
+          <button type="button" onclick="importMainOrderedPdf()">Import PDF</button>
+        </div>
+        <div id="mainOrderedImportResult" class="ordered-import-result"></div>
+      </section>
     </div>
-    <div class="request-actions">
-      <button type="button" onclick="saveOrderRequest()">Submit Request</button>
+
+    <div class="ordered-status-grid">
+      <section class="ordered-section ordered-section-full">
+        <div class="ordered-section-header">
+          <h3>Item Requests</h3>
+          <span id="orderRequestsCount" class="ordered-section-count"></span>
+        </div>
+        <div id="orderRequests"></div>
+      </section>
+
+      <section class="ordered-section">
+        <div class="ordered-section-header">
+          <h3>Expected Deliveries</h3>
+          <div class="ordered-section-tools">
+            <span id="expectedDeliveriesCount" class="ordered-section-count"></span>
+            <button type="button" onclick="openManualReceivedWindow()">Manual Received Item</button>
+          </div>
+        </div>
+        <div id="expectedDeliveries"></div>
+      </section>
+
+      <section class="ordered-section">
+        <div class="ordered-section-header">
+          <h3>Needs Delivery Date</h3>
+          <span id="needsDeliveryDateCount" class="ordered-section-count"></span>
+        </div>
+        <div id="needsDeliveryDateDeliveries"></div>
+      </section>
+
+      <section class="ordered-section">
+        <div class="ordered-section-header">
+          <h3>Received Deliveries</h3>
+          <span id="receivedDeliveriesCount" class="ordered-section-count"></span>
+        </div>
+        <div id="receivedDeliveries"></div>
+      </section>
     </div>
   </div>
 
-  <div class="deliveries-section">
-    <h3>Item Requests</h3>
-    <div id="orderRequests"></div>
-  </div>
-
-  <div class="deliveries-section">
-    <h3>Expected Deliveries</h3>
-    <div id="expectedDeliveries"></div>
-  </div>
-
-  <div class="deliveries-section">
-    <h3>Manual Received Item</h3>
-    <div class="request-form">
-      <div class="request-field">
-        <label for="manual_received_date_ordered">Date Ordered</label>
-        <input type="date" id="manual_received_date_ordered" required>
+  <div id="manualReceivedWindow" class="ordered-modal" hidden role="dialog" aria-modal="true" aria-labelledby="manualReceivedWindowTitle">
+    <div class="ordered-modal-window">
+      <div class="ordered-modal-header">
+        <h3 id="manualReceivedWindowTitle">Manual Received Item</h3>
+        <button class="ordered-modal-close" type="button" onclick="closeManualReceivedWindow()" aria-label="Close manual received item">X</button>
       </div>
-      <div class="request-field">
-        <label for="manual_received_expected_delivery_date">Expected Delivery</label>
-        <input type="date" id="manual_received_expected_delivery_date" required>
+      <div class="request-form">
+        <div class="request-field">
+          <label for="manual_received_date_ordered">Date Ordered</label>
+          <input type="date" id="manual_received_date_ordered" required>
+        </div>
+        <div class="request-field">
+          <label for="manual_received_expected_delivery_date">Expected Delivery</label>
+          <input type="date" id="manual_received_expected_delivery_date" required>
+        </div>
+        <div class="request-field">
+          <label for="manual_received_item_name">Item Name</label>
+          <input type="text" id="manual_received_item_name" required>
+        </div>
+        <div class="request-field">
+          <label for="manual_received_package_qty">Package QTY</label>
+          <input type="number" id="manual_received_package_qty" min="0" step="1" required>
+        </div>
+        <div class="request-field">
+          <label for="manual_received_units_per_package">Units Per Package</label>
+          <input type="number" id="manual_received_units_per_package" min="0" step="1">
+        </div>
+        <div class="request-field">
+          <label for="manual_received_item_supplier">Retailer/Supplier</label>
+          <input type="text" id="manual_received_item_supplier" required>
+        </div>
+        <div class="request-field">
+          <label for="manual_received_department">Department</label>
+          <input type="text" id="manual_received_department" required>
+        </div>
+        <div class="request-field">
+          <label for="manual_received_date">Received Date</label>
+          <input type="date" id="manual_received_date" required>
+        </div>
+        <div class="request-field">
+          <label for="manual_received_time">Received Time</label>
+          <input type="text" id="manual_received_time" placeholder="00:00" inputmode="numeric" maxlength="5">
+        </div>
+        <div class="request-field">
+          <label for="manual_received_location">Received Location</label>
+          <input type="text" id="manual_received_location" required>
+        </div>
       </div>
-      <div class="request-field">
-        <label for="manual_received_item_name">Item Name</label>
-        <input type="text" id="manual_received_item_name" required>
-      </div>
-      <div class="request-field">
-        <label for="manual_received_package_qty">Package QTY</label>
-        <input type="number" id="manual_received_package_qty" min="0" step="1" required>
-      </div>
-      <div class="request-field">
-        <label for="manual_received_units_per_package">Units Per Package</label>
-        <input type="number" id="manual_received_units_per_package" min="0" step="1">
-      </div>
-      <div class="request-field">
-        <label for="manual_received_item_supplier">Retailer/Supplier</label>
-        <input type="text" id="manual_received_item_supplier" required>
-      </div>
-      <div class="request-field">
-        <label for="manual_received_department">Department</label>
-        <input type="text" id="manual_received_department" required>
-      </div>
-      <div class="request-field">
-        <label for="manual_received_date">Received Date</label>
-        <input type="date" id="manual_received_date" required>
-      </div>
-      <div class="request-field">
-        <label for="manual_received_time">Received Time</label>
-        <input type="text" id="manual_received_time" placeholder="00:00" inputmode="numeric" maxlength="5">
-      </div>
-      <div class="request-field">
-        <label for="manual_received_location">Received Location</label>
-        <input type="text" id="manual_received_location" required>
+      <div class="request-actions">
+        <button type="button" onclick="saveManualReceivedItem()">Add Received Item</button>
       </div>
     </div>
-    <div class="request-actions">
-      <button type="button" onclick="saveManualReceivedItem()">Add Received Item</button>
-    </div>
-
-    <h3>Received Deliveries</h3>
-    <div id="receivedDeliveries"></div>
   </div>
 </section>
 

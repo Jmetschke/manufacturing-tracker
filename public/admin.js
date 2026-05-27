@@ -521,15 +521,19 @@ function buildAdminExpectedDeliveriesByDate(items, visibleStart, visibleEnd) {
   const rangeEndIso = toIsoDate(visibleEnd);
 
   items.forEach(item => {
-    const expectedDate = item.expected_delivery_date;
-    if (!expectedDate || item.received_date) return;
-    if (expectedDate < rangeStartIso || expectedDate > rangeEndIso) return;
+    const isReceived = Boolean(item.received_date);
+    const deliveryDate = isReceived ? item.received_date : item.expected_delivery_date;
+    if (!deliveryDate || Number(item.import_needs_delivery_date)) return;
+    if (deliveryDate < rangeStartIso || deliveryDate > rangeEndIso) return;
 
-    if (!deliveriesByDate.has(expectedDate)) {
-      deliveriesByDate.set(expectedDate, []);
+    if (!deliveriesByDate.has(deliveryDate)) {
+      deliveriesByDate.set(deliveryDate, []);
     }
 
-    deliveriesByDate.get(expectedDate).push(item);
+    deliveriesByDate.get(deliveryDate).push({
+      ...item,
+      calendar_delivery_status: isReceived ? "Delivered" : "Expected"
+    });
   });
 
   return deliveriesByDate;
@@ -541,16 +545,25 @@ function appendAdminExpectedDeliveries(container, deliveries) {
   const section = document.createElement("div");
   section.className = "admin-calendar-deliveries";
 
-  const heading = document.createElement("div");
-  heading.className = "admin-calendar-delivery-heading";
-  heading.textContent = "Expected Deliveries";
-  section.appendChild(heading);
+  const groups = [
+    ["Expected", deliveries.filter(delivery => delivery.calendar_delivery_status !== "Delivered")],
+    ["Delivered", deliveries.filter(delivery => delivery.calendar_delivery_status === "Delivered")]
+  ];
 
-  deliveries.forEach(delivery => {
-    const item = document.createElement("div");
-    item.className = "admin-calendar-delivery";
-    item.textContent = `${delivery.item_name} - QTY ${delivery.package_qty}`;
-    section.appendChild(item);
+  groups.forEach(([label, group]) => {
+    if (!group.length) return;
+
+    const heading = document.createElement("div");
+    heading.className = "admin-calendar-delivery-heading";
+    heading.textContent = `${label} Deliveries`;
+    section.appendChild(heading);
+
+    group.forEach(delivery => {
+      const item = document.createElement("div");
+      item.className = "admin-calendar-delivery";
+      item.textContent = `${delivery.item_name} - QTY ${delivery.package_qty}`;
+      section.appendChild(item);
+    });
   });
 
   container.appendChild(section);
@@ -1568,6 +1581,24 @@ function resetAdminManualReceivedForm() {
   document.getElementById("admin_manual_received_location").value = "";
 }
 
+function openAdminManualReceivedWindow() {
+  const modal = document.getElementById("adminManualReceivedWindow");
+  if (!modal) return;
+
+  modal.hidden = false;
+  document.body.style.overflow = "hidden";
+  const firstField = document.getElementById("admin_manual_received_item_name");
+  if (firstField) firstField.focus();
+}
+
+function closeAdminManualReceivedWindow() {
+  const modal = document.getElementById("adminManualReceivedWindow");
+  if (!modal) return;
+
+  modal.hidden = true;
+  document.body.style.overflow = "";
+}
+
 async function loadOrderedItems() {
   const res = await fetch("/ordered-items");
 
@@ -1659,6 +1690,7 @@ async function saveAdminManualReceivedItem() {
   }
 
   resetAdminManualReceivedForm();
+  closeAdminManualReceivedWindow();
   showMessage("Received item added.", "success");
   await loadOrderedItems();
 }
@@ -1821,6 +1853,7 @@ async function markRequestOrdered(requestId, payload) {
 
 function renderOrderedItemsTable() {
   renderExpectedDeliveriesTable();
+  renderNeedsDeliveryDateTable();
   renderReceivedDeliveriesTable();
 }
 
@@ -1875,7 +1908,7 @@ function renderExpectedDeliveriesTable() {
   const container = document.getElementById("adminExpectedDeliveries");
   const count = document.getElementById("adminExpectedDeliveriesCount");
   container.innerHTML = "";
-  const expectedDeliveries = allOrderedItems.filter(item => !item.received_date);
+  const expectedDeliveries = allOrderedItems.filter(item => !item.received_date && !Number(item.import_needs_delivery_date));
   if (count) {
     count.textContent = `${expectedDeliveries.length} expected`;
   }
@@ -1906,6 +1939,50 @@ function renderExpectedDeliveriesTable() {
       }
     });
     actionCell.appendChild(checkbox);
+    row.appendChild(actionCell);
+
+    table.appendChild(row);
+  });
+
+  container.appendChild(table);
+}
+
+function renderNeedsDeliveryDateTable() {
+  const container = document.getElementById("adminNeedsDeliveryDateDeliveries");
+  const count = document.getElementById("adminNeedsDeliveryDateCount");
+  if (!container) return;
+
+  container.innerHTML = "";
+  const deliveries = allOrderedItems.filter(item => !item.received_date && Number(item.import_needs_delivery_date));
+  if (count) {
+    count.textContent = `${deliveries.length} need date`;
+  }
+
+  if (!deliveries.length) {
+    const empty = document.createElement("div");
+    empty.className = "message";
+    empty.textContent = "No imported deliveries need a delivery date.";
+    container.appendChild(empty);
+    return;
+  }
+
+  const table = document.createElement("table");
+  table.className = "mobile-stack";
+  const labels = appendDeliveryHeader(table, ["Delivery Date"]);
+
+  deliveries.forEach(item => {
+    const row = document.createElement("tr");
+    appendDeliveryRowCells(row, item, labels);
+
+    const actionCell = document.createElement("td");
+    actionCell.dataset.label = labels[labels.length - 1];
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "Set Date";
+    button.addEventListener("click", () => {
+      showAdminReceiveForm(item.id, actionCell, { checked: true });
+    });
+    actionCell.appendChild(button);
     row.appendChild(actionCell);
 
     table.appendChild(row);
@@ -2115,12 +2192,25 @@ async function importOrderedPdf() {
   fileInput.value = "";
   showMessage(`Imported ${imported.items.length} order item${imported.items.length === 1 ? "" : "s"}.`, "success");
   result.textContent = imported.items
-    .map(item => `${item.expected_delivery_date}: ${item.item_name} - QTY ${item.package_qty}`)
+    .map(item => {
+      const status = item.received_date
+        ? `delivered ${item.received_date}`
+        : item.import_needs_delivery_date
+          ? "needs delivery date"
+          : `expected ${item.expected_delivery_date}`;
+      return `${status}: ${item.item_name} - QTY ${item.package_qty}`;
+    })
     .join("\n");
 
   await loadOrderedItems();
   await loadAdminCalendar();
 }
+
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape") {
+    closeAdminManualReceivedWindow();
+  }
+});
 
 async function initAdmin() {
   loadEmployeeSelects();

@@ -582,15 +582,19 @@ function buildExpectedDeliveriesByDate(items, visibleStart, visibleEnd) {
   const rangeEndIso = toIsoDate(visibleEnd);
 
   items.forEach(item => {
-    const expectedDate = item.expected_delivery_date;
-    if (!expectedDate || item.received_date) return;
-    if (expectedDate < rangeStartIso || expectedDate > rangeEndIso) return;
+    const isReceived = Boolean(item.received_date);
+    const deliveryDate = isReceived ? item.received_date : item.expected_delivery_date;
+    if (!deliveryDate || Number(item.import_needs_delivery_date)) return;
+    if (deliveryDate < rangeStartIso || deliveryDate > rangeEndIso) return;
 
-    if (!deliveriesByDate.has(expectedDate)) {
-      deliveriesByDate.set(expectedDate, []);
+    if (!deliveriesByDate.has(deliveryDate)) {
+      deliveriesByDate.set(deliveryDate, []);
     }
 
-    deliveriesByDate.get(expectedDate).push(item);
+    deliveriesByDate.get(deliveryDate).push({
+      ...item,
+      calendar_delivery_status: isReceived ? "Delivered" : "Expected"
+    });
   });
 
   return deliveriesByDate;
@@ -602,16 +606,25 @@ function appendExpectedDeliveries(container, deliveries) {
   const section = document.createElement("div");
   section.className = "calendar-deliveries";
 
-  const heading = document.createElement("div");
-  heading.className = "calendar-delivery-heading";
-  heading.textContent = "Expected Deliveries";
-  section.appendChild(heading);
+  const groups = [
+    ["Expected", deliveries.filter(delivery => delivery.calendar_delivery_status !== "Delivered")],
+    ["Delivered", deliveries.filter(delivery => delivery.calendar_delivery_status === "Delivered")]
+  ];
 
-  deliveries.forEach(delivery => {
-    const item = document.createElement("div");
-    item.className = "calendar-delivery";
-    item.textContent = `${delivery.item_name} - QTY ${delivery.package_qty}`;
-    section.appendChild(item);
+  groups.forEach(([label, group]) => {
+    if (!group.length) return;
+
+    const heading = document.createElement("div");
+    heading.className = "calendar-delivery-heading";
+    heading.textContent = `${label} Deliveries`;
+    section.appendChild(heading);
+
+    group.forEach(delivery => {
+      const item = document.createElement("div");
+      item.className = "calendar-delivery";
+      item.textContent = `${delivery.item_name} - QTY ${delivery.package_qty}`;
+      section.appendChild(item);
+    });
   });
 
   container.appendChild(section);
@@ -1415,6 +1428,24 @@ function resetManualReceivedForm() {
   document.getElementById("manual_received_location").value = "";
 }
 
+function openManualReceivedWindow() {
+  const modal = document.getElementById("manualReceivedWindow");
+  if (!modal) return;
+
+  modal.hidden = false;
+  document.body.style.overflow = "hidden";
+  const firstField = document.getElementById("manual_received_item_name");
+  if (firstField) firstField.focus();
+}
+
+function closeManualReceivedWindow() {
+  const modal = document.getElementById("manualReceivedWindow");
+  if (!modal) return;
+
+  modal.hidden = true;
+  document.body.style.overflow = "";
+}
+
 async function saveOrderRequest() {
   const payload = {
     request_date: document.getElementById("request_date").value,
@@ -1475,14 +1506,60 @@ async function saveManualReceivedItem() {
   }
 
   resetManualReceivedForm();
+  closeManualReceivedWindow();
   await loadOrderedItems();
   alert("Received item added");
 }
 
+async function importMainOrderedPdf() {
+  const fileInput = document.getElementById("main_ordered_import_pdf");
+  const departmentInput = document.getElementById("main_ordered_import_department");
+  const result = document.getElementById("mainOrderedImportResult");
+  const file = fileInput.files[0];
+  const department = departmentInput.value.trim();
+
+  result.textContent = "";
+
+  if (!file) {
+    alert("Choose an invoice or order PDF to import.");
+    return;
+  }
+
+  if (!department) {
+    alert("Department is required for imported order items.");
+    departmentInput.focus();
+    return;
+  }
+
+  const res = await fetch(`/ordered-items/import-pdf?department=${encodeURIComponent(department)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/pdf" },
+    body: file
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    alert("PDF import failed: " + text);
+    return;
+  }
+
+  const imported = await res.json();
+  fileInput.value = "";
+  result.textContent = [
+    `Imported ${imported.items.length} item${imported.items.length === 1 ? "" : "s"}.`,
+    `${imported.received || 0} delivered, ${imported.needs_delivery_date || 0} need delivery date.`
+  ].join("\n");
+  await loadOrderedItems();
+}
+
 function renderOrderRequests() {
   const container = document.getElementById("orderRequests");
+  const count = document.getElementById("orderRequestsCount");
   const openRequests = orderRequests.filter(request => !request.ordered_item_id);
   container.innerHTML = "";
+  if (count) {
+    count.textContent = `${openRequests.length} open`;
+  }
 
   if (!openRequests.length) {
     const empty = document.createElement("div");
@@ -1538,6 +1615,9 @@ function createDeliveryDetails(item) {
   appendDeliveryDetail(details, "Supplier", item.item_supplier);
   appendDeliveryDetail(details, "Department", item.department);
   appendDeliveryDetail(details, "Requested By", item.requested_by);
+  if (Number(item.import_needs_delivery_date)) {
+    appendDeliveryDetail(details, "Needs Delivery Date", "Yes");
+  }
 
   if (item.received_date) {
     appendDeliveryDetail(details, "Received", item.received_date);
@@ -1710,11 +1790,32 @@ function renderDeliveryList(container, items, isReceived) {
 }
 
 function renderDeliveries() {
-  const expected = orderedItems.filter(item => !item.received_date);
+  const needsDeliveryDate = orderedItems.filter(item => !item.received_date && Number(item.import_needs_delivery_date));
+  const expected = orderedItems.filter(item => !item.received_date && !Number(item.import_needs_delivery_date));
   const received = orderedItems.filter(item => item.received_date);
+  const expectedCount = document.getElementById("expectedDeliveriesCount");
+  const needsDeliveryDateCount = document.getElementById("needsDeliveryDateCount");
+  const receivedCount = document.getElementById("receivedDeliveriesCount");
+
+  if (expectedCount) {
+    expectedCount.textContent = `${expected.length} expected`;
+  }
+  if (needsDeliveryDateCount) {
+    needsDeliveryDateCount.textContent = `${needsDeliveryDate.length} need date`;
+  }
+  if (receivedCount) {
+    receivedCount.textContent = `${received.length} received`;
+  }
 
   renderDeliveryList(document.getElementById("expectedDeliveries"), expected, false);
+  renderDeliveryList(document.getElementById("needsDeliveryDateDeliveries"), needsDeliveryDate, false);
   renderDeliveryList(document.getElementById("receivedDeliveries"), received, true);
 }
+
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape") {
+    closeManualReceivedWindow();
+  }
+});
 
 load();

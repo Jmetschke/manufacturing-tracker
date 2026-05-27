@@ -509,6 +509,7 @@ async function initializeDatabase() {
       received_date TEXT,
       received_time TEXT,
       received_location TEXT,
+      import_needs_delivery_date INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     )
@@ -560,6 +561,7 @@ async function initializeDatabase() {
   await addMissingColumn("ordered_items", "received_date", "TEXT");
   await addMissingColumn("ordered_items", "received_time", "TEXT");
   await addMissingColumn("ordered_items", "received_location", "TEXT");
+  await addMissingColumn("ordered_items", "import_needs_delivery_date", "INTEGER DEFAULT 0");
   await addMissingColumn("ordered_items", "created_at", "TEXT");
   await addMissingColumn("ordered_items", "updated_at", "TEXT");
   await addMissingColumn("order_requests", "request_date", "TEXT");
@@ -658,6 +660,7 @@ function orderedItemsSelect(whereClause = "") {
       received_date,
       received_time,
       received_location,
+      COALESCE(import_needs_delivery_date, 0) AS import_needs_delivery_date,
       created_at,
       updated_at
     FROM ordered_items
@@ -788,6 +791,11 @@ function addIsoDays(isoDate, days) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function todayIsoDate() {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 function parseWeekdayDeliveryDate(line, orderDate) {
   if (!orderDate) return "";
 
@@ -820,6 +828,137 @@ function isDeliveryStatusLine(value) {
   return /^(Arriving|Delivered|Delivery|Expected delivery)\b/i.test(String(value || ""));
 }
 
+function isDeliveredStatusLine(value) {
+  return /^Delivered\b/i.test(String(value || ""));
+}
+
+function findNearbyDate(lines, index, windowSize = 3) {
+  for (let offset = 0; offset <= windowSize; offset += 1) {
+    const before = lines[index - offset];
+    const after = lines[index + offset];
+    const beforeDate = parseAmazonDate(before);
+    if (beforeDate) return beforeDate;
+    const afterDate = parseAmazonDate(after);
+    if (afterDate) return afterDate;
+  }
+
+  return "";
+}
+
+function findInvoiceDate(lines) {
+  const labelPatterns = [
+    /^(Invoice Date|Order placed|Order Date|Date Ordered|Purchase Date|Transaction Date)$/i,
+    /^(Invoice Date|Order Date|Date Ordered|Purchase Date|Transaction Date)\b/i
+  ];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!labelPatterns.some(pattern => pattern.test(line))) continue;
+
+    const inlineDate = parseAmazonDate(line);
+    if (inlineDate) return inlineDate;
+
+    const nearbyDate = findNearbyDate(lines, index, 2);
+    if (nearbyDate) return nearbyDate;
+  }
+
+  return lines.map(line => parseAmazonDate(line)).find(Boolean) || "";
+}
+
+function findDeliveredDate(lines, orderDate = "") {
+  const patterns = [
+    /^Delivered\b/i,
+    /^(Delivery Date|Date Delivered|Delivered Date|Received Date)$/i,
+    /^(Delivery Date|Date Delivered|Delivered Date|Received Date)\b/i,
+    /\bdelivered\b/i
+  ];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!patterns.some(pattern => pattern.test(line))) continue;
+
+    const parsed = parseAmazonDeliveryDate(line, orderDate);
+    if (parsed) return parsed;
+
+    const nearbyDate = findNearbyDate(lines, index, 2);
+    if (nearbyDate) return nearbyDate;
+  }
+
+  return "";
+}
+
+function findInvoiceNumber(lines) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const inlineMatch = line.match(/\b(?:Invoice|Order|PO|Receipt)\s*#?\s*[:#]\s*([A-Z0-9-]+)/i);
+    if (inlineMatch) return inlineMatch[1];
+
+    if (/^(Invoice|Order|PO|Receipt)\s*#?$/i.test(line)) {
+      const value = normalizeRequiredText(lines[index + 1]);
+      if (value) return value;
+    }
+  }
+
+  return "";
+}
+
+function isGenericInvoiceNoiseLine(line) {
+  const text = String(line || "").trim();
+  if (!text) return true;
+  if (text.startsWith("https://") || text.startsWith("http://")) return true;
+  if (/^Page\s+\d+/i.test(text)) return true;
+  if (/^(Invoice|Receipt|Order|Order #|Invoice #|PO #|Date|Invoice Date|Order Date|Delivery Date|Date Delivered|Delivered Date|Received Date)$/i.test(text)) return true;
+  if (/^(Ship To|Bill To|Sold by|Sold By:|Supplied by|Payment|Subtotal|Total|Tax|Shipping|Grand Total|Amount|Balance|Terms|Qty|Quantity|Price|Unit Price|Description)$/i.test(text)) return true;
+  if (/^\$?\d+(?:\.\d{2})?$/.test(text)) return true;
+  if (/^\d{1,4}$/.test(text)) return true;
+  if (parseAmazonDate(text)) return true;
+  return false;
+}
+
+function parseGenericInvoicePdfLines(lines) {
+  const dateOrdered = findInvoiceDate(lines) || todayIsoDate();
+  const deliveredDate = findDeliveredDate(lines, dateOrdered);
+  const invoiceNumber = findInvoiceNumber(lines);
+  const itemCompany = invoiceNumber ? `Imported Invoice ${invoiceNumber}` : "Imported Invoice";
+  const candidateLines = [];
+
+  lines.forEach(line => {
+    const text = normalizeRequiredText(line).replace(/\s+/g, " ");
+    if (isGenericInvoiceNoiseLine(text)) return;
+    if (invoiceNumber && text === invoiceNumber) return;
+    if (/^\$/.test(text)) return;
+    if (text.length < 4 || text.length > 180) return;
+    candidateLines.push(text);
+  });
+
+  const items = candidateLines.slice(0, 60).map(line => {
+    const qtyMatch = line.match(/\b(?:qty|quantity)\s*[:#]?\s*(\d+)\b/i) || line.match(/\s+x\s*(\d+)\b/i);
+    const packageQty = qtyMatch ? Number(qtyMatch[1]) : 1;
+
+    return {
+      item_name: line
+        .replace(/\b(?:qty|quantity)\s*[:#]?\s*\d+\b/i, "")
+        .replace(/\s+x\s*\d+\b/i, "")
+        .replace(/\s+\$?\d+(?:\.\d{2})?\s*$/, "")
+        .replace(/\s+/g, " ")
+        .trim(),
+      package_qty: Number.isInteger(packageQty) && packageQty >= 0 ? packageQty : 1,
+      item_supplier: "Imported PDF",
+      expected_delivery_date: deliveredDate || dateOrdered,
+      received_date: deliveredDate,
+      received_location: deliveredDate ? "Imported PDF" : "",
+      import_needs_delivery_date: deliveredDate ? 0 : 1
+    };
+  }).filter(item => item.item_name);
+
+  return {
+    date_ordered: dateOrdered,
+    order_number: invoiceNumber,
+    item_company: itemCompany,
+    items
+  };
+}
+
 function parseAmazonOrderPdf(buffer) {
   const lines = extractPdfTextLines(buffer)
     .filter(line =>
@@ -838,6 +977,7 @@ function parseAmazonOrderPdf(buffer) {
     if (!isDeliveryStatusLine(lines[index])) continue;
 
     const expectedDeliveryDate = parseAmazonDeliveryDate(lines[index], dateOrdered);
+    const deliveredDate = isDeliveredStatusLine(lines[index]) ? expectedDeliveryDate : "";
     const itemLines = [];
     let supplier = "Amazon";
     let cursor = index + 1;
@@ -859,21 +999,33 @@ function parseAmazonOrderPdf(buffer) {
     }
 
     const itemName = itemLines.join(" ").replace(/\s+/g, " ").trim();
-    if (itemName && expectedDeliveryDate) {
+    if (itemName) {
       items.push({
         item_name: itemName,
         package_qty: 1,
         item_supplier: supplier,
-        expected_delivery_date: expectedDeliveryDate
+        expected_delivery_date: expectedDeliveryDate || dateOrdered || todayIsoDate(),
+        received_date: deliveredDate,
+        received_location: deliveredDate ? "Imported PDF" : "",
+        import_needs_delivery_date: expectedDeliveryDate ? 0 : 1
       });
     }
   }
 
-  return {
-    date_ordered: dateOrdered,
+  const fallbackOrderDate = dateOrdered ||
+    (items[0] && (items[0].received_date || items[0].expected_delivery_date)) ||
+    todayIsoDate();
+
+  const parsed = {
+    date_ordered: fallbackOrderDate,
     order_number: orderNumber,
+    item_company: orderNumber ? `Amazon Order ${orderNumber}` : "Amazon Order",
     items
   };
+
+  if (parsed.items.length) return parsed;
+
+  return parseGenericInvoicePdfLines(lines);
 }
 
 /* ---------- ORDERED ITEMS ---------- */
@@ -1106,7 +1258,7 @@ app.post("/admin/ordered-items", async (req, res) => {
   }
 });
 
-app.post("/admin/ordered-items/import-pdf", express.raw({ type: "application/pdf", limit: "10mb" }), async (req, res) => {
+async function importOrderedItemsPdf(req, res) {
   const department = normalizeRequiredText(req.query.department || req.headers["x-order-department"]);
 
   if (!department) {
@@ -1131,16 +1283,21 @@ app.post("/admin/ordered-items/import-pdf", express.raw({ type: "application/pdf
        package_qty,
        item_supplier,
        department,
+       received_date,
+       received_location,
+       import_needs_delivery_date,
        updated_at
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`;
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`;
 
   try {
-    const itemCompany = parsed.order_number ? `Amazon Order ${parsed.order_number}` : "Amazon Order";
+    const itemCompany = parsed.item_company || (parsed.order_number ? `Amazon Order ${parsed.order_number}` : "Imported PDF");
     const ids = await withTransaction(async transaction => {
       const insertedIds = [];
 
       for (const item of parsed.items) {
+        const needsDeliveryDate = item.import_needs_delivery_date ? 1 : 0;
+        const receivedDate = isIsoDate(item.received_date) ? item.received_date : null;
         const result = await runSql(insertSql, [
           parsed.date_ordered,
           item.expected_delivery_date,
@@ -1148,7 +1305,10 @@ app.post("/admin/ordered-items/import-pdf", express.raw({ type: "application/pdf
           itemCompany,
           item.package_qty,
           item.item_supplier,
-          department
+          department,
+          receivedDate,
+          receivedDate ? item.received_location || "Imported PDF" : null,
+          needsDeliveryDate
         ], transaction);
         insertedIds.push(result.lastID);
       }
@@ -1161,12 +1321,17 @@ app.post("/admin/ordered-items/import-pdf", express.raw({ type: "application/pdf
       ids,
       date_ordered: parsed.date_ordered,
       order_number: parsed.order_number,
+      needs_delivery_date: parsed.items.filter(item => item.import_needs_delivery_date).length,
+      received: parsed.items.filter(item => item.received_date).length,
       items: parsed.items
     });
   } catch (err) {
     res.status(500).send(err.message);
   }
-});
+}
+
+app.post("/ordered-items/import-pdf", express.raw({ type: "application/pdf", limit: "10mb" }), importOrderedItemsPdf);
+app.post("/admin/ordered-items/import-pdf", express.raw({ type: "application/pdf", limit: "10mb" }), importOrderedItemsPdf);
 
 app.post("/ordered-items/received", (req, res) => {
   const dateOrdered = normalizeRequiredText(req.body.date_ordered);
@@ -1262,6 +1427,7 @@ app.put("/ordered-items/:id/receive", (req, res) => {
      SET received_date = ?,
          received_time = ?,
          received_location = ?,
+         import_needs_delivery_date = 0,
          updated_at = datetime('now')
      WHERE id = ?`,
     [receivedDate, receivedTime || null, receivedLocation, req.params.id],

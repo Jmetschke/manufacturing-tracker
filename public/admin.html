@@ -329,7 +329,7 @@
     .ordered-section-header {
       display: flex;
       justify-content: space-between;
-      align-items: baseline;
+      align-items: center;
       gap: 12px;
       margin-bottom: 10px;
     }
@@ -340,10 +340,52 @@
       color: #555;
       font-size: 0.92rem;
     }
+    .ordered-section-tools {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+    }
     .ordered-import-result {
       margin: 0 0 16px;
       line-height: 1.4;
       white-space: pre-line;
+    }
+    .ordered-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 24px;
+      overflow-y: auto;
+      background: rgba(32, 33, 36, 0.55);
+    }
+    .ordered-modal[hidden] {
+      display: none;
+    }
+    .ordered-modal-window {
+      width: min(920px, 100%);
+      border: 1px solid #c9c9c2;
+      background: #fff;
+      padding: 16px;
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
+    }
+    .ordered-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .ordered-modal-header h3 {
+      margin: 0;
+    }
+    .ordered-modal-close {
+      min-width: 44px;
+      margin: 0;
     }
     .summary-line {
       display: flex;
@@ -466,6 +508,11 @@
       .ordered-status-grid { grid-template-columns: 1fr; }
       .ordered-section-header { display: block; }
       .ordered-section-count { display: block; margin-top: 4px; }
+      .ordered-section-tools { justify-content: stretch; margin-top: 8px; }
+      .ordered-section-tools button,
+      .ordered-modal .ordered-actions button { width: 100%; margin-left: 0; margin-right: 0; }
+      .ordered-modal { padding: 12px; }
+      .ordered-modal-window { padding: 12px; }
       .ordered-actions button { width: 100%; margin-left: 0; margin-right: 0; }
       .request-order-form { grid-template-columns: 1fr; }
     }
@@ -670,13 +717,45 @@
       <section class="ordered-section">
         <div class="ordered-section-header">
           <h3>Expected Deliveries</h3>
-          <span id="adminExpectedDeliveriesCount" class="ordered-section-count"></span>
+          <div class="ordered-section-tools">
+            <span id="adminExpectedDeliveriesCount" class="ordered-section-count"></span>
+            <button type="button" onclick="openAdminManualReceivedWindow()">Manual Received Item</button>
+          </div>
         </div>
         <div id="adminExpectedDeliveries"></div>
       </section>
 
       <section class="ordered-section">
+        <div class="ordered-section-header">
+          <h3>Needs Delivery Date</h3>
+          <span id="adminNeedsDeliveryDateCount" class="ordered-section-count"></span>
+        </div>
+        <div id="adminNeedsDeliveryDateDeliveries"></div>
+      </section>
+
+      <section class="ordered-section">
         <h3>Manual Received Item</h3>
+        <div class="ordered-actions">
+          <button type="button" onclick="openAdminManualReceivedWindow()">Open Manual Received Item</button>
+        </div>
+      </section>
+
+      <section class="ordered-section ordered-section-full">
+        <div class="ordered-section-header">
+          <h3>Received Deliveries</h3>
+          <span id="adminReceivedDeliveriesCount" class="ordered-section-count"></span>
+        </div>
+        <div id="adminReceivedDeliveries"></div>
+      </section>
+    </div>
+  </div>
+
+  <div id="adminManualReceivedWindow" class="ordered-modal" hidden role="dialog" aria-modal="true" aria-labelledby="adminManualReceivedWindowTitle">
+    <div class="ordered-modal-window">
+      <div class="ordered-modal-header">
+        <h3 id="adminManualReceivedWindowTitle">Manual Received Item</h3>
+        <button class="ordered-modal-close" type="button" onclick="closeAdminManualReceivedWindow()" aria-label="Close manual received item">X</button>
+      </div>
         <div class="ordered-form">
           <div class="ordered-field">
             <label for="admin_manual_received_date_ordered">Date Ordered</label>
@@ -722,15 +801,6 @@
         <div class="ordered-actions">
           <button type="button" onclick="saveAdminManualReceivedItem()">Add Received Item</button>
         </div>
-      </section>
-
-      <section class="ordered-section ordered-section-full">
-        <div class="ordered-section-header">
-          <h3>Received Deliveries</h3>
-          <span id="adminReceivedDeliveriesCount" class="ordered-section-count"></span>
-        </div>
-        <div id="adminReceivedDeliveries"></div>
-      </section>
     </div>
   </div>
 </section>
