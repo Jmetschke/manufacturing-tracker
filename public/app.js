@@ -1446,6 +1446,30 @@ function closeManualReceivedWindow() {
   document.body.style.overflow = "";
 }
 
+function isMobileOrderedView() {
+  return window.matchMedia("(max-width: 640px)").matches;
+}
+
+function toggleMobileOrderedPanel(button) {
+  const panel = button.closest(".ordered-card, .ordered-section");
+  if (!panel) return;
+
+  const willFocus = !panel.classList.contains("mobile-focused");
+  document
+    .querySelectorAll("#orderedTab .ordered-card.mobile-focused, #orderedTab .ordered-section.mobile-focused")
+    .forEach(openPanel => {
+      if (openPanel !== panel) openPanel.classList.remove("mobile-focused");
+    });
+
+  panel.classList.toggle("mobile-focused", willFocus);
+
+  if (willFocus && isMobileOrderedView()) {
+    panel.scrollIntoView({ block: "start", behavior: "smooth" });
+    const firstField = panel.querySelector("input, select, textarea, button:not(.ordered-mobile-toggle)");
+    if (firstField) firstField.focus({ preventScroll: true });
+  }
+}
+
 async function saveOrderRequest() {
   const payload = {
     request_date: document.getElementById("request_date").value,
@@ -1555,10 +1579,14 @@ async function importMainOrderedPdf() {
 function renderOrderRequests() {
   const container = document.getElementById("orderRequests");
   const count = document.getElementById("orderRequestsCount");
+  const mobileCount = document.getElementById("orderRequestsMobileCount");
   const openRequests = orderRequests.filter(request => !request.ordered_item_id);
   container.innerHTML = "";
   if (count) {
     count.textContent = `${openRequests.length} open`;
+  }
+  if (mobileCount) {
+    mobileCount.textContent = `${openRequests.length} open`;
   }
 
   if (!openRequests.length) {
@@ -1635,6 +1663,16 @@ function createDeliveryCard(item, isReceived) {
   const title = document.createElement("div");
   title.className = "delivery-title";
   title.textContent = item.item_name;
+  title.tabIndex = 0;
+  title.setAttribute("role", "button");
+  title.setAttribute("aria-expanded", "false");
+  title.addEventListener("click", () => toggleMobileDeliveryCard(card, title));
+  title.addEventListener("keydown", event => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      toggleMobileDeliveryCard(card, title);
+    }
+  });
   card.appendChild(title);
   card.appendChild(createDeliveryDetails(item));
 
@@ -1663,6 +1701,28 @@ function createDeliveryCard(item, isReceived) {
   card.appendChild(toggleLabel);
 
   return card;
+}
+
+function toggleMobileDeliveryCard(card, title) {
+  if (!isMobileOrderedView()) return;
+
+  const willFocus = !card.classList.contains("mobile-focused");
+  card.parentElement
+    .querySelectorAll(".delivery-card.mobile-focused")
+    .forEach(openCard => {
+      if (openCard !== card) {
+        openCard.classList.remove("mobile-focused");
+        const openTitle = openCard.querySelector(".delivery-title");
+        if (openTitle) openTitle.setAttribute("aria-expanded", "false");
+      }
+    });
+
+  card.classList.toggle("mobile-focused", willFocus);
+  title.setAttribute("aria-expanded", String(willFocus));
+
+  if (willFocus) {
+    card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
 }
 
 function showReceivePrompt(card, itemId) {
@@ -1771,15 +1831,15 @@ async function undoReceivedItem(itemId) {
   await loadOrderedItems();
 }
 
-function renderDeliveryList(container, items, isReceived) {
+function renderDeliveryList(container, items, isReceived, emptyText = "") {
   container.innerHTML = "";
 
   if (!items.length) {
     const empty = document.createElement("div");
     empty.className = "empty-entries";
-    empty.textContent = isReceived
+    empty.textContent = emptyText || (isReceived
       ? "No received deliveries yet."
-      : "No expected deliveries.";
+      : "No expected deliveries.");
     container.appendChild(empty);
     return;
   }
@@ -1800,15 +1860,32 @@ function renderDeliveries() {
   if (expectedCount) {
     expectedCount.textContent = `${expected.length} expected`;
   }
+  const expectedMobileCount = document.getElementById("expectedDeliveriesMobileCount");
+  if (expectedMobileCount) {
+    expectedMobileCount.textContent = `${expected.length} expected`;
+  }
   if (needsDeliveryDateCount) {
     needsDeliveryDateCount.textContent = `${needsDeliveryDate.length} need date`;
+  }
+  const needsDeliveryDateMobileCount = document.getElementById("needsDeliveryDateMobileCount");
+  if (needsDeliveryDateMobileCount) {
+    needsDeliveryDateMobileCount.textContent = `${needsDeliveryDate.length} need date`;
   }
   if (receivedCount) {
     receivedCount.textContent = `${received.length} received`;
   }
+  const receivedMobileCount = document.getElementById("receivedDeliveriesMobileCount");
+  if (receivedMobileCount) {
+    receivedMobileCount.textContent = `${received.length} received`;
+  }
 
   renderDeliveryList(document.getElementById("expectedDeliveries"), expected, false);
-  renderDeliveryList(document.getElementById("needsDeliveryDateDeliveries"), needsDeliveryDate, false);
+  renderDeliveryList(
+    document.getElementById("needsDeliveryDateDeliveries"),
+    needsDeliveryDate,
+    false,
+    "No imported deliveries need a delivery date."
+  );
   renderDeliveryList(document.getElementById("receivedDeliveries"), received, true);
 }
 

@@ -718,13 +718,15 @@ function extractPdfTextLines(buffer) {
   let match;
 
   while ((match = streamPattern.exec(binary))) {
-    if (!/FlateDecode/.test(match[1])) continue;
-
     let content;
-    try {
-      content = zlib.inflateSync(Buffer.from(match[2], "binary")).toString("latin1");
-    } catch (err) {
-      continue;
+    if (/FlateDecode/.test(match[1])) {
+      try {
+        content = zlib.inflateSync(Buffer.from(match[2], "binary")).toString("latin1");
+      } catch (err) {
+        continue;
+      }
+    } else {
+      content = match[2];
     }
 
     if (!/\bT[Jj]\b/.test(content)) continue;
@@ -830,6 +832,25 @@ function isDeliveryStatusLine(value) {
 
 function isDeliveredStatusLine(value) {
   return /^Delivered\b/i.test(String(value || ""));
+}
+
+function isAmazonItemNoiseLine(line) {
+  const text = String(line || "").trim();
+  if (!text) return true;
+  if (/^Your package\b/i.test(text)) return true;
+  if (/^Return or replace items:/i.test(text)) return true;
+  if (/^Supplied by:/i.test(text) || /^Other$/i.test(text)) return true;
+  if (/^\$/.test(text)) return true;
+  if (/^(Buy it again|View order details|Write a product review|Archive order|Problem with order)$/i.test(text)) return true;
+  if (/^(Order Summary|Payment method|Ship to|Print|Back to top)$/i.test(text)) return true;
+  if (/^(Item\(s\) Subtotal|Shipping & Handling|Total before tax|Estimated tax|Grand Total):?/i.test(text)) return true;
+  if (parseAmazonDate(text)) return true;
+  return false;
+}
+
+function findInlineValue(line, labelPattern) {
+  const match = String(line || "").match(labelPattern);
+  return match ? normalizeRequiredText(match[1]) : "";
 }
 
 function findNearbyDate(lines, index, windowSize = 3) {
@@ -969,9 +990,30 @@ function parseAmazonOrderPdf(buffer) {
 
   const orderPlacedIndex = lines.findIndex(line => /^Order placed$/i.test(line));
   const orderNumberIndex = lines.findIndex(line => /^Order #$/i.test(line));
-  const dateOrdered = orderPlacedIndex >= 0 ? parseAmazonDate(lines[orderPlacedIndex + 1]) : "";
-  const orderNumber = orderNumberIndex >= 0 ? normalizeRequiredText(lines[orderNumberIndex + 1]) : "";
+  const inlineOrderDateLine = lines.find(line => /^Order placed\b/i.test(line));
+  const dateOrdered = orderPlacedIndex >= 0
+    ? parseAmazonDate(lines[orderPlacedIndex + 1])
+    : parseAmazonDate(inlineOrderDateLine);
+  const inlineOrderNumberLine = lines.find(line => /^Order\s*#/i.test(line));
+  const orderNumber = orderNumberIndex >= 0
+    ? normalizeRequiredText(lines[orderNumberIndex + 1])
+    : findInlineValue(inlineOrderNumberLine, /^Order\s*#\s*(.+)$/i);
   const items = [];
+
+  function pushAmazonItem(itemLines, supplier, expectedDeliveryDate, deliveredDate) {
+    const itemName = itemLines.join(" ").replace(/\s+/g, " ").trim();
+    if (!itemName) return;
+
+    items.push({
+      item_name: itemName,
+      package_qty: 1,
+      item_supplier: supplier || "Amazon",
+      expected_delivery_date: expectedDeliveryDate || dateOrdered || todayIsoDate(),
+      received_date: deliveredDate,
+      received_location: deliveredDate ? "Imported PDF" : "",
+      import_needs_delivery_date: expectedDeliveryDate ? 0 : 1
+    });
+  }
 
   for (let index = 0; index < lines.length; index += 1) {
     if (!isDeliveryStatusLine(lines[index])) continue;
@@ -988,9 +1030,13 @@ function parseAmazonOrderPdf(buffer) {
       if (/^Sold by:/i.test(line)) {
         const inlineSupplier = line.replace(/^Sold by:\s*/i, "").trim();
         supplier = inlineSupplier || normalizeRequiredText(lines[cursor + 1]) || supplier;
-        break;
+        pushAmazonItem(itemLines, supplier, expectedDeliveryDate, deliveredDate);
+        itemLines.length = 0;
+        supplier = "Amazon";
+        cursor += 1;
+        continue;
       }
-      if (/^Supplied by:/i.test(line) || /^Other$/i.test(line) || /^\$/.test(line)) {
+      if (isAmazonItemNoiseLine(line)) {
         cursor += 1;
         continue;
       }
@@ -998,18 +1044,7 @@ function parseAmazonOrderPdf(buffer) {
       cursor += 1;
     }
 
-    const itemName = itemLines.join(" ").replace(/\s+/g, " ").trim();
-    if (itemName) {
-      items.push({
-        item_name: itemName,
-        package_qty: 1,
-        item_supplier: supplier,
-        expected_delivery_date: expectedDeliveryDate || dateOrdered || todayIsoDate(),
-        received_date: deliveredDate,
-        received_location: deliveredDate ? "Imported PDF" : "",
-        import_needs_delivery_date: expectedDeliveryDate ? 0 : 1
-      });
-    }
+    pushAmazonItem(itemLines, supplier, expectedDeliveryDate, deliveredDate);
   }
 
   const fallbackOrderDate = dateOrdered ||
