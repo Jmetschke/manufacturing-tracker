@@ -387,6 +387,9 @@
       min-width: 44px;
       margin: 0;
     }
+    .ordered-mobile-toggle {
+      display: none;
+    }
     .summary-line {
       display: flex;
       flex-wrap: wrap;
@@ -420,6 +423,9 @@
     }
     .mobile-stack {
       width: 100%;
+    }
+    .mobile-summary-row {
+      display: none;
     }
     #table { overflow-x: auto; width: 100%; }
     #adminExpectedDeliveries,
@@ -515,6 +521,113 @@
       .ordered-modal-window { padding: 12px; }
       .ordered-actions button { width: 100%; margin-left: 0; margin-right: 0; }
       .request-order-form { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 900px) {
+      #orderedPanel .ordered-workspace {
+        display: grid;
+        gap: 8px;
+      }
+      #orderedPanel .ordered-entry-grid,
+      #orderedPanel .ordered-status-grid {
+        display: contents;
+      }
+      #orderedPanel .ordered-expected-list { order: 1; }
+      #orderedPanel .ordered-manual-action { order: 2; }
+      #orderedPanel .ordered-import-action { order: 3; }
+      #orderedPanel .ordered-request-action { order: 4; }
+      #orderedPanel .ordered-add-action { order: 5; }
+      #orderedPanel .ordered-needs-date-list { order: 6; }
+      #orderedPanel .ordered-received-list { order: 7; }
+      #orderedPanel .ordered-requests-list { order: 8; }
+      #orderedPanel .ordered-card,
+      #orderedPanel .ordered-section {
+        padding: 0;
+        overflow: hidden;
+      }
+      #orderedPanel .ordered-card > h3,
+      #orderedPanel .ordered-section > h3,
+      #orderedPanel .ordered-section-header {
+        display: none;
+      }
+      #orderedPanel .ordered-mobile-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        width: 100%;
+        min-height: 50px;
+        margin: 0;
+        border: 0;
+        border-bottom: 1px solid #e2e2dc;
+        background: #fff;
+        color: #202124;
+        text-align: left;
+        font-weight: bold;
+      }
+      #orderedPanel .ordered-mobile-toggle::after {
+        content: "+";
+        font-weight: bold;
+      }
+      #orderedPanel .ordered-card.mobile-focused > .ordered-mobile-toggle::after,
+      #orderedPanel .ordered-section.mobile-focused > .ordered-mobile-toggle::after {
+        content: "-";
+      }
+      #orderedPanel .ordered-card > .ordered-form,
+      #orderedPanel .ordered-card > .ordered-actions,
+      #orderedPanel .ordered-card > .ordered-import-result,
+      #orderedPanel .ordered-section > div:not(.ordered-section-header):not(.ordered-mobile-toggle),
+      #orderedPanel .ordered-section .ordered-section-tools button {
+        display: none;
+      }
+      #orderedPanel .ordered-card.mobile-focused > .ordered-form,
+      #orderedPanel .ordered-card.mobile-focused > .ordered-actions,
+      #orderedPanel .ordered-card.mobile-focused > .ordered-import-result,
+      #orderedPanel .ordered-section.mobile-focused > div:not(.ordered-section-header):not(.ordered-mobile-toggle),
+      #orderedPanel .ordered-section.mobile-focused .ordered-section-tools button {
+        display: block;
+      }
+      #orderedPanel .ordered-card.mobile-focused > .ordered-form {
+        display: grid;
+      }
+      #orderedPanel .ordered-card > .ordered-form,
+      #orderedPanel .ordered-card > .ordered-actions,
+      #orderedPanel .ordered-card > .ordered-import-result,
+      #orderedPanel .ordered-section > div:not(.ordered-section-header):not(.ordered-mobile-toggle) {
+        padding: 12px;
+      }
+      #orderedPanel .ordered-section-tools button,
+      #orderedPanel .ordered-card .ordered-actions button,
+      #orderedPanel .ordered-mobile-toggle {
+        width: 100%;
+        margin-left: 0;
+        margin-right: 0;
+      }
+      #orderedPanel .ordered-section-count {
+        display: block;
+        margin: 0;
+        color: #555;
+        font-weight: normal;
+      }
+      #orderedPanel .mobile-stack tr {
+        display: none;
+      }
+      #orderedPanel .mobile-stack tr.mobile-focused,
+      #orderedPanel .mobile-stack tr.table-heading-row {
+        display: block;
+      }
+      #orderedPanel .mobile-stack tr.table-heading-row {
+        display: none;
+      }
+      #orderedPanel .mobile-stack tr.mobile-summary-row {
+        display: block;
+      }
+      #orderedPanel .mobile-stack tr.mobile-summary-row td {
+        font-weight: bold;
+      }
+      #orderedPanel .mobile-stack tr.mobile-focused td {
+        display: flex;
+      }
     }
   </style>
 </head>
@@ -623,7 +736,10 @@
 <section id="orderedPanel" class="admin-panel">
   <div class="ordered-workspace">
     <div class="ordered-entry-grid">
-      <section class="ordered-card">
+      <section class="ordered-card ordered-request-action">
+        <button class="ordered-mobile-toggle" type="button" onclick="toggleAdminMobileOrderedPanel(this)">
+          <span>Request Item</span>
+        </button>
         <h3>Request Item</h3>
         <div class="ordered-form">
           <div class="ordered-field">
@@ -656,7 +772,10 @@
         </div>
       </section>
 
-      <section class="ordered-card">
+      <section class="ordered-card ordered-import-action">
+        <button class="ordered-mobile-toggle" type="button" onclick="toggleAdminMobileOrderedPanel(this)">
+          <span>Import PDF</span>
+        </button>
         <h3>Import Order PDF</h3>
         <div class="ordered-form">
           <div class="ordered-field">
@@ -674,7 +793,10 @@
         <div id="orderedImportResult" class="ordered-import-result"></div>
       </section>
 
-      <section class="ordered-card">
+      <section class="ordered-card ordered-add-action">
+        <button class="ordered-mobile-toggle" type="button" onclick="toggleAdminMobileOrderedPanel(this)">
+          <span>Add Ordered Item</span>
+        </button>
         <h3>Add Ordered Item</h3>
         <div class="ordered-form">
           <div class="ordered-field">
@@ -706,7 +828,11 @@
     </div>
 
     <div class="ordered-status-grid">
-      <section class="ordered-section ordered-section-full">
+      <section class="ordered-section ordered-section-full ordered-requests-list">
+        <button class="ordered-mobile-toggle" type="button" onclick="toggleAdminMobileOrderedPanel(this)">
+          <span>Item Requests</span>
+          <span id="adminOrderRequestsMobileCount" class="ordered-section-count"></span>
+        </button>
         <div class="ordered-section-header">
           <h3>Item Requests</h3>
           <span id="adminOrderRequestsCount" class="ordered-section-count"></span>
@@ -714,7 +840,11 @@
         <div id="adminOrderRequests"></div>
       </section>
 
-      <section class="ordered-section">
+      <section class="ordered-section ordered-expected-list">
+        <button class="ordered-mobile-toggle" type="button" onclick="toggleAdminMobileOrderedPanel(this)">
+          <span>Expected Deliveries</span>
+          <span id="adminExpectedDeliveriesMobileCount" class="ordered-section-count"></span>
+        </button>
         <div class="ordered-section-header">
           <h3>Expected Deliveries</h3>
           <div class="ordered-section-tools">
@@ -725,7 +855,11 @@
         <div id="adminExpectedDeliveries"></div>
       </section>
 
-      <section class="ordered-section">
+      <section class="ordered-section ordered-needs-date-list">
+        <button class="ordered-mobile-toggle" type="button" onclick="toggleAdminMobileOrderedPanel(this)">
+          <span>Needs Delivery Date</span>
+          <span id="adminNeedsDeliveryDateMobileCount" class="ordered-section-count"></span>
+        </button>
         <div class="ordered-section-header">
           <h3>Needs Delivery Date</h3>
           <span id="adminNeedsDeliveryDateCount" class="ordered-section-count"></span>
@@ -733,14 +867,21 @@
         <div id="adminNeedsDeliveryDateDeliveries"></div>
       </section>
 
-      <section class="ordered-section">
+      <section class="ordered-section ordered-manual-action">
+        <button class="ordered-mobile-toggle" type="button" onclick="openAdminManualReceivedWindow()">
+          <span>Manual Received Item</span>
+        </button>
         <h3>Manual Received Item</h3>
         <div class="ordered-actions">
           <button type="button" onclick="openAdminManualReceivedWindow()">Open Manual Received Item</button>
         </div>
       </section>
 
-      <section class="ordered-section ordered-section-full">
+      <section class="ordered-section ordered-section-full ordered-received-list">
+        <button class="ordered-mobile-toggle" type="button" onclick="toggleAdminMobileOrderedPanel(this)">
+          <span>Received Deliveries</span>
+          <span id="adminReceivedDeliveriesMobileCount" class="ordered-section-count"></span>
+        </button>
         <div class="ordered-section-header">
           <h3>Received Deliveries</h3>
           <span id="adminReceivedDeliveriesCount" class="ordered-section-count"></span>

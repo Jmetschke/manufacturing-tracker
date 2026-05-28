@@ -986,6 +986,143 @@
         margin-right: 0;
       }
     }
+
+    @media (max-width: 900px) {
+      #orderedTab .ordered-workspace {
+        display: grid;
+        gap: 8px;
+      }
+
+      #orderedTab .ordered-entry-grid,
+      #orderedTab .ordered-status-grid {
+        display: contents;
+      }
+
+      #orderedTab .ordered-expected-list { order: 1; }
+      #orderedTab .ordered-manual-action { order: 2; }
+      #orderedTab .ordered-import-action { order: 3; }
+      #orderedTab .ordered-request-action { order: 4; }
+      #orderedTab .ordered-needs-date-list { order: 5; }
+      #orderedTab .ordered-received-list { order: 6; }
+      #orderedTab .ordered-requests-list { order: 7; }
+
+      #orderedTab .ordered-card,
+      #orderedTab .ordered-section {
+        padding: 0;
+        overflow: hidden;
+      }
+
+      #orderedTab .ordered-card > h3,
+      #orderedTab .ordered-section-header {
+        display: none;
+      }
+
+      #orderedTab .ordered-mobile-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        width: 100%;
+        min-height: 50px;
+        margin: 0;
+        border: 0;
+        border-bottom: 1px solid #e2e2dc;
+        background: #fff;
+        color: #202124;
+        text-align: left;
+        font-weight: bold;
+      }
+
+      #orderedTab .ordered-mobile-toggle::after {
+        content: "+";
+        font-weight: bold;
+      }
+
+      #orderedTab .ordered-card.mobile-focused > .ordered-mobile-toggle::after,
+      #orderedTab .ordered-section.mobile-focused > .ordered-mobile-toggle::after {
+        content: "-";
+      }
+
+      #orderedTab .ordered-card > .request-form,
+      #orderedTab .ordered-card > .request-actions,
+      #orderedTab .ordered-card > .ordered-import-result,
+      #orderedTab .ordered-section > div:not(.ordered-section-header):not(.ordered-mobile-toggle),
+      #orderedTab .ordered-section .ordered-section-tools button {
+        display: none;
+      }
+
+      #orderedTab .ordered-card.mobile-focused > .request-form,
+      #orderedTab .ordered-card.mobile-focused > .request-actions,
+      #orderedTab .ordered-card.mobile-focused > .ordered-import-result,
+      #orderedTab .ordered-section.mobile-focused > div:not(.ordered-section-header):not(.ordered-mobile-toggle),
+      #orderedTab .ordered-section.mobile-focused .ordered-section-tools button {
+        display: block;
+      }
+
+      #orderedTab .ordered-card.mobile-focused > .request-form {
+        display: grid;
+      }
+
+      #orderedTab .ordered-card > .request-form,
+      #orderedTab .ordered-card > .request-actions,
+      #orderedTab .ordered-card > .ordered-import-result,
+      #orderedTab .ordered-section > div:not(.ordered-section-header):not(.ordered-mobile-toggle) {
+        padding: 12px;
+      }
+
+      #orderedTab .ordered-section-tools button,
+      #orderedTab .ordered-card .request-actions button,
+      #orderedTab .ordered-mobile-toggle {
+        width: 100%;
+        margin-left: 0;
+        margin-right: 0;
+      }
+
+      #orderedTab .ordered-section-count {
+        display: block;
+        margin: 0;
+        color: #555;
+        font-weight: normal;
+      }
+
+      #orderedTab .delivery-card {
+        padding: 0;
+        margin-bottom: 8px;
+      }
+
+      #orderedTab .delivery-title {
+        margin: 0;
+        padding: 12px;
+        cursor: pointer;
+      }
+
+      #orderedTab .delivery-card .delivery-details,
+      #orderedTab .delivery-card .receive-toggle,
+      #orderedTab .delivery-card > button,
+      #orderedTab .delivery-card .receive-row {
+        display: none;
+      }
+
+      #orderedTab .delivery-card.mobile-focused .delivery-details,
+      #orderedTab .delivery-card.mobile-focused .receive-row {
+        display: grid;
+      }
+
+      #orderedTab .delivery-card.mobile-focused .receive-toggle {
+        display: inline-flex;
+        padding: 0 12px 12px;
+      }
+
+      #orderedTab .delivery-card.mobile-focused > button {
+        display: block;
+        width: calc(100% - 24px);
+        margin: 0 12px 12px;
+      }
+
+      #orderedTab .delivery-card.mobile-focused .delivery-details {
+        padding: 0 12px 12px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1102,7 +1239,7 @@
 <section id="orderedTab" class="tab-panel">
   <div class="ordered-workspace">
     <div class="ordered-entry-grid">
-      <section class="ordered-card">
+      <section class="ordered-card ordered-request-action">
         <button class="ordered-mobile-toggle" type="button" onclick="toggleMobileOrderedPanel(this)">
           <span>Request Item</span>
         </button>
@@ -1138,7 +1275,7 @@
         </div>
       </section>
 
-      <section class="ordered-card">
+      <section class="ordered-card ordered-manual-action">
         <button class="ordered-mobile-toggle" type="button" onclick="openManualReceivedWindow()">
           <span>Manual Received Item</span>
         </button>
@@ -1148,7 +1285,7 @@
         </div>
       </section>
 
-      <section class="ordered-card">
+      <section class="ordered-card ordered-import-action">
         <button class="ordered-mobile-toggle" type="button" onclick="toggleMobileOrderedPanel(this)">
           <span>Import PDF</span>
         </button>
@@ -1171,7 +1308,7 @@
     </div>
 
     <div class="ordered-status-grid">
-      <section class="ordered-section ordered-section-full">
+      <section class="ordered-section ordered-section-full ordered-requests-list">
         <button class="ordered-mobile-toggle" type="button" onclick="toggleMobileOrderedPanel(this)">
           <span>Item Requests</span>
           <span id="orderRequestsMobileCount" class="ordered-section-count"></span>
@@ -1183,7 +1320,7 @@
         <div id="orderRequests"></div>
       </section>
 
-      <section class="ordered-section">
+      <section class="ordered-section ordered-expected-list">
         <button class="ordered-mobile-toggle" type="button" onclick="toggleMobileOrderedPanel(this)">
           <span>Expected Deliveries</span>
           <span id="expectedDeliveriesMobileCount" class="ordered-section-count"></span>
@@ -1198,7 +1335,7 @@
         <div id="expectedDeliveries"></div>
       </section>
 
-      <section class="ordered-section">
+      <section class="ordered-section ordered-needs-date-list">
         <button class="ordered-mobile-toggle" type="button" onclick="toggleMobileOrderedPanel(this)">
           <span>Needs Delivery Date</span>
           <span id="needsDeliveryDateMobileCount" class="ordered-section-count"></span>
@@ -1210,7 +1347,7 @@
         <div id="needsDeliveryDateDeliveries"></div>
       </section>
 
-      <section class="ordered-section">
+      <section class="ordered-section ordered-received-list">
         <button class="ordered-mobile-toggle" type="button" onclick="toggleMobileOrderedPanel(this)">
           <span>Received Deliveries</span>
           <span id="receivedDeliveriesMobileCount" class="ordered-section-count"></span>

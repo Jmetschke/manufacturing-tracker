@@ -1599,6 +1599,30 @@ function closeAdminManualReceivedWindow() {
   document.body.style.overflow = "";
 }
 
+function isAdminMobileOrderedView() {
+  return window.matchMedia("(max-width: 900px)").matches;
+}
+
+function toggleAdminMobileOrderedPanel(button) {
+  const panel = button.closest(".ordered-card, .ordered-section");
+  if (!panel) return;
+
+  const willFocus = !panel.classList.contains("mobile-focused");
+  document
+    .querySelectorAll("#orderedPanel .ordered-card.mobile-focused, #orderedPanel .ordered-section.mobile-focused")
+    .forEach(openPanel => {
+      if (openPanel !== panel) openPanel.classList.remove("mobile-focused");
+    });
+
+  panel.classList.toggle("mobile-focused", willFocus);
+
+  if (willFocus && isAdminMobileOrderedView()) {
+    panel.scrollIntoView({ block: "start", behavior: "smooth" });
+    const firstField = panel.querySelector("input, select, textarea, button:not(.ordered-mobile-toggle)");
+    if (firstField) firstField.focus({ preventScroll: true });
+  }
+}
+
 async function loadOrderedItems() {
   const res = await fetch("/ordered-items");
 
@@ -1698,10 +1722,14 @@ async function saveAdminManualReceivedItem() {
 function renderAdminOrderRequests() {
   const container = document.getElementById("adminOrderRequests");
   const count = document.getElementById("adminOrderRequestsCount");
+  const mobileCount = document.getElementById("adminOrderRequestsMobileCount");
   const openRequests = allOrderRequests.filter(request => !request.ordered_item_id);
   container.innerHTML = "";
   if (count) {
     count.textContent = `${openRequests.length} open`;
+  }
+  if (mobileCount) {
+    mobileCount.textContent = `${openRequests.length} open`;
   }
 
   if (!openRequests.length) {
@@ -1757,6 +1785,7 @@ function renderAdminOrderRequests() {
     orderedCell.appendChild(checkbox);
     row.appendChild(orderedCell);
 
+    appendMobileSummaryRow(table, labels, request.item_needed, row);
     table.appendChild(row);
   });
 
@@ -1904,13 +1933,52 @@ function appendDeliveryHeader(table, extraLabels = []) {
   return labels;
 }
 
+function appendMobileSummaryRow(table, labels, title, detailRow) {
+  const summaryRow = document.createElement("tr");
+  summaryRow.className = "mobile-summary-row";
+  const summaryCell = document.createElement("td");
+  summaryCell.colSpan = labels.length;
+  summaryCell.dataset.label = "Item";
+  summaryCell.textContent = title;
+  summaryCell.tabIndex = 0;
+  summaryCell.setAttribute("role", "button");
+  summaryCell.setAttribute("aria-expanded", "false");
+
+  const toggle = () => {
+    const willFocus = !detailRow.classList.contains("mobile-focused");
+    table.querySelectorAll("tr.mobile-focused").forEach(row => {
+      if (row !== detailRow) row.classList.remove("mobile-focused");
+    });
+    table.querySelectorAll(".mobile-summary-row td[aria-expanded='true']").forEach(cell => {
+      if (cell !== summaryCell) cell.setAttribute("aria-expanded", "false");
+    });
+    detailRow.classList.toggle("mobile-focused", willFocus);
+    summaryCell.setAttribute("aria-expanded", String(willFocus));
+  };
+
+  summaryCell.addEventListener("click", toggle);
+  summaryCell.addEventListener("keydown", event => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      toggle();
+    }
+  });
+
+  summaryRow.appendChild(summaryCell);
+  table.appendChild(summaryRow);
+}
+
 function renderExpectedDeliveriesTable() {
   const container = document.getElementById("adminExpectedDeliveries");
   const count = document.getElementById("adminExpectedDeliveriesCount");
+  const mobileCount = document.getElementById("adminExpectedDeliveriesMobileCount");
   container.innerHTML = "";
   const expectedDeliveries = allOrderedItems.filter(item => !item.received_date && !Number(item.import_needs_delivery_date));
   if (count) {
     count.textContent = `${expectedDeliveries.length} expected`;
+  }
+  if (mobileCount) {
+    mobileCount.textContent = `${expectedDeliveries.length} expected`;
   }
 
   if (!expectedDeliveries.length) {
@@ -1941,6 +2009,7 @@ function renderExpectedDeliveriesTable() {
     actionCell.appendChild(checkbox);
     row.appendChild(actionCell);
 
+    appendMobileSummaryRow(table, labels, item.item_name, row);
     table.appendChild(row);
   });
 
@@ -1950,12 +2019,16 @@ function renderExpectedDeliveriesTable() {
 function renderNeedsDeliveryDateTable() {
   const container = document.getElementById("adminNeedsDeliveryDateDeliveries");
   const count = document.getElementById("adminNeedsDeliveryDateCount");
+  const mobileCount = document.getElementById("adminNeedsDeliveryDateMobileCount");
   if (!container) return;
 
   container.innerHTML = "";
   const deliveries = allOrderedItems.filter(item => !item.received_date && Number(item.import_needs_delivery_date));
   if (count) {
     count.textContent = `${deliveries.length} need date`;
+  }
+  if (mobileCount) {
+    mobileCount.textContent = `${deliveries.length} need date`;
   }
 
   if (!deliveries.length) {
@@ -1985,6 +2058,7 @@ function renderNeedsDeliveryDateTable() {
     actionCell.appendChild(button);
     row.appendChild(actionCell);
 
+    appendMobileSummaryRow(table, labels, item.item_name, row);
     table.appendChild(row);
   });
 
@@ -2076,10 +2150,14 @@ async function saveAdminReceivedItem(itemId, payload) {
 function renderReceivedDeliveriesTable() {
   const container = document.getElementById("adminReceivedDeliveries");
   const count = document.getElementById("adminReceivedDeliveriesCount");
+  const mobileCount = document.getElementById("adminReceivedDeliveriesMobileCount");
   container.innerHTML = "";
   const receivedDeliveries = allOrderedItems.filter(item => item.received_date);
   if (count) {
     count.textContent = `${receivedDeliveries.length} received`;
+  }
+  if (mobileCount) {
+    mobileCount.textContent = `${receivedDeliveries.length} received`;
   }
 
   if (!receivedDeliveries.length) {
@@ -2107,6 +2185,7 @@ function renderReceivedDeliveriesTable() {
     actionCell.appendChild(undoButton);
     row.appendChild(actionCell);
 
+    appendMobileSummaryRow(table, labels, item.item_name, row);
     table.appendChild(row);
   });
 
