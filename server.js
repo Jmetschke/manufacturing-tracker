@@ -321,7 +321,8 @@ function parseSchedulePayloadForCleanup(rawValue) {
     batchSb: [],
     events: [],
     tasks: [],
-    testPickups: []
+    testPickups: [],
+    processingTasks: []
   };
 
   if (!rawValue) return empty;
@@ -334,7 +335,8 @@ function parseSchedulePayloadForCleanup(rawValue) {
         batchSb: Array.isArray(parsed.batchSb) ? parsed.batchSb : [],
         events: Array.isArray(parsed.events) ? parsed.events : [],
         tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
-        testPickups: Array.isArray(parsed.testPickups) ? parsed.testPickups : []
+        testPickups: Array.isArray(parsed.testPickups) ? parsed.testPickups : [],
+        processingTasks: Array.isArray(parsed.processingTasks) ? parsed.processingTasks : []
       };
     }
 

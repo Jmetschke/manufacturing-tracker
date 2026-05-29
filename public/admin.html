@@ -67,6 +67,8 @@
     .admin-calendar-day {
       min-height: 120px;
       cursor: pointer;
+      display: flex;
+      flex-direction: column;
     }
     .admin-calendar-day:focus {
       outline: 2px solid #4f5f47;
@@ -222,6 +224,18 @@
     .calendar-focus-item ul {
       margin: 4px 0 0 18px;
       padding: 0;
+    }
+    .calendar-processing-tasks {
+      display: grid;
+      gap: 4px;
+      margin-top: auto;
+      padding-top: 8px;
+    }
+    .calendar-processing-task {
+      background: #e7f6df;
+      border-left: 3px solid #5d9b45;
+      color: #24451c;
+      padding: 5px 6px;
     }
     .schedule-task-section {
       margin-top: 10px;
@@ -791,6 +805,9 @@
       <h4>Test Pick Ups</h4>
       <div id="testPickupRows"></div>
       <button type="button" onclick="addTestPickup()">Add Test Pick Up</button>
+      <h4>Processing Tasks</h4>
+      <div id="processingTaskRows"></div>
+      <button type="button" onclick="addScheduleTask('', 1, 'processingTaskRows')">Add Processing Task</button>
     </div>
     <div class="edit-actions">
       <button type="button" onclick="saveScheduleDay()">Save Day</button>

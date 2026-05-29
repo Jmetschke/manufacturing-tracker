@@ -441,7 +441,8 @@ function parseSchedulePayload(rawValue) {
     batchSb: [],
     events: [],
     tasks: [],
-    testPickups: []
+    testPickups: [],
+    processingTasks: []
   };
 
   if (!rawValue) return empty;
@@ -458,7 +459,8 @@ function parseSchedulePayload(rawValue) {
               .map(normalizeScheduleTask)
               .filter(task => task.text)
           : [],
-        testPickups: normalizeTestPickups(parsed.testPickups)
+        testPickups: normalizeTestPickups(parsed.testPickups),
+        processingTasks: normalizeProcessingTasks(parsed.processingTasks)
       };
     }
 
@@ -468,7 +470,8 @@ function parseSchedulePayload(rawValue) {
         tasks: parsed
           .map(normalizeScheduleTask)
           .filter(task => task.text),
-        testPickups: []
+        testPickups: [],
+        processingTasks: []
       };
     }
   } catch (err) {
@@ -482,8 +485,28 @@ function parseSchedulePayload(rawValue) {
       .map(line => line.trim())
       .filter(Boolean)
       .map(line => ({ text: line, days: 1, totalHours: 0, assignments: [] })),
-    testPickups: []
+    testPickups: [],
+    processingTasks: []
   };
+}
+
+function normalizeProcessingTasks(value) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map(item => {
+      if (item && typeof item === "object") {
+        return normalizeScheduleTask(item);
+      }
+
+      return {
+        text: String(item || "").trim(),
+        days: 1,
+        totalHours: 0,
+        assignments: []
+      };
+    })
+    .filter(task => task.text);
 }
 
 function normalizeTestPickups(value) {
@@ -605,6 +628,46 @@ function appendCalendarTaskSummary(container, tasks) {
   container.appendChild(list);
 }
 
+function appendTaskFocusDetails(block, projectedTasks, emptyText) {
+  const groups = groupDailyTaskAssignments(projectedTasks);
+  if (!groups.length) {
+    block.appendChild(createFocusEmpty(emptyText));
+    return;
+  }
+
+  groups.forEach(task => {
+    const item = document.createElement("div");
+    item.className = "calendar-focus-item";
+    const titleLine = document.createElement("b");
+    titleLine.textContent = `${task.text} - ${formatTaskHours(task.assignedHours)} assigned`;
+    item.appendChild(titleLine);
+
+    if (task.people.size) {
+      const people = document.createElement("div");
+      people.textContent = `${task.people.size} person${task.people.size === 1 ? "" : "s"} assigned`;
+      item.appendChild(people);
+
+      const list = document.createElement("ul");
+      task.people.forEach((hours, employee) => {
+        const person = document.createElement("li");
+        person.textContent = `${employee}: ${formatTaskHours(hours)}`;
+        list.appendChild(person);
+      });
+      item.appendChild(list);
+    } else {
+      item.appendChild(createFocusEmpty("No person hours assigned for this day."));
+    }
+
+    if (Number.isFinite(task.remainingHours)) {
+      const remaining = document.createElement("div");
+      remaining.textContent = `${formatTaskHours(task.remainingHours)} remaining after this day`;
+      item.appendChild(remaining);
+    }
+
+    block.appendChild(item);
+  });
+}
+
 function createFocusEmpty(text) {
   const empty = document.createElement("div");
   empty.className = "calendar-focus-empty";
@@ -703,6 +766,8 @@ function renderFocusedScheduleDay(isoDate, scheduleDay, deliveries) {
     `Test Pick Up ${pickup.time}: ${pickup.items.join(", ")}`,
   "No test pick ups."));
 
+  section("Processing Tasks", block => appendTaskFocusDetails(block, scheduleDay.processingTasks || [], "No processing tasks."));
+
   panel.hidden = false;
   panel.scrollIntoView({ block: "start", behavior: "smooth" });
 }
@@ -721,6 +786,26 @@ function appendTestPickupList(container, testPickups) {
   });
 
   container.appendChild(pickupList);
+}
+
+function appendProcessingTaskList(container, processingTasks) {
+  if (!processingTasks.length) return;
+
+  const list = document.createElement("div");
+  list.className = "calendar-processing-tasks";
+
+  groupDailyTaskAssignments(processingTasks).forEach(task => {
+    const item = document.createElement("div");
+    item.className = "calendar-processing-task";
+    item.textContent = task.assignedHours > 0
+      ? `${task.text} - ${formatTaskHours(task.assignedHours)}`
+      : task.legacyDays > 1
+        ? `${task.text} - ${task.legacyDays} days`
+        : task.text;
+    list.appendChild(item);
+  });
+
+  container.appendChild(list);
 }
 
 function appendEventList(container, events) {
@@ -828,7 +913,8 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
       batchSb: [],
       events: [],
       tasks: [],
-      testPickups: []
+      testPickups: [],
+      processingTasks: []
     });
   }
 
@@ -842,6 +928,7 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
       scheduleDay.batchHijnx = payload.batchHijnx;
       scheduleDay.batchSb = payload.batchSb;
       scheduleDay.testPickups = payload.testPickups;
+      scheduleDay.processingTasks = payload.processingTasks;
     }
 
     payload.events.forEach(event => {
@@ -854,7 +941,7 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
 
         const isoDate = toIsoDate(eventDate);
         if (!activeSchedule.has(isoDate)) {
-          activeSchedule.set(isoDate, { batchHijnx: [], batchSb: [], events: [], tasks: [], testPickups: [] });
+          activeSchedule.set(isoDate, { batchHijnx: [], batchSb: [], events: [], tasks: [], testPickups: [], processingTasks: [] });
         }
 
         const time = event.times[index] || { start: "", end: "" };
@@ -905,9 +992,52 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
 
         const isoDate = toIsoDate(activeDate);
         if (!activeSchedule.has(isoDate)) {
-          activeSchedule.set(isoDate, { batchHijnx: [], batchSb: [], events: [], tasks: [], testPickups: [] });
+          activeSchedule.set(isoDate, { batchHijnx: [], batchSb: [], events: [], tasks: [], testPickups: [], processingTasks: [] });
         }
         activeSchedule.get(isoDate).tasks.push(...projectedTasks);
+      });
+    });
+
+    payload.processingTasks.forEach(task => {
+      let remainingHours = task.totalHours;
+      const workDates = getProjectedWorkDates(startDate, task.days);
+
+      workDates.forEach((activeDate, dayIndex) => {
+        const dayAssignments = (task.assignments || [])
+          .filter(assignment => assignment.dayIndex === dayIndex);
+        const projectedTasks = [];
+
+        if (task.totalHours > 0 && dayAssignments.length) {
+          dayAssignments.forEach(assignment => {
+            const appliedHours = Math.min(remainingHours, assignment.hours);
+            remainingHours = Math.max(0, remainingHours - assignment.hours);
+            if (appliedHours <= 0) return;
+
+            projectedTasks.push({
+              text: task.text,
+              employee: assignment.employee,
+              hours: appliedHours,
+              remainingHours,
+              totalHours: task.totalHours
+            });
+          });
+        } else if (task.totalHours > 0) {
+          projectedTasks.push({
+            text: task.text,
+            remainingHours,
+            totalHours: task.totalHours
+          });
+        } else {
+          projectedTasks.push({ text: task.text, days: task.days });
+        }
+
+        if (activeDate < rangeStart || activeDate > rangeEnd) return;
+
+        const isoDate = toIsoDate(activeDate);
+        if (!activeSchedule.has(isoDate)) {
+          activeSchedule.set(isoDate, { batchHijnx: [], batchSb: [], events: [], tasks: [], testPickups: [], processingTasks: [] });
+        }
+        activeSchedule.get(isoDate).processingTasks.push(...projectedTasks);
       });
     });
   });
@@ -1534,7 +1664,7 @@ function renderScheduleCalendar(weekStart, scheduleByDate, deliveriesByDate) {
     dateLabel.textContent = formatDisplayDate(isoDate);
     cell.appendChild(dateLabel);
 
-    const scheduleDay = scheduleByDate.get(isoDate) || { batchHijnx: [], batchSb: [], events: [], tasks: [], testPickups: [] };
+    const scheduleDay = scheduleByDate.get(isoDate) || { batchHijnx: [], batchSb: [], events: [], tasks: [], testPickups: [], processingTasks: [] };
     const deliveries = deliveriesByDate.get(isoDate) || [];
     appendEventList(cell, scheduleDay.events || []);
     appendBatchList(cell, scheduleDay);
@@ -1545,6 +1675,7 @@ function renderScheduleCalendar(weekStart, scheduleByDate, deliveriesByDate) {
     tasks.className = "schedule-tasks";
     appendCalendarTaskSummary(tasks, scheduleDay.tasks);
     cell.appendChild(tasks);
+    appendProcessingTaskList(cell, scheduleDay.processingTasks || []);
     cell.addEventListener("click", () => renderFocusedScheduleDay(isoDate, scheduleDay, deliveries));
     cell.addEventListener("keydown", event => {
       if (event.key === "Enter" || event.key === " ") {

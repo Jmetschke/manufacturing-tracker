@@ -157,6 +157,8 @@
       min-height: 110px;
       padding: 8px;
       cursor: pointer;
+      display: flex;
+      flex-direction: column;
     }
 
     .schedule-cell:focus {
@@ -262,6 +264,20 @@
     .calendar-focus-item ul {
       margin: 4px 0 0 18px;
       padding: 0;
+    }
+
+    .calendar-processing-tasks {
+      display: grid;
+      gap: 5px;
+      margin-top: auto;
+      padding-top: 8px;
+    }
+
+    .calendar-processing-task {
+      background: #e7f6df;
+      border-left: 3px solid #5d9b45;
+      color: #24451c;
+      padding: 5px 6px;
     }
 
     .test-pickup-list {
