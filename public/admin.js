@@ -1433,24 +1433,31 @@ function refreshScheduleTaskRows() {
   });
 }
 
-function createEmployeeSelect(value = "") {
-  const select = document.createElement("select");
-  select.className = "schedule-assignment-employee";
+function ensureScheduleEmployeeDatalist() {
+  let datalist = document.getElementById("scheduleAssignmentEmployees");
+  if (datalist) return datalist;
 
-  const blank = document.createElement("option");
-  blank.value = "";
-  blank.text = "Person";
-  select.appendChild(blank);
+  datalist = document.createElement("datalist");
+  datalist.id = "scheduleAssignmentEmployees";
 
   window.employeeNames.forEach(employee => {
     const option = document.createElement("option");
     option.value = employee;
-    option.text = employee;
-    select.appendChild(option);
+    datalist.appendChild(option);
   });
 
-  select.value = value;
-  return select;
+  document.body.appendChild(datalist);
+  return datalist;
+}
+
+function createEmployeeInput(value = "") {
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "schedule-assignment-employee";
+  input.placeholder = "Person";
+  input.setAttribute("list", ensureScheduleEmployeeDatalist().id);
+  input.value = value;
+  return input;
 }
 
 function addScheduleAssignment(taskRow, value = {}) {
@@ -1470,7 +1477,7 @@ function addScheduleAssignment(taskRow, value = {}) {
   daySelect.value = String(Math.min(days - 1, Math.max(0, Number.parseInt(value.dayIndex, 10) || 0)));
   row.appendChild(daySelect);
 
-  const employee = createEmployeeSelect(value.employee || "");
+  const employee = createEmployeeInput(value.employee || "");
   row.appendChild(employee);
 
   const hours = document.createElement("input");
