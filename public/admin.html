@@ -66,6 +66,11 @@
     }
     .admin-calendar-day {
       min-height: 120px;
+      cursor: pointer;
+    }
+    .admin-calendar-day:focus {
+      outline: 2px solid #4f5f47;
+      outline-offset: -2px;
     }
     .admin-event-list {
       display: grid;
@@ -190,16 +195,68 @@
     .admin-task-list li {
       margin-bottom: 4px;
     }
+    .calendar-day-focus {
+      margin-top: 12px;
+      padding: 12px;
+      background: #fff;
+      border: 1px solid #d8ded3;
+    }
+    .calendar-day-focus h3 {
+      margin-top: 0;
+    }
+    .calendar-day-focus-body {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+    }
+    .calendar-focus-section h4 {
+      margin: 0 0 6px;
+    }
+    .calendar-focus-item,
+    .calendar-focus-empty {
+      background: #f7f8f4;
+      border-left: 3px solid #4f5f47;
+      padding: 6px 8px;
+      margin-bottom: 6px;
+    }
+    .calendar-focus-item ul {
+      margin: 4px 0 0 18px;
+      padding: 0;
+    }
     .schedule-task-section {
       margin-top: 10px;
     }
     .schedule-task-row {
       display: grid;
-      grid-template-columns: 34px minmax(180px, 1fr) 90px repeat(3, auto);
+      grid-template-columns: 34px minmax(180px, 1fr) 120px 90px repeat(3, auto);
       gap: 6px;
       align-items: center;
       margin-bottom: 6px;
       max-width: 860px;
+    }
+    .schedule-assignment-panel {
+      grid-column: 2 / -1;
+      border-left: 3px solid #d8ded3;
+      padding-left: 10px;
+      display: grid;
+      gap: 6px;
+    }
+    .schedule-assignment-header,
+    .schedule-assignment-row {
+      display: grid;
+      grid-template-columns: minmax(130px, 1fr) auto;
+      gap: 6px;
+      align-items: center;
+    }
+    .schedule-assignment-row {
+      grid-template-columns: 90px minmax(160px, 1fr) 100px auto;
+    }
+    .schedule-task-remaining {
+      color: #4f5f47;
+      font-weight: bold;
+    }
+    .schedule-task-remaining.over-assigned {
+      color: #9a3412;
     }
     .test-pickup-row {
       display: grid;
@@ -213,7 +270,8 @@
       font-weight: bold;
       text-align: right;
     }
-    .schedule-task-row input {
+    .schedule-task-row input,
+    .schedule-task-row select {
       margin: 0;
       width: 100%;
     }
@@ -503,6 +561,9 @@
       .batch-row,
       .schedule-task-row,
       .test-pickup-row { grid-template-columns: 28px 1fr; }
+      .schedule-assignment-panel { grid-column: 1 / -1; }
+      .schedule-assignment-header,
+      .schedule-assignment-row { grid-template-columns: 1fr; }
       .test-pickup-item-picker { grid-template-columns: 1fr; }
       .ordered-item-row { grid-template-columns: 1fr; }
       .event-row-grid,
@@ -694,6 +755,11 @@
   </div>
 
   <div id="adminCalendar" class="admin-calendar-grid"></div>
+
+  <section id="adminCalendarDayFocus" class="calendar-day-focus" hidden>
+    <h3 id="adminCalendarDayFocusTitle"></h3>
+    <div id="adminCalendarDayFocusBody" class="calendar-day-focus-body"></div>
+  </section>
 
   <section id="scheduleEditor" class="edit-panel schedule-editor">
     <h3>Edit Calendar Day</h3>

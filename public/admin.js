@@ -343,10 +343,7 @@ function parseSchedulePayload(rawValue) {
         events: normalizeEventList(parsed.events),
         tasks: Array.isArray(parsed.tasks)
           ? parsed.tasks
-              .map(task => ({
-                text: String(task.text || "").trim(),
-                days: Math.max(1, Number.parseInt(task.days, 10) || 1)
-              }))
+              .map(normalizeScheduleTask)
               .filter(task => task.text)
           : [],
         testPickups: normalizeTestPickups(parsed.testPickups)
@@ -357,10 +354,7 @@ function parseSchedulePayload(rawValue) {
       return {
         ...empty,
         tasks: parsed
-          .map(task => ({
-            text: String(task.text || "").trim(),
-            days: Math.max(1, Number.parseInt(task.days, 10) || 1)
-          }))
+          .map(normalizeScheduleTask)
           .filter(task => task.text),
         testPickups: []
       };
@@ -375,7 +369,7 @@ function parseSchedulePayload(rawValue) {
       .split("\n")
       .map(line => line.trim())
       .filter(Boolean)
-      .map(line => ({ text: line, days: 1 })),
+      .map(line => ({ text: line, days: 1, totalHours: 0, assignments: [] })),
     testPickups: []
   };
 }
@@ -393,8 +387,40 @@ function normalizeTestPickups(value) {
     .filter(pickup => /^([01]\d|2[0-3]):[0-5]\d$/.test(pickup.time) && pickup.items.length);
 }
 
+function normalizeScheduleAssignments(value, days) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map(assignment => ({
+      dayIndex: Math.max(0, Number.parseInt(assignment && assignment.dayIndex, 10) || 0),
+      employee: String(assignment && assignment.employee ? assignment.employee : "").trim(),
+      hours: Math.max(0, Number.parseFloat(assignment && assignment.hours) || 0)
+    }))
+    .filter(assignment => assignment.dayIndex < days && assignment.employee && assignment.hours > 0);
+}
+
+function normalizeScheduleTask(task) {
+  const text = String(task && task.text ? task.text : "").trim();
+  const days = Math.max(1, Number.parseInt(task && task.days, 10) || 1);
+  const totalHours = Math.max(0, Number.parseFloat(task && task.totalHours) || 0);
+
+  return {
+    text,
+    days,
+    totalHours,
+    assignments: normalizeScheduleAssignments(task && task.assignments, days)
+  };
+}
+
 function getScheduleTasks(rawValue) {
   return parseSchedulePayload(rawValue).tasks;
+}
+
+function formatTaskHours(value) {
+  const hours = Number.parseFloat(value);
+  if (!Number.isFinite(hours)) return "0 hrs";
+  const rounded = Math.round(hours * 100) / 100;
+  return `${rounded.toLocaleString(undefined, { maximumFractionDigits: 2 })} hr${rounded === 1 ? "" : "s"}`;
 }
 
 function appendBatchList(container, payload) {
@@ -483,15 +509,45 @@ function buildAdminProjectedTasksByDate(rows, visibleStart, visibleEnd) {
     const payload = parseSchedulePayload(row.tasks);
 
     payload.tasks.forEach(task => {
-      getProjectedWorkDates(startDate, task.days).forEach(activeDate => {
+      let remainingHours = task.totalHours;
+      const workDates = getProjectedWorkDates(startDate, task.days);
+
+      workDates.forEach((activeDate, dayIndex) => {
+        const dayAssignments = (task.assignments || [])
+          .filter(assignment => assignment.dayIndex === dayIndex);
+        const projectedTasks = [];
+
+        if (task.totalHours > 0 && dayAssignments.length) {
+          dayAssignments.forEach(assignment => {
+            const appliedHours = Math.min(remainingHours, assignment.hours);
+            remainingHours = Math.max(0, remainingHours - assignment.hours);
+            if (appliedHours <= 0) return;
+
+            projectedTasks.push({
+              text: task.text,
+              employee: assignment.employee,
+              hours: appliedHours,
+              remainingHours,
+              totalHours: task.totalHours
+            });
+          });
+        } else if (task.totalHours > 0) {
+          projectedTasks.push({
+            text: task.text,
+            remainingHours,
+            totalHours: task.totalHours
+          });
+        } else {
+          projectedTasks.push({ text: task.text, days: task.days });
+        }
+
         if (activeDate < rangeStart || activeDate > rangeEnd) return;
 
         const isoDate = toIsoDate(activeDate);
         if (!tasksByDate.has(isoDate)) {
           tasksByDate.set(isoDate, []);
         }
-
-        tasksByDate.get(isoDate).push({ text: task.text, days: task.days });
+        tasksByDate.get(isoDate).push(...projectedTasks);
       });
     });
   });
@@ -864,11 +920,173 @@ function appendOrderedTaskList(container, tasks, className) {
 
   lines.forEach(task => {
     const item = document.createElement("li");
-    item.textContent = task.days > 1 ? `${task.text} (${task.days} days)` : task.text;
+    const parts = [task.text];
+    if (task.employee && task.hours) {
+      parts.push(`${task.employee}: ${formatTaskHours(task.hours)}`);
+    } else if (task.totalHours) {
+      parts.push(`${formatTaskHours(task.remainingHours)} remaining`);
+    } else if (task.days > 1) {
+      parts.push(`${task.days} days`);
+    }
+    if (task.employee && Number.isFinite(task.remainingHours)) {
+      parts.push(`${formatTaskHours(task.remainingHours)} left`);
+    }
+    item.textContent = parts.join(" - ");
     list.appendChild(item);
   });
 
   container.appendChild(list);
+}
+
+function groupDailyTaskAssignments(tasks) {
+  const groups = new Map();
+
+  tasks.forEach(task => {
+    if (!groups.has(task.text)) {
+      groups.set(task.text, {
+        text: task.text,
+        assignedHours: 0,
+        remainingHours: task.remainingHours,
+        people: new Map(),
+        legacyDays: task.days || 1
+      });
+    }
+
+    const group = groups.get(task.text);
+    if (task.hours) {
+      group.assignedHours += task.hours;
+    }
+    if (Number.isFinite(task.remainingHours)) {
+      group.remainingHours = task.remainingHours;
+    }
+    if (task.employee && task.hours) {
+      group.people.set(task.employee, (group.people.get(task.employee) || 0) + task.hours);
+    }
+  });
+
+  return Array.from(groups.values());
+}
+
+function appendCalendarTaskSummary(container, tasks, className) {
+  const lines = Array.isArray(tasks) ? tasks : getScheduleTasks(tasks);
+  if (!lines.length) return;
+
+  const list = document.createElement("ol");
+  list.className = className;
+
+  groupDailyTaskAssignments(lines).forEach(task => {
+    const item = document.createElement("li");
+    item.textContent = task.assignedHours > 0
+      ? `${task.text} - ${formatTaskHours(task.assignedHours)}`
+      : task.legacyDays > 1
+        ? `${task.text} - ${task.legacyDays} days`
+        : task.text;
+    list.appendChild(item);
+  });
+
+  container.appendChild(list);
+}
+
+function renderAdminFocusedDay(isoDate, payload, projectedTasks, deliveries, events) {
+  const panel = document.getElementById("adminCalendarDayFocus");
+  const title = document.getElementById("adminCalendarDayFocusTitle");
+  const body = document.getElementById("adminCalendarDayFocusBody");
+  if (!panel || !title || !body) return;
+
+  title.textContent = formatDisplayDate(isoDate);
+  body.innerHTML = "";
+
+  const section = (headingText, fill) => {
+    const block = document.createElement("div");
+    block.className = "calendar-focus-section";
+    const heading = document.createElement("h4");
+    heading.textContent = headingText;
+    block.appendChild(heading);
+    fill(block);
+    body.appendChild(block);
+  };
+
+  section("Tasks", block => {
+    const groups = groupDailyTaskAssignments(projectedTasks);
+    if (!groups.length) {
+      block.appendChild(createFocusEmpty("No tasks scheduled."));
+      return;
+    }
+
+    groups.forEach(task => {
+      const item = document.createElement("div");
+      item.className = "calendar-focus-item";
+      const titleLine = document.createElement("b");
+      titleLine.textContent = `${task.text} - ${formatTaskHours(task.assignedHours)} assigned`;
+      item.appendChild(titleLine);
+
+      if (task.people.size) {
+        const people = document.createElement("div");
+        people.textContent = `${task.people.size} person${task.people.size === 1 ? "" : "s"} assigned`;
+        item.appendChild(people);
+
+        const list = document.createElement("ul");
+        task.people.forEach((hours, employee) => {
+          const person = document.createElement("li");
+          person.textContent = `${employee}: ${formatTaskHours(hours)}`;
+          list.appendChild(person);
+        });
+        item.appendChild(list);
+      } else {
+        item.appendChild(createFocusEmpty("No person hours assigned for this day."));
+      }
+
+      if (Number.isFinite(task.remainingHours)) {
+        const remaining = document.createElement("div");
+        remaining.textContent = `${formatTaskHours(task.remainingHours)} remaining after this day`;
+        item.appendChild(remaining);
+      }
+
+      block.appendChild(item);
+    });
+  });
+
+  section("Events", block => appendFocusLines(block, events, event => {
+    const timeText = event.start && event.end ? ` ${event.start}-${event.end}` : "";
+    return `${event.title}${timeText} - ${event.location} - ${event.company}`;
+  }, "No events scheduled."));
+
+  section("Production Batches", block => appendFocusLines(block, [
+    ...payload.batchHijnx.map(batch => ({ label: "Hijnx", ...batch })),
+    ...payload.batchSb.map(batch => ({ label: "SB", ...batch }))
+  ], batch => batch.units ? `${batch.label}: ${batch.item} - ${batch.units} units` : `${batch.label}: ${batch.item}`, "No production batches."));
+
+  section("Deliveries", block => appendFocusLines(block, deliveries, delivery =>
+    `${delivery.calendar_delivery_status}: ${delivery.item_name} - QTY ${delivery.package_qty || ""}`.trim(),
+  "No deliveries."));
+
+  section("Test Pick Ups", block => appendFocusLines(block, payload.testPickups, pickup =>
+    `Test Pick Up ${pickup.time}: ${pickup.items.join(", ")}`,
+  "No test pick ups."));
+
+  panel.hidden = false;
+  panel.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+
+function createFocusEmpty(text) {
+  const empty = document.createElement("div");
+  empty.className = "calendar-focus-empty";
+  empty.textContent = text;
+  return empty;
+}
+
+function appendFocusLines(container, lines, formatLine, emptyText) {
+  if (!lines.length) {
+    container.appendChild(createFocusEmpty(emptyText));
+    return;
+  }
+
+  lines.forEach(line => {
+    const item = document.createElement("div");
+    item.className = "calendar-focus-item";
+    item.textContent = formatLine(line);
+    container.appendChild(item);
+  });
 }
 
 function showAdminTab(tabName) {
@@ -1159,28 +1377,47 @@ function renderAdminCalendar(gridStart) {
     const isoDate = toIsoDate(date);
     const cell = document.createElement("div");
     cell.className = "admin-calendar-day";
+    cell.tabIndex = 0;
+    cell.setAttribute("role", "button");
+    cell.setAttribute("aria-label", `View details for ${formatDisplayDate(isoDate)}`);
 
     const dateLabel = document.createElement("div");
     dateLabel.className = "admin-calendar-date";
     dateLabel.textContent = `${date.getMonth() + 1}/${date.getDate()}`;
     cell.appendChild(dateLabel);
 
-    appendEventList(cell, adminEventsByDate.get(isoDate) || []);
+    const activeEvents = adminEventsByDate.get(isoDate) || [];
+    const activeDeliveries = adminExpectedDeliveriesByDate.get(isoDate) || [];
+    const activeTasks = adminProjectedTasksByDate.get(isoDate) || [];
+
+    appendEventList(cell, activeEvents);
 
     const payload = parseSchedulePayload(adminScheduleRows.get(isoDate));
     appendBatchList(cell, payload);
-    appendAdminExpectedDeliveries(cell, adminExpectedDeliveriesByDate.get(isoDate) || []);
+    appendAdminExpectedDeliveries(cell, activeDeliveries);
     appendTestPickupList(cell, payload);
 
     const tasks = document.createElement("div");
     tasks.className = "admin-calendar-tasks";
-    appendOrderedTaskList(tasks, adminProjectedTasksByDate.get(isoDate) || [], "admin-task-list");
+    appendCalendarTaskSummary(tasks, activeTasks, "admin-task-list");
     cell.appendChild(tasks);
+    cell.addEventListener("click", () => {
+      renderAdminFocusedDay(isoDate, payload, activeTasks, activeDeliveries, activeEvents);
+    });
+    cell.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        renderAdminFocusedDay(isoDate, payload, activeTasks, activeDeliveries, activeEvents);
+      }
+    });
 
     const editButton = document.createElement("button");
     editButton.type = "button";
     editButton.textContent = "Edit";
-    editButton.addEventListener("click", () => editScheduleDay(isoDate));
+    editButton.addEventListener("click", event => {
+      event.stopPropagation();
+      editScheduleDay(isoDate);
+    });
     cell.appendChild(editButton);
 
     calendar.appendChild(cell);
@@ -1192,13 +1429,110 @@ function refreshScheduleTaskRows() {
     row.querySelector(".schedule-task-order").textContent = `${index + 1}.`;
     row.querySelector(".schedule-task-up").disabled = index === 0;
     row.querySelector(".schedule-task-down").disabled = index === rows.length - 1;
+    updateScheduleTaskRemaining(row);
   });
+}
+
+function createEmployeeSelect(value = "") {
+  const select = document.createElement("select");
+  select.className = "schedule-assignment-employee";
+
+  const blank = document.createElement("option");
+  blank.value = "";
+  blank.text = "Person";
+  select.appendChild(blank);
+
+  window.employeeNames.forEach(employee => {
+    const option = document.createElement("option");
+    option.value = employee;
+    option.text = employee;
+    select.appendChild(option);
+  });
+
+  select.value = value;
+  return select;
+}
+
+function addScheduleAssignment(taskRow, value = {}) {
+  const assignments = taskRow.querySelector(".schedule-assignment-rows");
+  const row = document.createElement("div");
+  row.className = "schedule-assignment-row";
+
+  const days = Math.max(1, Number.parseInt(taskRow.querySelector(".schedule-task-days").value, 10) || 1);
+  const daySelect = document.createElement("select");
+  daySelect.className = "schedule-assignment-day";
+  for (let index = 0; index < days; index += 1) {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.text = `Day ${index + 1}`;
+    daySelect.appendChild(option);
+  }
+  daySelect.value = String(Math.min(days - 1, Math.max(0, Number.parseInt(value.dayIndex, 10) || 0)));
+  row.appendChild(daySelect);
+
+  const employee = createEmployeeSelect(value.employee || "");
+  row.appendChild(employee);
+
+  const hours = document.createElement("input");
+  hours.type = "number";
+  hours.className = "schedule-assignment-hours";
+  hours.min = "0";
+  hours.step = "0.25";
+  hours.placeholder = "Hours";
+  hours.value = value.hours || "";
+  hours.addEventListener("input", () => updateScheduleTaskRemaining(taskRow));
+  row.appendChild(hours);
+
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.textContent = "Remove";
+  removeButton.addEventListener("click", () => {
+    row.remove();
+    updateScheduleTaskRemaining(taskRow);
+  });
+  row.appendChild(removeButton);
+
+  assignments.appendChild(row);
+  updateScheduleTaskRemaining(taskRow);
+}
+
+function refreshScheduleAssignmentDays(taskRow) {
+  const days = Math.max(1, Number.parseInt(taskRow.querySelector(".schedule-task-days").value, 10) || 1);
+  taskRow.querySelectorAll(".schedule-assignment-day").forEach(select => {
+    const selected = Math.min(days - 1, Math.max(0, Number.parseInt(select.value, 10) || 0));
+    select.innerHTML = "";
+    for (let index = 0; index < days; index += 1) {
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.text = `Day ${index + 1}`;
+      select.appendChild(option);
+    }
+    select.value = String(selected);
+  });
+}
+
+function updateScheduleTaskRemaining(taskRow) {
+  const total = Math.max(0, Number.parseFloat(taskRow.querySelector(".schedule-task-hours").value) || 0);
+  const assigned = Array.from(taskRow.querySelectorAll(".schedule-assignment-hours"))
+    .reduce((sum, input) => sum + (Number.parseFloat(input.value) || 0), 0);
+  const remaining = Math.max(0, total - assigned);
+  const summary = taskRow.querySelector(".schedule-task-remaining");
+  if (!summary) return;
+
+  summary.textContent = total
+    ? `${formatTaskHours(remaining)} remaining`
+    : "Enter total hours";
+  summary.classList.toggle("over-assigned", assigned > total && total > 0);
+  if (assigned > total && total > 0) {
+    summary.textContent = `${formatTaskHours(assigned - total)} over assigned`;
+  }
 }
 
 function addScheduleTask(value = "", daysValue = 1) {
   const rows = document.getElementById("scheduleTaskRows");
   const row = document.createElement("div");
   row.className = "schedule-task-row";
+  const task = value && typeof value === "object" ? value : { text: value, days: daysValue };
 
   const order = document.createElement("span");
   order.className = "schedule-task-order";
@@ -1207,17 +1541,32 @@ function addScheduleTask(value = "", daysValue = 1) {
   const input = document.createElement("input");
   input.type = "text";
   input.className = "schedule-task-input";
-  input.value = value;
+  input.value = task.text || "";
   input.placeholder = "Task";
   row.appendChild(input);
+
+  const totalHours = document.createElement("input");
+  totalHours.type = "number";
+  totalHours.className = "schedule-task-hours";
+  totalHours.min = "0";
+  totalHours.step = "0.25";
+  totalHours.value = task.totalHours || "";
+  totalHours.placeholder = "Total hours";
+  totalHours.title = "Total hours";
+  totalHours.addEventListener("input", () => updateScheduleTaskRemaining(row));
+  row.appendChild(totalHours);
 
   const days = document.createElement("input");
   days.type = "number";
   days.className = "schedule-task-days";
   days.min = "1";
   days.step = "1";
-  days.value = String(Math.max(1, Number.parseInt(daysValue, 10) || 1));
+  days.value = String(Math.max(1, Number.parseInt(task.days, 10) || 1));
   days.title = "Days";
+  days.addEventListener("input", () => {
+    refreshScheduleAssignmentDays(row);
+    updateScheduleTaskRemaining(row);
+  });
   row.appendChild(days);
 
   const upButton = document.createElement("button");
@@ -1257,7 +1606,31 @@ function addScheduleTask(value = "", daysValue = 1) {
   });
   row.appendChild(removeButton);
 
+  const assignmentPanel = document.createElement("div");
+  assignmentPanel.className = "schedule-assignment-panel";
+
+  const assignmentHeader = document.createElement("div");
+  assignmentHeader.className = "schedule-assignment-header";
+  const remaining = document.createElement("span");
+  remaining.className = "schedule-task-remaining";
+  assignmentHeader.appendChild(remaining);
+
+  const addAssignmentButton = document.createElement("button");
+  addAssignmentButton.type = "button";
+  addAssignmentButton.textContent = "Add Person Hours";
+  addAssignmentButton.addEventListener("click", () => addScheduleAssignment(row));
+  assignmentHeader.appendChild(addAssignmentButton);
+  assignmentPanel.appendChild(assignmentHeader);
+
+  const assignmentRows = document.createElement("div");
+  assignmentRows.className = "schedule-assignment-rows";
+  assignmentPanel.appendChild(assignmentRows);
+  row.appendChild(assignmentPanel);
+
   rows.appendChild(row);
+  if (Array.isArray(task.assignments)) {
+    task.assignments.forEach(assignment => addScheduleAssignment(row, assignment));
+  }
   refreshScheduleTaskRows();
   return input;
 }
@@ -1272,7 +1645,7 @@ function populateScheduleTaskRows(tasks) {
     return;
   }
 
-  lines.forEach(task => addScheduleTask(task.text, task.days));
+  lines.forEach(task => addScheduleTask(task));
 }
 
 function refreshTestPickupRows() {
@@ -1404,12 +1777,31 @@ function buildSchedulePayload(includeTasks = true) {
 
   const tasks = includeTasks
     ? Array.from(document.querySelectorAll(".schedule-task-row"))
-        .map(row => ({
-          text: row.querySelector(".schedule-task-input").value.trim(),
-          days: Math.max(1, Number.parseInt(row.querySelector(".schedule-task-days").value, 10) || 1)
-        }))
+        .map(row => {
+          const days = Math.max(1, Number.parseInt(row.querySelector(".schedule-task-days").value, 10) || 1);
+          return {
+            text: row.querySelector(".schedule-task-input").value.trim(),
+            totalHours: Math.max(0, Number.parseFloat(row.querySelector(".schedule-task-hours").value) || 0),
+            days,
+            assignments: Array.from(row.querySelectorAll(".schedule-assignment-row"))
+              .map(assignmentRow => ({
+                dayIndex: Math.max(0, Number.parseInt(assignmentRow.querySelector(".schedule-assignment-day").value, 10) || 0),
+                employee: assignmentRow.querySelector(".schedule-assignment-employee").value.trim(),
+                hours: Math.max(0, Number.parseFloat(assignmentRow.querySelector(".schedule-assignment-hours").value) || 0)
+              }))
+              .filter(assignment => assignment.dayIndex < days && assignment.employee && assignment.hours > 0)
+          };
+        })
         .filter(task => task.text)
     : [];
+
+  const invalidTask = tasks.find(task =>
+    task.totalHours <= 0 ||
+    task.assignments.reduce((sum, assignment) => sum + assignment.hours, 0) > task.totalHours
+  );
+  if (invalidTask) {
+    throw new Error("Each task needs total hours, and assigned person hours cannot exceed the task total.");
+  }
 
   const testPickups = includeTasks ? getTestPickupValues() : [];
   const invalidPickup = testPickups.find(pickup => !/^([01]\d|2[0-3]):[0-5]\d$/.test(pickup.time) || !pickup.items.length);

@@ -156,6 +156,12 @@
       background: #fff;
       min-height: 110px;
       padding: 8px;
+      cursor: pointer;
+    }
+
+    .schedule-cell:focus {
+      outline: 2px solid #4f5f47;
+      outline-offset: -2px;
     }
 
     .event-list {
@@ -222,6 +228,40 @@
 
     .schedule-task-list li {
       margin-bottom: 4px;
+    }
+
+    .calendar-day-focus {
+      margin-top: 12px;
+      padding: 12px;
+      background: #fff;
+      border: 1px solid #d8ded3;
+    }
+
+    .calendar-day-focus h3 {
+      margin-top: 0;
+    }
+
+    .calendar-day-focus-body {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+    }
+
+    .calendar-focus-section h4 {
+      margin: 0 0 6px;
+    }
+
+    .calendar-focus-item,
+    .calendar-focus-empty {
+      background: #f7f8f4;
+      border-left: 3px solid #4f5f47;
+      padding: 6px 8px;
+      margin-bottom: 6px;
+    }
+
+    .calendar-focus-item ul {
+      margin: 4px 0 0 18px;
+      padding: 0;
     }
 
     .test-pickup-list {
@@ -1229,6 +1269,10 @@
     <div id="scheduleRange" class="schedule-range"></div>
   </div>
   <div id="scheduleCalendar" class="schedule-grid"></div>
+  <section id="scheduleDayFocus" class="calendar-day-focus" hidden>
+    <h3 id="scheduleDayFocusTitle"></h3>
+    <div id="scheduleDayFocusBody" class="calendar-day-focus-body"></div>
+  </section>
 
   <div class="weekly-tasks">
     <h3>This Week's Tasks</h3>

@@ -455,10 +455,7 @@ function parseSchedulePayload(rawValue) {
         events: normalizeEventList(parsed.events),
         tasks: Array.isArray(parsed.tasks)
           ? parsed.tasks
-              .map(task => ({
-                text: String(task.text || "").trim(),
-                days: Math.max(1, Number.parseInt(task.days, 10) || 1)
-              }))
+              .map(normalizeScheduleTask)
               .filter(task => task.text)
           : [],
         testPickups: normalizeTestPickups(parsed.testPickups)
@@ -469,10 +466,7 @@ function parseSchedulePayload(rawValue) {
       return {
         ...empty,
         tasks: parsed
-          .map(task => ({
-            text: String(task.text || "").trim(),
-            days: Math.max(1, Number.parseInt(task.days, 10) || 1)
-          }))
+          .map(normalizeScheduleTask)
           .filter(task => task.text),
         testPickups: []
       };
@@ -487,7 +481,7 @@ function parseSchedulePayload(rawValue) {
       .split("\n")
       .map(line => line.trim())
       .filter(Boolean)
-      .map(line => ({ text: line, days: 1 })),
+      .map(line => ({ text: line, days: 1, totalHours: 0, assignments: [] })),
     testPickups: []
   };
 }
@@ -505,6 +499,38 @@ function normalizeTestPickups(value) {
     .filter(pickup => /^([01]\d|2[0-3]):[0-5]\d$/.test(pickup.time) && pickup.items.length);
 }
 
+function normalizeScheduleAssignments(value, days) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map(assignment => ({
+      dayIndex: Math.max(0, Number.parseInt(assignment && assignment.dayIndex, 10) || 0),
+      employee: String(assignment && assignment.employee ? assignment.employee : "").trim(),
+      hours: Math.max(0, Number.parseFloat(assignment && assignment.hours) || 0)
+    }))
+    .filter(assignment => assignment.dayIndex < days && assignment.employee && assignment.hours > 0);
+}
+
+function normalizeScheduleTask(task) {
+  const text = String(task && task.text ? task.text : "").trim();
+  const days = Math.max(1, Number.parseInt(task && task.days, 10) || 1);
+  const totalHours = Math.max(0, Number.parseFloat(task && task.totalHours) || 0);
+
+  return {
+    text,
+    days,
+    totalHours,
+    assignments: normalizeScheduleAssignments(task && task.assignments, days)
+  };
+}
+
+function formatTaskHours(value) {
+  const hours = Number.parseFloat(value);
+  if (!Number.isFinite(hours)) return "0 hrs";
+  const rounded = Math.round(hours * 100) / 100;
+  return `${rounded.toLocaleString(undefined, { maximumFractionDigits: 2 })} hr${rounded === 1 ? "" : "s"}`;
+}
+
 function appendTaskList(container, tasks) {
   if (!tasks.length) return;
 
@@ -513,11 +539,172 @@ function appendTaskList(container, tasks) {
 
   tasks.forEach(task => {
     const item = document.createElement("li");
-    item.textContent = task.text;
+    const parts = [task.text];
+    if (task.employee && task.hours) {
+      parts.push(`${task.employee}: ${formatTaskHours(task.hours)}`);
+    } else if (task.totalHours) {
+      parts.push(`${formatTaskHours(task.remainingHours)} remaining`);
+    } else if (task.days > 1) {
+      parts.push(`${task.days} days`);
+    }
+    if (task.employee && Number.isFinite(task.remainingHours)) {
+      parts.push(`${formatTaskHours(task.remainingHours)} left`);
+    }
+    item.textContent = parts.join(" - ");
     list.appendChild(item);
   });
 
   container.appendChild(list);
+}
+
+function groupDailyTaskAssignments(tasks) {
+  const groups = new Map();
+
+  tasks.forEach(task => {
+    if (!groups.has(task.text)) {
+      groups.set(task.text, {
+        text: task.text,
+        assignedHours: 0,
+        remainingHours: task.remainingHours,
+        people: new Map(),
+        legacyDays: task.days || 1
+      });
+    }
+
+    const group = groups.get(task.text);
+    if (task.hours) {
+      group.assignedHours += task.hours;
+    }
+    if (Number.isFinite(task.remainingHours)) {
+      group.remainingHours = task.remainingHours;
+    }
+    if (task.employee && task.hours) {
+      group.people.set(task.employee, (group.people.get(task.employee) || 0) + task.hours);
+    }
+  });
+
+  return Array.from(groups.values());
+}
+
+function appendCalendarTaskSummary(container, tasks) {
+  if (!tasks.length) return;
+
+  const list = document.createElement("ol");
+  list.className = "schedule-task-list";
+
+  groupDailyTaskAssignments(tasks).forEach(task => {
+    const item = document.createElement("li");
+    item.textContent = task.assignedHours > 0
+      ? `${task.text} - ${formatTaskHours(task.assignedHours)}`
+      : task.legacyDays > 1
+        ? `${task.text} - ${task.legacyDays} days`
+        : task.text;
+    list.appendChild(item);
+  });
+
+  container.appendChild(list);
+}
+
+function createFocusEmpty(text) {
+  const empty = document.createElement("div");
+  empty.className = "calendar-focus-empty";
+  empty.textContent = text;
+  return empty;
+}
+
+function appendFocusLines(container, lines, formatLine, emptyText) {
+  if (!lines.length) {
+    container.appendChild(createFocusEmpty(emptyText));
+    return;
+  }
+
+  lines.forEach(line => {
+    const item = document.createElement("div");
+    item.className = "calendar-focus-item";
+    item.textContent = formatLine(line);
+    container.appendChild(item);
+  });
+}
+
+function renderFocusedScheduleDay(isoDate, scheduleDay, deliveries) {
+  const panel = document.getElementById("scheduleDayFocus");
+  const title = document.getElementById("scheduleDayFocusTitle");
+  const body = document.getElementById("scheduleDayFocusBody");
+  if (!panel || !title || !body) return;
+
+  title.textContent = formatDisplayDate(isoDate);
+  body.innerHTML = "";
+
+  const section = (headingText, fill) => {
+    const block = document.createElement("div");
+    block.className = "calendar-focus-section";
+    const heading = document.createElement("h4");
+    heading.textContent = headingText;
+    block.appendChild(heading);
+    fill(block);
+    body.appendChild(block);
+  };
+
+  section("Tasks", block => {
+    const groups = groupDailyTaskAssignments(scheduleDay.tasks || []);
+    if (!groups.length) {
+      block.appendChild(createFocusEmpty("No tasks scheduled."));
+      return;
+    }
+
+    groups.forEach(task => {
+      const item = document.createElement("div");
+      item.className = "calendar-focus-item";
+      const titleLine = document.createElement("b");
+      titleLine.textContent = `${task.text} - ${formatTaskHours(task.assignedHours)} assigned`;
+      item.appendChild(titleLine);
+
+      if (task.people.size) {
+        const people = document.createElement("div");
+        people.textContent = `${task.people.size} person${task.people.size === 1 ? "" : "s"} assigned`;
+        item.appendChild(people);
+
+        const list = document.createElement("ul");
+        task.people.forEach((hours, employee) => {
+          const person = document.createElement("li");
+          person.textContent = `${employee}: ${formatTaskHours(hours)}`;
+          list.appendChild(person);
+        });
+        item.appendChild(list);
+      } else {
+        item.appendChild(createFocusEmpty("No person hours assigned for this day."));
+      }
+
+      if (Number.isFinite(task.remainingHours)) {
+        const remaining = document.createElement("div");
+        remaining.textContent = `${formatTaskHours(task.remainingHours)} remaining after this day`;
+        item.appendChild(remaining);
+      }
+
+      block.appendChild(item);
+    });
+  });
+
+  section("Events", block => appendFocusLines(block, scheduleDay.events || [], event => {
+    const timeText = event.start && event.end ? ` ${event.start}-${event.end}` : "";
+    return `${event.title}${timeText} - ${event.location} - ${event.company}`;
+  }, "No events scheduled."));
+
+  section("Production Batches", block => appendFocusLines(block, [
+    ...(scheduleDay.batchHijnx || []).map(batch => ({ label: "Hijnx", ...batch })),
+    ...(scheduleDay.batchSb || []).map(batch => ({ label: "SB", ...batch }))
+  ], batch => batch.units ? `${batch.label}: ${batch.item} - ${batch.units} units` : `${batch.label}: ${batch.item}`, "No production batches."));
+
+  section("Deliveries", block => appendFocusLines(block, deliveries, delivery =>
+    `${delivery.calendar_delivery_status}: ${delivery.item_name} - QTY ${delivery.package_qty || ""}`.trim(),
+  "No deliveries."));
+
+  section("Test Pick Ups", block => appendFocusLines(block, scheduleDay.testPickups || [], pickup =>
+    `Test Pick Up ${pickup.time}: ${pickup.items.join(", ")}`,
+  "No test pick ups."));
+
+  panel.hidden = false;
+  panel.scrollIntoView({ block: "start", behavior: "smooth" });
 }
 
 function appendTestPickupList(container, testPickups) {
@@ -682,14 +869,45 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
     });
 
     payload.tasks.forEach(task => {
-      getProjectedWorkDates(startDate, task.days).forEach(activeDate => {
+      let remainingHours = task.totalHours;
+      const workDates = getProjectedWorkDates(startDate, task.days);
+
+      workDates.forEach((activeDate, dayIndex) => {
+        const dayAssignments = (task.assignments || [])
+          .filter(assignment => assignment.dayIndex === dayIndex);
+        const projectedTasks = [];
+
+        if (task.totalHours > 0 && dayAssignments.length) {
+          dayAssignments.forEach(assignment => {
+            const appliedHours = Math.min(remainingHours, assignment.hours);
+            remainingHours = Math.max(0, remainingHours - assignment.hours);
+            if (appliedHours <= 0) return;
+
+            projectedTasks.push({
+              text: task.text,
+              employee: assignment.employee,
+              hours: appliedHours,
+              remainingHours,
+              totalHours: task.totalHours
+            });
+          });
+        } else if (task.totalHours > 0) {
+          projectedTasks.push({
+            text: task.text,
+            remainingHours,
+            totalHours: task.totalHours
+          });
+        } else {
+          projectedTasks.push({ text: task.text, days: task.days });
+        }
+
         if (activeDate < rangeStart || activeDate > rangeEnd) return;
 
         const isoDate = toIsoDate(activeDate);
         if (!activeSchedule.has(isoDate)) {
           activeSchedule.set(isoDate, { batchHijnx: [], batchSb: [], events: [], tasks: [], testPickups: [] });
         }
-        activeSchedule.get(isoDate).tasks.push({ text: task.text });
+        activeSchedule.get(isoDate).tasks.push(...projectedTasks);
       });
     });
   });
@@ -1307,22 +1525,33 @@ function renderScheduleCalendar(weekStart, scheduleByDate, deliveriesByDate) {
     const isoDate = toIsoDate(date);
     const cell = document.createElement("div");
     cell.className = "schedule-cell";
+    cell.tabIndex = 0;
+    cell.setAttribute("role", "button");
+    cell.setAttribute("aria-label", `View details for ${formatDisplayDate(isoDate)}`);
 
     const dateLabel = document.createElement("div");
     dateLabel.className = "schedule-date";
     dateLabel.textContent = formatDisplayDate(isoDate);
     cell.appendChild(dateLabel);
 
-    const scheduleDay = scheduleByDate.get(isoDate) || { batchHijnx: [], batchSb: [], events: [], tasks: [] };
+    const scheduleDay = scheduleByDate.get(isoDate) || { batchHijnx: [], batchSb: [], events: [], tasks: [], testPickups: [] };
+    const deliveries = deliveriesByDate.get(isoDate) || [];
     appendEventList(cell, scheduleDay.events || []);
     appendBatchList(cell, scheduleDay);
-    appendExpectedDeliveries(cell, deliveriesByDate.get(isoDate) || []);
+    appendExpectedDeliveries(cell, deliveries);
     appendTestPickupList(cell, scheduleDay.testPickups || []);
 
     const tasks = document.createElement("div");
     tasks.className = "schedule-tasks";
-    appendTaskList(tasks, scheduleDay.tasks);
+    appendCalendarTaskSummary(tasks, scheduleDay.tasks);
     cell.appendChild(tasks);
+    cell.addEventListener("click", () => renderFocusedScheduleDay(isoDate, scheduleDay, deliveries));
+    cell.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        renderFocusedScheduleDay(isoDate, scheduleDay, deliveries);
+      }
+    });
 
     calendar.appendChild(cell);
   }
