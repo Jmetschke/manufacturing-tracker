@@ -2,6 +2,7 @@ let reportData = [];
 let allEntries = [];
 let allItems = [];
 let allTasks = [];
+let itemTaskOptionsByItemId = {};
 let allOrderedItems = [];
 let allOrderRequests = [];
 let adminScheduleRows = new Map();
@@ -116,13 +117,15 @@ function updateAdminDispensaryField() {
 }
 
 async function loadLookups() {
-  const [items, tasks] = await Promise.all([
+  const [items, tasks, taskOptions] = await Promise.all([
     fetch("/items").then(r => r.json()),
-    fetch("/tasks").then(r => r.json())
+    fetch("/tasks").then(r => r.json()),
+    fetch("/item-task-options").then(r => r.json())
   ]);
 
   allItems = items;
   allTasks = tasks;
+  itemTaskOptionsByItemId = taskOptions;
 
   fillSelect(
     document.getElementById("item_filter"),
@@ -425,11 +428,13 @@ function normalizeScheduleAssignments(value, days) {
 
 function normalizeScheduleTask(task) {
   const text = String(task && task.text ? task.text : "").trim();
+  const item = String(task && task.item ? task.item : "").trim();
   const days = Math.max(1, Number.parseInt(task && task.days, 10) || 1);
   const totalHours = Math.max(0, Number.parseFloat(task && task.totalHours) || 0);
 
   return {
     text,
+    item,
     days,
     totalHours,
     assignments: normalizeScheduleAssignments(task && task.assignments, days)
@@ -1624,6 +1629,69 @@ function updateScheduleTaskRemaining(taskRow) {
   }
 }
 
+function findItemIdByName(itemName) {
+  const item = allItems.find(option => option.name === itemName);
+  return item ? String(item.id) : "";
+}
+
+function getTaskNameById(taskId) {
+  const task = allTasks.find(option => String(option.id) === String(taskId));
+  return task ? task.name : "";
+}
+
+function createScheduleItemSelect(value = "") {
+  const select = document.createElement("select");
+  select.className = "schedule-task-item";
+
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.text = "Select Item";
+  select.appendChild(placeholder);
+
+  allItems.forEach(item => {
+    const option = document.createElement("option");
+    option.value = item.name;
+    option.text = item.name;
+    select.appendChild(option);
+  });
+
+  select.value = value;
+  return select;
+}
+
+function renderScheduleTaskSelect(select, itemName, selectedTask = "") {
+  const itemId = findItemIdByName(itemName);
+  const allowedTaskIds = (itemTaskOptionsByItemId[itemId] || []).map(String);
+  const allowedTaskNames = allowedTaskIds
+    .map(getTaskNameById)
+    .filter(Boolean);
+
+  select.innerHTML = "";
+
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.text = itemName ? "Select Task" : "Select Item First";
+  select.appendChild(placeholder);
+
+  allowedTaskNames.forEach(taskName => {
+    const option = document.createElement("option");
+    option.value = taskName;
+    option.text = taskName;
+    select.appendChild(option);
+  });
+
+  if (selectedTask && !allowedTaskNames.includes(selectedTask)) {
+    const existingOption = document.createElement("option");
+    existingOption.value = selectedTask;
+    existingOption.text = selectedTask;
+    select.appendChild(existingOption);
+  }
+
+  select.value = selectedTask && Array.from(select.options).some(option => option.value === selectedTask)
+    ? selectedTask
+    : "";
+}
+
 function addScheduleTask(value = "", daysValue = 1, rowsId = "scheduleTaskRows") {
   const rows = document.getElementById(rowsId);
   const row = document.createElement("div");
@@ -1635,11 +1703,15 @@ function addScheduleTask(value = "", daysValue = 1, rowsId = "scheduleTaskRows")
   order.className = "schedule-task-order";
   row.appendChild(order);
 
-  const input = document.createElement("input");
-  input.type = "text";
+  const itemSelect = createScheduleItemSelect(task.item || "");
+  row.appendChild(itemSelect);
+
+  const input = document.createElement("select");
   input.className = "schedule-task-input";
-  input.value = task.text || "";
-  input.placeholder = "Task";
+  renderScheduleTaskSelect(input, itemSelect.value, task.text || "");
+  itemSelect.addEventListener("change", () => {
+    renderScheduleTaskSelect(input, itemSelect.value);
+  });
   row.appendChild(input);
 
   const totalHours = document.createElement("input");
@@ -1877,6 +1949,7 @@ function getScheduleTaskValues(selector) {
     .map(row => {
       const days = Math.max(1, Number.parseInt(row.querySelector(".schedule-task-days").value, 10) || 1);
       return {
+        item: row.querySelector(".schedule-task-item").value.trim(),
         text: row.querySelector(".schedule-task-input").value.trim(),
         totalHours: Math.max(0, Number.parseFloat(row.querySelector(".schedule-task-hours").value) || 0),
         days,
