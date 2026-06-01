@@ -197,6 +197,8 @@ const taskNames = [
   "Capping (shooters)",
   "Capping (SB Vapes)",
   "Capping (Hijnx Vapes)",
+  "Capping (Tinctures)",
+  "Capping (Topicals)",
   "Packaging",
   "Popping",
   "Sugaring",
@@ -217,6 +219,285 @@ const taskNames = [
   "Pulling/Seperating Order",
   "Counting/Verifying Order"
 ];
+
+const itemTaskNames = Object.freeze({
+  "Daytime Focus Micro Pump": [
+    "FIlling (Slot Machine)",
+    "Capping (Tinctures)",
+    "Packaging",
+    "Sealing",
+    "Counting (5's)",
+    "Bagging (20's)"
+  ],
+  "Good Night Sleep Micro Pump": [
+    "FIlling (Slot Machine)",
+    "Capping (Tinctures)",
+    "Packaging",
+    "Sealing",
+    "Counting (5's)",
+    "Bagging (20's)"
+  ],
+  "Main Squeeze Party Pouch": [
+    "Depositing (Beldos)",
+    "Packaging",
+    "Sealing",
+    "Counting (5's)",
+    "Bagging (10's)"
+  ],
+  "Micro Dots (50-piece packs)": [
+    "Popping",
+    "Packaging",
+    "Sealing",
+    "Counting (5's)",
+    "Bagging (20's)"
+  ],
+  "RSO Whoopie Hi": [
+    "Depositing (Beldos)",
+    "Packaging",
+    "Sealing",
+    "Counting (5's)",
+    "Bagging (10's)",
+    "Packaging Labels Stickering",
+    "Correction Stickering"
+  ],
+  "Space Chunk OG 1 chunk (pcs)": [
+    "Depositing (truffly)",
+    "Nerding",
+    "Popping",
+    "Sugaring",
+    "Packaging",
+    "Sealing",
+    "Counting (5's)",
+    "Bagging (20's)",
+    "Packaging Labels Stickering",
+    "Correction Stickering"
+  ],
+  "Space Chunk ALPHA OG 2 chunk (units)": [
+    "Depositing (truffly)",
+    "Nerding",
+    "Popping",
+    "Sugaring",
+    "Packaging",
+    "Sealing",
+    "Counting (5's)",
+    "Bagging (20's)",
+    "Packaging Labels Stickering",
+    "Correction Stickering"
+  ],
+  "Space Chunk REX OG 1 chunk (units)": [
+    "Depositing (truffly)",
+    "Nerding",
+    "Popping",
+    "Sugaring",
+    "Packaging",
+    "Sealing",
+    "Counting (5's)",
+    "Bagging (20's)",
+    "Packaging Labels Stickering",
+    "Correction Stickering"
+  ],
+  "Space Chunk REX OG 2 chunk (units)": [
+    "Depositing (truffly)",
+    "Nerding",
+    "Popping",
+    "Sugaring",
+    "Packaging",
+    "Sealing",
+    "Counting (5's)",
+    "Bagging (20's)",
+    "Packaging Labels Stickering",
+    "Correction Stickering"
+  ],
+  "Space Chunk ZUUL OG 1 chunk (units)": [
+    "Depositing (truffly)",
+    "Nerding",
+    "Popping",
+    "Sugaring",
+    "Packaging",
+    "Sealing",
+    "Counting (5's)",
+    "Bagging (20's)",
+    "Packaging Labels Stickering",
+    "Correction Stickering"
+  ],
+  "Space Chunk ZUUL OG 2 chunk (units)": [
+    "Depositing (truffly)",
+    "Nerding",
+    "Popping",
+    "Sugaring",
+    "Packaging",
+    "Sealing",
+    "Counting (5's)",
+    "Bagging (20's)",
+    "Packaging Labels Stickering",
+    "Correction Stickering"
+  ],
+  "Space Chunk 1 chunk CBD 50mg 1-1 (pcs)": [
+    "Depositing (truffly)",
+    "Nerding",
+    "Popping",
+    "Sugaring",
+    "Packaging",
+    "Sealing",
+    "Counting (5's)",
+    "Bagging (20's)",
+    "Packaging Labels Stickering",
+    "Correction Stickering"
+  ],
+  "Space Chunks CBD 2 chunks 1-1 (units)": [
+    "Depositing (truffly)",
+    "Nerding",
+    "Popping",
+    "Sugaring",
+    "Packaging",
+    "Sealing",
+    "Counting (5's)",
+    "Bagging (20's)",
+    "Packaging Labels Stickering",
+    "Correction Stickering"
+  ],
+  "Space Chunk CBN 1 chunk (pcs)": [
+    "Depositing (truffly)",
+    "Nerding",
+    "Popping",
+    "Sugaring",
+    "Packaging",
+    "Sealing",
+    "Counting (5's)",
+    "Bagging (20's)",
+    "Packaging Labels Stickering",
+    "Correction Stickering"
+  ],
+  "Space Chunk CBN 2 chunk (units)": [
+    "Depositing (truffly)",
+    "Nerding",
+    "Popping",
+    "Sugaring",
+    "Packaging",
+    "Sealing",
+    "Counting (5's)",
+    "Bagging (20's)",
+    "Packaging Labels Stickering",
+    "Correction Stickering"
+  ],
+  "Space Chunk Mini 10 chunk (units)": [
+    "Depositing (muffly)",
+    "Depositing (truffly)",
+    "Nerding",
+    "Popping",
+    "Sugaring",
+    "Packaging",
+    "Sealing",
+    "Counting (5's)",
+    "Bagging (20's)",
+    "Packaging Labels Stickering",
+    "Correction Stickering"
+  ],
+  "Space Chunk SUGAR FREE 10pk (units)": [
+    "Depositing (muffly)",
+    "Depositing (truffly)",
+    "Nerding",
+    "Popping",
+    "Sugaring",
+    "Packaging",
+    "Sealing",
+    "Counting (5's)",
+    "Bagging (20's)",
+    "Packaging Labels Stickering",
+    "Correction Stickering"
+  ],
+  "Space Chunk SUGAR FREE 2pk (units)": [
+    "Depositing (truffly)",
+    "Nerding",
+    "Popping",
+    "Sugaring",
+    "Packaging",
+    "Sealing",
+    "Counting (5's)",
+    "Bagging (20's)",
+    "Packaging Labels Stickering",
+    "Correction Stickering"
+  ],
+  "Shooters Triple Citrus": [
+    "Filling (Filling Machine)",
+    "Capping (shooters)",
+    "Seal-Stickering (shooters)",
+    "Bagging (10's)"
+  ],
+  "Shooters Sour Watermelon": [
+    "Filling (Filling Machine)",
+    "Capping (shooters)",
+    "Seal-Stickering (shooters)",
+    "Bagging (10's)"
+  ],
+  "Shooters Sour Blu Raz": [
+    "Filling (Filling Machine)",
+    "Capping (shooters)",
+    "Seal-Stickering (shooters)",
+    "Bagging (10's)"
+  ],
+  "Grape 1g": [
+    "Filling (SB Vapes)",
+    "Capping (SB Vapes)",
+    "Sealing",
+    "Counting (SB 5's)",
+    "Bagging (SB 25's)"
+  ],
+  "Mango 1g": [
+    "Filling (SB Vapes)",
+    "Capping (SB Vapes)",
+    "Sealing",
+    "Counting (SB 5's)",
+    "Bagging (SB 25's)"
+  ],
+  "Lemon 1g": [
+    "Filling (SB Vapes)",
+    "Capping (SB Vapes)",
+    "Sealing",
+    "Counting (SB 5's)",
+    "Bagging (SB 25's)"
+  ],
+  "Watermelon 1g": [
+    "Filling (SB Vapes)",
+    "Capping (SB Vapes)",
+    "Sealing",
+    "Counting (SB 5's)",
+    "Bagging (SB 25's)"
+  ],
+  "Big Stick": [
+    "Filling (Filling Machine)",
+    "Capping (Topicals)",
+    "Packaging",
+    "Sealing",
+    "Bagging (10's)"
+  ],
+  "Small Stick": [
+    "Filling (Filling Machine)",
+    "Capping (Topicals)",
+    "Packaging",
+    "Sealing",
+    "Counting (5's)",
+    "Bagging (20's)"
+  ],
+  "Tiny Stick": [
+    "Filling (Filling Machine)",
+    "Capping (Topicals)",
+    "Packaging",
+    "Sealing",
+    "Counting (5's)",
+    "Bagging (20's)"
+  ],
+  "Swag": [
+    "Swag Press",
+    "Swag Assembly",
+    "Swag Counting"
+  ],
+  "Delivery Order": [
+    "Exit Label Stickering",
+    "Pulling/Seperating Order",
+    "Counting/Verifying Order"
+  ]
+});
 
 function runSql(sql, params = [], database = db) {
   return new Promise((resolve, reject) => {
@@ -582,7 +863,7 @@ async function initializeDatabase() {
   await seedNames("items", itemNames);
   await removeNames("items", ["Item A", "Item B"]);
   await seedNames("tasks", taskNames);
-  await removeNames("tasks", ["Assembly"]);
+  await removeNames("tasks", ["Assembly", "Cutting"]);
   await logLookupCount("items");
   await logLookupCount("tasks");
 }
@@ -601,6 +882,31 @@ app.get("/tasks", (req, res) => {
     if (err) return res.status(500).send(err.message);
     res.json(rows);
   });
+});
+
+app.get("/item-task-options", async (req, res) => {
+  try {
+    const [items, tasks] = await Promise.all([
+      allSql("SELECT id, name FROM items"),
+      allSql("SELECT id, name FROM tasks")
+    ]);
+    const itemIdsByName = new Map(items.map(item => [item.name, item.id]));
+    const taskIdsByName = new Map(tasks.map(task => [task.name, task.id]));
+    const optionsByItemId = {};
+
+    Object.entries(itemTaskNames).forEach(([itemName, taskNamesForItem]) => {
+      const itemId = itemIdsByName.get(itemName);
+      if (!itemId) return;
+
+      optionsByItemId[itemId] = taskNamesForItem
+        .map(taskName => taskIdsByName.get(taskName))
+        .filter(taskId => taskId !== undefined);
+    });
+
+    res.json(optionsByItemId);
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
 });
 
 /* ---------- SCHEDULE ---------- */

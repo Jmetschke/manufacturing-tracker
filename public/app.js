@@ -2,6 +2,8 @@ let timerInterval = null;
 let startTime = null;
 let currentLogId = null;
 let loadedItems = [];
+let loadedTasks = [];
+let itemTaskOptionsByItemId = {};
 let pendingEntry = null;
 let savedEntries = [];
 let orderedItems = [];
@@ -54,6 +56,32 @@ function selectValue(id, value) {
   const element = document.getElementById(id);
   if (value !== undefined && value !== null) {
     element.value = String(value);
+  }
+}
+
+function renderTaskOptions(itemId, selectedTaskId = "") {
+  const taskSel = document.getElementById("task");
+  if (!taskSel) return;
+
+  const allowedTaskIds = new Set((itemTaskOptionsByItemId[String(itemId)] || []).map(String));
+  const taskOptions = loadedTasks.filter(task => allowedTaskIds.has(String(task.id)));
+
+  taskSel.innerHTML = "";
+
+  const taskPlaceholder = document.createElement("option");
+  taskPlaceholder.value = "";
+  taskPlaceholder.text = itemId ? "Select Task" : "Select Item First";
+  taskSel.appendChild(taskPlaceholder);
+
+  taskOptions.forEach(task => {
+    const option = document.createElement("option");
+    option.value = task.id;
+    option.text = task.name;
+    taskSel.appendChild(option);
+  });
+
+  if (selectedTaskId && taskOptions.some(task => String(task.id) === String(selectedTaskId))) {
+    taskSel.value = String(selectedTaskId);
   }
 }
 
@@ -1114,25 +1142,24 @@ const bulkTypes = [
 async function load() {
   loadEmployeeOptions();
 
-  const items = await fetch("/items").then(r => r.json());
-  const tasks = await fetch("/tasks").then(r => r.json());
+  const [items, tasks, taskOptions] = await Promise.all([
+    fetch("/items").then(r => r.json()),
+    fetch("/tasks").then(r => r.json()),
+    fetch("/item-task-options").then(r => r.json())
+  ]);
   loadedItems = items;
+  loadedTasks = tasks;
+  itemTaskOptionsByItemId = taskOptions;
 
   const itemSel = document.getElementById("item");
   const taskSel = document.getElementById("task");
 
   itemSel.innerHTML = "";
-  taskSel.innerHTML = "";
 
   const itemPlaceholder = document.createElement("option");
   itemPlaceholder.value = "";
   itemPlaceholder.text = "Select Item";
   itemSel.appendChild(itemPlaceholder);
-
-  const taskPlaceholder = document.createElement("option");
-  taskPlaceholder.value = "";
-  taskPlaceholder.text = "Select Task";
-  taskSel.appendChild(taskPlaceholder);
 
   items.forEach(i => {
     const o = document.createElement("option");
@@ -1141,17 +1168,13 @@ async function load() {
     itemSel.appendChild(o);
   });
 
-  tasks.forEach(t => {
-    const o = document.createElement("option");
-    o.value = t.id;
-    o.text = t.name;
-    taskSel.appendChild(o);
-  });
+  renderTaskOptions("");
 
   setupDispensaryLocations();
   updateDispensaryField();
 
   itemSel.addEventListener("change", () => {
+    renderTaskOptions(itemSel.value);
     updateDispensaryField();
     syncPendingWorkSelection();
   });
@@ -1557,7 +1580,7 @@ function restoreTimerFromLog(log) {
   selectValue("employee", log.employee);
   selectValue("work_date", log.work_date);
   selectValue("item", log.item_id);
-  selectValue("task", log.task_id);
+  renderTaskOptions(log.item_id, log.task_id);
   selectValue("dispensary_name", log.dispensary_name);
   updateDispensaryField();
 
