@@ -1529,7 +1529,7 @@ function ensureScheduleEmployeeDatalist() {
   datalist = document.createElement("datalist");
   datalist.id = "scheduleAssignmentEmployees";
 
-  window.employeeNames.forEach(employee => {
+  ["Open", ...window.employeeNames].forEach(employee => {
     const option = document.createElement("option");
     option.value = employee;
     datalist.appendChild(option);
