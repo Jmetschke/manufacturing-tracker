@@ -564,15 +564,21 @@ function normalizeScheduleAssignments(value, days) {
 
 function normalizeScheduleTask(task) {
   const text = String(task && task.text ? task.text : "").trim();
+  const item = String(task && task.item ? task.item : "").trim();
   const days = Math.max(1, Number.parseInt(task && task.days, 10) || 1);
   const totalHours = Math.max(0, Number.parseFloat(task && task.totalHours) || 0);
 
   return {
     text,
+    item,
     days,
     totalHours,
     assignments: normalizeScheduleAssignments(task && task.assignments, days)
   };
+}
+
+function getTaskDisplayText(task) {
+  return task.item ? `${task.item} - ${task.text}` : task.text;
 }
 
 function formatTaskHours(value) {
@@ -590,7 +596,7 @@ function appendTaskList(container, tasks) {
 
   tasks.forEach(task => {
     const item = document.createElement("li");
-    const parts = [task.text];
+    const parts = [getTaskDisplayText(task)];
     if (task.employee && task.hours) {
       parts.push(`${task.employee}: ${formatTaskHours(task.hours)}`);
     } else if (task.totalHours) {
@@ -612,8 +618,10 @@ function groupDailyTaskAssignments(tasks) {
   const groups = new Map();
 
   tasks.forEach(task => {
-    if (!groups.has(task.text)) {
-      groups.set(task.text, {
+    const key = `${task.item || ""}\n${task.text}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        item: task.item || "",
         text: task.text,
         assignedHours: 0,
         remainingHours: task.remainingHours,
@@ -622,7 +630,7 @@ function groupDailyTaskAssignments(tasks) {
       });
     }
 
-    const group = groups.get(task.text);
+    const group = groups.get(key);
     if (task.hours) {
       group.assignedHours += task.hours;
     }
@@ -646,10 +654,10 @@ function appendCalendarTaskSummary(container, tasks) {
   groupDailyTaskAssignments(tasks).forEach(task => {
     const item = document.createElement("li");
     item.textContent = task.assignedHours > 0
-      ? `${task.text} - ${formatTaskHours(task.assignedHours)}`
+      ? `${getTaskDisplayText(task)} - ${formatTaskHours(task.assignedHours)}`
       : task.legacyDays > 1
-        ? `${task.text} - ${task.legacyDays} days`
-        : task.text;
+        ? `${getTaskDisplayText(task)} - ${task.legacyDays} days`
+        : getTaskDisplayText(task);
     list.appendChild(item);
   });
 
@@ -667,7 +675,7 @@ function appendTaskFocusDetails(block, projectedTasks, emptyText) {
     const item = document.createElement("div");
     item.className = "calendar-focus-item";
     const titleLine = document.createElement("b");
-    titleLine.textContent = `${task.text} - ${formatTaskHours(task.assignedHours)} assigned`;
+    titleLine.textContent = `${getTaskDisplayText(task)} - ${formatTaskHours(task.assignedHours)} assigned`;
     item.appendChild(titleLine);
 
     if (task.people.size) {
@@ -747,7 +755,7 @@ function renderFocusedScheduleDay(isoDate, scheduleDay, deliveries) {
       const item = document.createElement("div");
       item.className = "calendar-focus-item";
       const titleLine = document.createElement("b");
-      titleLine.textContent = `${task.text} - ${formatTaskHours(task.assignedHours)} assigned`;
+      titleLine.textContent = `${getTaskDisplayText(task)} - ${formatTaskHours(task.assignedHours)} assigned`;
       item.appendChild(titleLine);
 
       if (task.people.size) {
@@ -826,10 +834,10 @@ function appendProcessingTaskList(container, processingTasks) {
     const item = document.createElement("div");
     item.className = "calendar-processing-task";
     item.textContent = task.assignedHours > 0
-      ? `${task.text} - ${formatTaskHours(task.assignedHours)}`
+      ? `${getTaskDisplayText(task)} - ${formatTaskHours(task.assignedHours)}`
       : task.legacyDays > 1
-        ? `${task.text} - ${task.legacyDays} days`
-        : task.text;
+        ? `${getTaskDisplayText(task)} - ${task.legacyDays} days`
+        : getTaskDisplayText(task);
     list.appendChild(item);
   });
 
@@ -999,6 +1007,7 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
             if (appliedHours <= 0) return;
 
             projectedTasks.push({
+              item: task.item,
               text: task.text,
               employee: assignment.employee,
               hours: appliedHours,
@@ -1008,12 +1017,13 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
           });
         } else if (task.totalHours > 0) {
           projectedTasks.push({
+            item: task.item,
             text: task.text,
             remainingHours,
             totalHours: task.totalHours
           });
         } else {
-          projectedTasks.push({ text: task.text, days: task.days });
+          projectedTasks.push({ item: task.item, text: task.text, days: task.days });
         }
 
         if (activeDate < rangeStart || activeDate > rangeEnd) return;
@@ -1042,6 +1052,7 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
             if (appliedHours <= 0) return;
 
             projectedTasks.push({
+              item: task.item,
               text: task.text,
               employee: assignment.employee,
               hours: appliedHours,
@@ -1051,12 +1062,13 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
           });
         } else if (task.totalHours > 0) {
           projectedTasks.push({
+            item: task.item,
             text: task.text,
             remainingHours,
             totalHours: task.totalHours
           });
         } else {
-          projectedTasks.push({ text: task.text, days: task.days });
+          projectedTasks.push({ item: task.item, text: task.text, days: task.days });
         }
 
         if (activeDate < rangeStart || activeDate > rangeEnd) return;
