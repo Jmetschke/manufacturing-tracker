@@ -1064,6 +1064,11 @@ function appendCalendarTaskSummary(container, tasks, className) {
   const lines = Array.isArray(tasks) ? tasks : getScheduleTasks(tasks);
   if (!lines.length) return;
 
+  const heading = document.createElement("div");
+  heading.className = "calendar-kitchen-heading";
+  heading.textContent = "Kitchen Tasks";
+  container.appendChild(heading);
+
   const list = document.createElement("ol");
   list.className = className;
 
@@ -1099,10 +1104,20 @@ function renderAdminFocusedDay(isoDate, payload, projectedTasks, projectedProces
     body.appendChild(block);
   };
 
-  section("Tasks", block => {
+  section("Events", block => appendFocusLines(block, events, event => {
+    const timeText = event.start && event.end ? ` ${event.start}-${event.end}` : "";
+    return `${event.title}${timeText} - ${event.location} - ${event.company}`;
+  }, "No events scheduled."));
+
+  section("Production Batches", block => appendFocusLines(block, [
+    ...payload.batchHijnx.map(batch => ({ label: "Hijnx", ...batch })),
+    ...payload.batchSb.map(batch => ({ label: "SB", ...batch }))
+  ], batch => batch.units ? `${batch.label}: ${batch.item} - ${batch.units} units` : `${batch.label}: ${batch.item}`, "No production batches."));
+
+  section("Kitchen Tasks", block => {
     const groups = groupDailyTaskAssignments(projectedTasks);
     if (!groups.length) {
-      block.appendChild(createFocusEmpty("No tasks scheduled."));
+      block.appendChild(createFocusEmpty("No kitchen tasks scheduled."));
       return;
     }
 
@@ -1138,16 +1153,6 @@ function renderAdminFocusedDay(isoDate, payload, projectedTasks, projectedProces
       block.appendChild(item);
     });
   });
-
-  section("Events", block => appendFocusLines(block, events, event => {
-    const timeText = event.start && event.end ? ` ${event.start}-${event.end}` : "";
-    return `${event.title}${timeText} - ${event.location} - ${event.company}`;
-  }, "No events scheduled."));
-
-  section("Production Batches", block => appendFocusLines(block, [
-    ...payload.batchHijnx.map(batch => ({ label: "Hijnx", ...batch })),
-    ...payload.batchSb.map(batch => ({ label: "SB", ...batch }))
-  ], batch => batch.units ? `${batch.label}: ${batch.item} - ${batch.units} units` : `${batch.label}: ${batch.item}`, "No production batches."));
 
   section("Deliveries", block => appendFocusLines(block, deliveries, delivery =>
     `${delivery.calendar_delivery_status}: ${delivery.item_name} - QTY ${delivery.package_qty || ""}`.trim(),
@@ -1678,13 +1683,13 @@ function renderAdminCalendar(gridStart) {
 
     const payload = parseSchedulePayload(adminScheduleRows.get(isoDate));
     appendBatchList(cell, payload);
-    appendAdminExpectedDeliveries(cell, activeDeliveries);
-    appendTestPickupList(cell, payload);
 
     const tasks = document.createElement("div");
     tasks.className = "admin-calendar-tasks";
-    appendCalendarTaskSummary(tasks, activeTasks, "admin-task-list");
+    appendCalendarTaskSummary(tasks, activeTasks, "admin-task-list admin-kitchen-task-list");
     cell.appendChild(tasks);
+    appendAdminExpectedDeliveries(cell, activeDeliveries);
+    appendTestPickupList(cell, payload);
     appendProcessingTaskList(cell, activeProcessingTasks);
     cell.addEventListener("click", () => {
       renderAdminFocusedDay(isoDate, payload, activeTasks, activeProcessingTasks, activeDeliveries, activeEvents);

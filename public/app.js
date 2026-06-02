@@ -592,7 +592,7 @@ function appendTaskList(container, tasks) {
   if (!tasks.length) return;
 
   const list = document.createElement("ol");
-  list.className = "schedule-task-list";
+  list.className = "schedule-task-list schedule-kitchen-task-list";
 
   tasks.forEach(task => {
     const item = document.createElement("li");
@@ -648,8 +648,13 @@ function groupDailyTaskAssignments(tasks) {
 function appendCalendarTaskSummary(container, tasks) {
   if (!tasks.length) return;
 
+  const heading = document.createElement("div");
+  heading.className = "calendar-kitchen-heading";
+  heading.textContent = "Kitchen Tasks";
+  container.appendChild(heading);
+
   const list = document.createElement("ol");
-  list.className = "schedule-task-list";
+  list.className = "schedule-task-list schedule-kitchen-task-list";
 
   groupDailyTaskAssignments(tasks).forEach(task => {
     const item = document.createElement("li");
@@ -744,10 +749,20 @@ function renderFocusedScheduleDay(isoDate, scheduleDay, deliveries) {
     body.appendChild(block);
   };
 
-  section("Tasks", block => {
+  section("Events", block => appendFocusLines(block, scheduleDay.events || [], event => {
+    const timeText = event.start && event.end ? ` ${event.start}-${event.end}` : "";
+    return `${event.title}${timeText} - ${event.location} - ${event.company}`;
+  }, "No events scheduled."));
+
+  section("Production Batches", block => appendFocusLines(block, [
+    ...(scheduleDay.batchHijnx || []).map(batch => ({ label: "Hijnx", ...batch })),
+    ...(scheduleDay.batchSb || []).map(batch => ({ label: "SB", ...batch }))
+  ], batch => batch.units ? `${batch.label}: ${batch.item} - ${batch.units} units` : `${batch.label}: ${batch.item}`, "No production batches."));
+
+  section("Kitchen Tasks", block => {
     const groups = groupDailyTaskAssignments(scheduleDay.tasks || []);
     if (!groups.length) {
-      block.appendChild(createFocusEmpty("No tasks scheduled."));
+      block.appendChild(createFocusEmpty("No kitchen tasks scheduled."));
       return;
     }
 
@@ -783,16 +798,6 @@ function renderFocusedScheduleDay(isoDate, scheduleDay, deliveries) {
       block.appendChild(item);
     });
   });
-
-  section("Events", block => appendFocusLines(block, scheduleDay.events || [], event => {
-    const timeText = event.start && event.end ? ` ${event.start}-${event.end}` : "";
-    return `${event.title}${timeText} - ${event.location} - ${event.company}`;
-  }, "No events scheduled."));
-
-  section("Production Batches", block => appendFocusLines(block, [
-    ...(scheduleDay.batchHijnx || []).map(batch => ({ label: "Hijnx", ...batch })),
-    ...(scheduleDay.batchSb || []).map(batch => ({ label: "SB", ...batch }))
-  ], batch => batch.units ? `${batch.label}: ${batch.item} - ${batch.units} units` : `${batch.label}: ${batch.item}`, "No production batches."));
 
   section("Deliveries", block => appendFocusLines(block, deliveries, delivery =>
     `${delivery.calendar_delivery_status}: ${delivery.item_name} - QTY ${delivery.package_qty || ""}`.trim(),
@@ -1703,13 +1708,13 @@ function renderScheduleCalendar(weekStart, scheduleByDate, deliveriesByDate) {
     const deliveries = deliveriesByDate.get(isoDate) || [];
     appendEventList(cell, scheduleDay.events || []);
     appendBatchList(cell, scheduleDay);
-    appendExpectedDeliveries(cell, deliveries);
-    appendTestPickupList(cell, scheduleDay.testPickups || []);
 
     const tasks = document.createElement("div");
     tasks.className = "schedule-tasks";
     appendCalendarTaskSummary(tasks, scheduleDay.tasks);
     cell.appendChild(tasks);
+    appendExpectedDeliveries(cell, deliveries);
+    appendTestPickupList(cell, scheduleDay.testPickups || []);
     appendProcessingTaskList(cell, scheduleDay.processingTasks || []);
     cell.addEventListener("click", () => renderFocusedScheduleDay(isoDate, scheduleDay, deliveries));
     cell.addEventListener("keydown", event => {
