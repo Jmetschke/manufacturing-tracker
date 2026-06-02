@@ -472,6 +472,20 @@
     .summary-line span {
       flex: 1 1 160px;
     }
+    .average-summary {
+      display: grid;
+      gap: 8px;
+      margin: 10px 0;
+    }
+    .average-summary h4 {
+      margin: 0;
+    }
+    .average-summary-list {
+      display: grid;
+      gap: 4px;
+      margin: 0;
+      padding-left: 20px;
+    }
     .request-order-form {
       display: none;
       grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -733,6 +747,9 @@
     </select>
     <select id="item_filter">
       <option value="">All Items</option>
+    </select>
+    <select id="task_filter">
+      <option value="">All Tasks</option>
     </select>
     <button onclick="loadReport()">Filter</button>
     <button onclick="exportCSV()">Export CSV</button>

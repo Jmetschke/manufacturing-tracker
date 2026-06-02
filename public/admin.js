@@ -87,6 +87,37 @@ function fillSelect(select, options, placeholder = "") {
   });
 }
 
+function getItemIdByName(itemName) {
+  const item = allItems.find(option => option.name === itemName);
+  return item ? String(item.id) : "";
+}
+
+function getTaskNameById(taskId) {
+  const task = allTasks.find(option => String(option.id) === String(taskId));
+  return task ? task.name : "";
+}
+
+function getAllowedTaskNamesForItem(itemName) {
+  const itemId = getItemIdByName(itemName);
+  if (!itemId) return allTasks.map(task => task.name);
+
+  return (itemTaskOptionsByItemId[itemId] || [])
+    .map(getTaskNameById)
+    .filter(Boolean);
+}
+
+function fillTaskFilterOptions(selectedTask = document.getElementById("task_filter").value) {
+  const itemName = document.getElementById("item_filter").value;
+  const taskNames = getAllowedTaskNamesForItem(itemName);
+  const options = taskNames.map(task => ({ value: task, text: task }));
+
+  fillSelect(document.getElementById("task_filter"), options, "All Tasks");
+
+  if (selectedTask && taskNames.includes(selectedTask)) {
+    document.getElementById("task_filter").value = selectedTask;
+  }
+}
+
 function getSelectText(select) {
   if (!select || !select.value) return "";
   const option = select.options[select.selectedIndex];
@@ -143,6 +174,9 @@ async function loadLookups() {
     document.getElementById("edit_task"),
     allTasks.map(task => ({ value: task.id, text: task.name }))
   );
+
+  fillTaskFilterOptions();
+  document.getElementById("item_filter").addEventListener("change", () => fillTaskFilterOptions());
 
   setupAdminDispensaryLocations();
   updateAdminDispensaryField();
@@ -1226,6 +1260,7 @@ async function loadReport() {
   const to = document.getElementById("to_date").value;
   const emp = document.getElementById("employee_filter").value;
   const item = document.getElementById("item_filter").value;
+  const task = document.getElementById("task_filter").value;
 
   allEntries = data;
   reportData = data.filter(entry => {
@@ -1233,6 +1268,7 @@ async function loadReport() {
     if (to && entry.work_date > to) return false;
     if (emp && entry.employee !== emp) return false;
     if (item && entry.item !== item) return false;
+    if (task && entry.task !== task) return false;
     return true;
   });
 
@@ -1249,6 +1285,72 @@ function appendCell(row, value, label = "") {
 
 function getEntryDataStatus(entry) {
   return entry.data_status || (entry.work_date < "2026-05-21" ? "test data" : "live");
+}
+
+function formatUnitsPerSecond(value) {
+  const unitsPerSecond = Number(value) || 0;
+  if (!unitsPerSecond) return "0 units/sec";
+  return `${unitsPerSecond.toLocaleString(undefined, {
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4
+  })} units/sec`;
+}
+
+function summarizeUnitRate(entries, groupKeys) {
+  const groups = new Map();
+
+  entries.forEach(entry => {
+    const quantity = Number(entry.quantity) || 0;
+    const seconds = Number(entry.duration_seconds) || 0;
+    if (quantity <= 0 || seconds <= 0) return;
+
+    const values = groupKeys.map(key => entry[key] || "Unknown");
+    const mapKey = values.join("\n");
+
+    if (!groups.has(mapKey)) {
+      groups.set(mapKey, {
+        values,
+        quantity: 0,
+        seconds: 0
+      });
+    }
+
+    const group = groups.get(mapKey);
+    group.quantity += quantity;
+    group.seconds += seconds;
+  });
+
+  return Array.from(groups.values())
+    .map(group => ({
+      ...group,
+      unitsPerSecond: group.seconds ? group.quantity / group.seconds : 0
+    }))
+    .sort((a, b) => {
+      const labelCompare = a.values.join(" ").localeCompare(b.values.join(" "));
+      return labelCompare || b.unitsPerSecond - a.unitsPerSecond;
+    });
+}
+
+function appendAverageSummaryList(container, heading, rows, formatRow) {
+  if (!rows.length) return;
+
+  const section = document.createElement("div");
+  section.className = "average-summary";
+
+  const title = document.createElement("h4");
+  title.textContent = heading;
+  section.appendChild(title);
+
+  const list = document.createElement("ol");
+  list.className = "average-summary-list";
+  rows.forEach(row => {
+    const item = document.createElement("li");
+    item.textContent = formatRow(row);
+    list.appendChild(item);
+  });
+  section.appendChild(list);
+
+  container.appendChild(section);
 }
 
 function renderTable() {
@@ -1312,14 +1414,49 @@ function renderSummary() {
   });
 
   const avg = totalQty ? Math.round(totalTime / totalQty) : 0;
+  const unitsPerSecond = totalTime ? totalQty / totalTime : 0;
+  const emp = document.getElementById("employee_filter").value;
+  const item = document.getElementById("item_filter").value;
+  const task = document.getElementById("task_filter").value;
+  const summary = document.getElementById("summary");
 
-  document.getElementById("summary").innerHTML = `
+  summary.innerHTML = `
     <div class="summary-line">
       <span><b>Total Qty:</b> ${totalQty}</span>
       <span><b>Total Time:</b> ${secondsToHMS(totalTime)}</span>
       <span><b>Avg Sec/Unit:</b> ${avg}</span>
+      <span><b>Avg Units/Sec:</b> ${formatUnitsPerSecond(unitsPerSecond)}</span>
     </div>
   `;
+
+  if (emp) {
+    appendAverageSummaryList(
+      summary,
+      `${emp} average units per second by item and task`,
+      summarizeUnitRate(reportData, ["item", "task"]),
+      row => `${row.values[0]} - ${row.values[1]}: ${formatUnitsPerSecond(row.unitsPerSecond)}`
+    );
+    return;
+  }
+
+  if (item && !task) {
+    appendAverageSummaryList(
+      summary,
+      `Average units per second by task and employee for ${item}`,
+      summarizeUnitRate(reportData, ["task", "employee"]),
+      row => `${row.values[0]} - ${row.values[1]}: ${formatUnitsPerSecond(row.unitsPerSecond)}`
+    );
+    return;
+  }
+
+  if (item || task) {
+    appendAverageSummaryList(
+      summary,
+      `Average units per second by employee for ${[item, task].filter(Boolean).join(" - ")}`,
+      summarizeUnitRate(reportData, ["employee"]),
+      row => `${row.values[0]}: ${formatUnitsPerSecond(row.unitsPerSecond)}`
+    );
+  }
 }
 
 function editEntry(logId) {
@@ -1637,16 +1774,6 @@ function updateScheduleTaskRemaining(taskRow) {
   }
 }
 
-function findItemIdByName(itemName) {
-  const item = allItems.find(option => option.name === itemName);
-  return item ? String(item.id) : "";
-}
-
-function getTaskNameById(taskId) {
-  const task = allTasks.find(option => String(option.id) === String(taskId));
-  return task ? task.name : "";
-}
-
 function createScheduleItemSelect(value = "") {
   const select = document.createElement("select");
   select.className = "schedule-task-item";
@@ -1668,7 +1795,7 @@ function createScheduleItemSelect(value = "") {
 }
 
 function renderScheduleTaskSelect(select, itemName, selectedTask = "") {
-  const itemId = findItemIdByName(itemName);
+  const itemId = getItemIdByName(itemName);
   const allowedTaskIds = (itemTaskOptionsByItemId[itemId] || []).map(String);
   const allowedTaskNames = allowedTaskIds
     .map(getTaskNameById)
