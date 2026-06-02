@@ -238,15 +238,49 @@
       padding: 5px 6px;
     }
     .schedule-task-section {
-      margin-top: 10px;
+      display: grid;
+      gap: 8px;
+      margin-top: 14px;
+      max-width: 1180px;
+    }
+    .schedule-task-section h4 {
+      border-top: 1px solid #d8ded3;
+      margin: 10px 0 0;
+      padding-top: 12px;
+    }
+    .schedule-task-section h4:first-child {
+      border-top: 0;
+      margin-top: 0;
+      padding-top: 0;
     }
     .schedule-task-row {
       display: grid;
-      grid-template-columns: 34px minmax(180px, 1fr) minmax(180px, 1fr) 100px 120px 90px repeat(3, auto);
+      grid-template-columns: 34px minmax(180px, 1.2fr) minmax(180px, 1.2fr) minmax(90px, 0.6fr) minmax(110px, 0.7fr) minmax(80px, 0.5fr) auto;
+      gap: 8px;
+      align-items: end;
+      margin-bottom: 10px;
+      max-width: 1180px;
+      border: 1px solid #d8ded3;
+      background: #fbfcfa;
+      padding: 10px;
+    }
+    .schedule-task-field {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .schedule-task-field label {
+      color: #4f5f47;
+      font-size: 12px;
+      font-weight: bold;
+      margin: 0;
+    }
+    .schedule-task-actions {
+      display: flex;
+      flex-wrap: wrap;
       gap: 6px;
-      align-items: center;
-      margin-bottom: 6px;
-      max-width: 1140px;
+      align-items: end;
+      justify-content: flex-end;
     }
     .schedule-assignment-panel {
       grid-column: 2 / -1;
@@ -589,6 +623,9 @@
       .batch-row,
       .schedule-task-row,
       .test-pickup-row { grid-template-columns: 28px 1fr; }
+      .schedule-task-field,
+      .schedule-task-actions { grid-column: 2 / -1; }
+      .schedule-task-actions { justify-content: flex-start; }
       .schedule-assignment-panel { grid-column: 1 / -1; }
       .schedule-assignment-header,
       .schedule-assignment-row { grid-template-columns: 1fr; }

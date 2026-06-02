@@ -1873,6 +1873,18 @@ function renderScheduleTaskSelect(select, itemName, selectedTask = "") {
     : "";
 }
 
+function createScheduleTaskField(labelText, control) {
+  const field = document.createElement("div");
+  field.className = "schedule-task-field";
+
+  const label = document.createElement("label");
+  label.textContent = labelText;
+  field.appendChild(label);
+  field.appendChild(control);
+
+  return field;
+}
+
 function formatEstimatedHours(value) {
   const hours = Number(value) || 0;
   if (!hours) return "";
@@ -1921,7 +1933,7 @@ function addScheduleTask(value = "", daysValue = 1, rowsId = "scheduleTaskRows")
   row.appendChild(order);
 
   const itemSelect = createScheduleItemSelect(task.item || "");
-  row.appendChild(itemSelect);
+  row.appendChild(createScheduleTaskField("Item", itemSelect));
 
   const input = document.createElement("select");
   input.className = "schedule-task-input";
@@ -1931,7 +1943,7 @@ function addScheduleTask(value = "", daysValue = 1, rowsId = "scheduleTaskRows")
     row.dataset.hoursOverridden = "false";
     autoFillScheduleTaskHours(row, true);
   });
-  row.appendChild(input);
+  row.appendChild(createScheduleTaskField("Task", input));
 
   const units = document.createElement("input");
   units.type = "number";
@@ -1945,7 +1957,7 @@ function addScheduleTask(value = "", daysValue = 1, rowsId = "scheduleTaskRows")
     row.dataset.hoursOverridden = "false";
     autoFillScheduleTaskHours(row, true);
   });
-  row.appendChild(units);
+  row.appendChild(createScheduleTaskField("Units", units));
 
   const totalHours = document.createElement("input");
   totalHours.type = "number";
@@ -1959,7 +1971,7 @@ function addScheduleTask(value = "", daysValue = 1, rowsId = "scheduleTaskRows")
     row.dataset.hoursOverridden = "true";
     updateScheduleTaskRemaining(row);
   });
-  row.appendChild(totalHours);
+  row.appendChild(createScheduleTaskField("Hours", totalHours));
 
   input.addEventListener("change", () => {
     row.dataset.hoursOverridden = "false";
@@ -1977,7 +1989,10 @@ function addScheduleTask(value = "", daysValue = 1, rowsId = "scheduleTaskRows")
     refreshScheduleAssignmentDays(row);
     updateScheduleTaskRemaining(row);
   });
-  row.appendChild(days);
+  row.appendChild(createScheduleTaskField("Days", days));
+
+  const taskActions = document.createElement("div");
+  taskActions.className = "schedule-task-actions";
 
   const upButton = document.createElement("button");
   upButton.type = "button";
@@ -1989,7 +2004,7 @@ function addScheduleTask(value = "", daysValue = 1, rowsId = "scheduleTaskRows")
       refreshScheduleTaskRows();
     }
   });
-  row.appendChild(upButton);
+  taskActions.appendChild(upButton);
 
   const downButton = document.createElement("button");
   downButton.type = "button";
@@ -2001,7 +2016,7 @@ function addScheduleTask(value = "", daysValue = 1, rowsId = "scheduleTaskRows")
       refreshScheduleTaskRows();
     }
   });
-  row.appendChild(downButton);
+  taskActions.appendChild(downButton);
 
   const removeButton = document.createElement("button");
   removeButton.type = "button";
@@ -2014,7 +2029,8 @@ function addScheduleTask(value = "", daysValue = 1, rowsId = "scheduleTaskRows")
     }
     refreshScheduleTaskRows();
   });
-  row.appendChild(removeButton);
+  taskActions.appendChild(removeButton);
+  row.appendChild(taskActions);
 
   const assignmentPanel = document.createElement("div");
   assignmentPanel.className = "schedule-assignment-panel";
