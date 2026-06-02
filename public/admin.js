@@ -1287,16 +1287,15 @@ function getEntryDataStatus(entry) {
   return entry.data_status || (entry.work_date < "2026-05-21" ? "test data" : "live");
 }
 
-function formatUnitsPerSecond(value) {
-  const unitsPerSecond = Number(value) || 0;
-  if (!unitsPerSecond) return "0 units/sec";
-  return `${unitsPerSecond.toLocaleString(undefined, {
-    minimumFractionDigits: 4,
-    maximumFractionDigits: 4
-  })} units/sec`;
+function formatSecondsPerUnit(value) {
+  const secondsPerUnit = Number(value) || 0;
+  if (!secondsPerUnit) return "0 sec/unit";
+  return `${secondsPerUnit.toLocaleString(undefined, {
+    maximumFractionDigits: 2
+  })} sec/unit`;
 }
 
-function summarizeUnitRate(entries, groupKeys) {
+function summarizeSecondsPerUnit(entries, groupKeys) {
   const groups = new Map();
 
   entries.forEach(entry => {
@@ -1323,11 +1322,11 @@ function summarizeUnitRate(entries, groupKeys) {
   return Array.from(groups.values())
     .map(group => ({
       ...group,
-      unitsPerSecond: group.seconds ? group.quantity / group.seconds : 0
+      secondsPerUnit: group.quantity ? group.seconds / group.quantity : 0
     }))
     .sort((a, b) => {
       const labelCompare = a.values.join(" ").localeCompare(b.values.join(" "));
-      return labelCompare || b.unitsPerSecond - a.unitsPerSecond;
+      return labelCompare || a.secondsPerUnit - b.secondsPerUnit;
     });
 }
 
@@ -1414,7 +1413,6 @@ function renderSummary() {
   });
 
   const avg = totalQty ? Math.round(totalTime / totalQty) : 0;
-  const unitsPerSecond = totalTime ? totalQty / totalTime : 0;
   const emp = document.getElementById("employee_filter").value;
   const item = document.getElementById("item_filter").value;
   const task = document.getElementById("task_filter").value;
@@ -1425,16 +1423,15 @@ function renderSummary() {
       <span><b>Total Qty:</b> ${totalQty}</span>
       <span><b>Total Time:</b> ${secondsToHMS(totalTime)}</span>
       <span><b>Avg Sec/Unit:</b> ${avg}</span>
-      <span><b>Avg Units/Sec:</b> ${formatUnitsPerSecond(unitsPerSecond)}</span>
     </div>
   `;
 
   if (emp) {
     appendAverageSummaryList(
       summary,
-      `${emp} average units per second by item and task`,
-      summarizeUnitRate(reportData, ["item", "task"]),
-      row => `${row.values[0]} - ${row.values[1]}: ${formatUnitsPerSecond(row.unitsPerSecond)}`
+      `${emp} average seconds per unit by item and task`,
+      summarizeSecondsPerUnit(reportData, ["item", "task"]),
+      row => `${row.values[0]} - ${row.values[1]}: ${formatSecondsPerUnit(row.secondsPerUnit)}`
     );
     return;
   }
@@ -1442,9 +1439,9 @@ function renderSummary() {
   if (item && !task) {
     appendAverageSummaryList(
       summary,
-      `Average units per second by task and employee for ${item}`,
-      summarizeUnitRate(reportData, ["task", "employee"]),
-      row => `${row.values[0]} - ${row.values[1]}: ${formatUnitsPerSecond(row.unitsPerSecond)}`
+      `Average seconds per unit by task and employee for ${item}`,
+      summarizeSecondsPerUnit(reportData, ["task", "employee"]),
+      row => `${row.values[0]} - ${row.values[1]}: ${formatSecondsPerUnit(row.secondsPerUnit)}`
     );
     return;
   }
@@ -1452,9 +1449,9 @@ function renderSummary() {
   if (item || task) {
     appendAverageSummaryList(
       summary,
-      `Average units per second by employee for ${[item, task].filter(Boolean).join(" - ")}`,
-      summarizeUnitRate(reportData, ["employee"]),
-      row => `${row.values[0]}: ${formatUnitsPerSecond(row.unitsPerSecond)}`
+      `Average seconds per unit by employee for ${[item, task].filter(Boolean).join(" - ")}`,
+      summarizeSecondsPerUnit(reportData, ["employee"]),
+      row => `${row.values[0]}: ${formatSecondsPerUnit(row.secondsPerUnit)}`
     );
   }
 }
