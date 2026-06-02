@@ -2123,6 +2123,43 @@ app.get("/admin/entries", (req, res) => {
   });
 });
 
+app.get("/admin/item-task-rate", (req, res) => {
+  const itemName = normalizeRequiredText(req.query.item);
+  const taskName = normalizeRequiredText(req.query.task);
+
+  if (!itemName || !taskName) {
+    return res.status(400).send("Item and task are required");
+  }
+
+  db.get(`
+    SELECT
+      SUM(COALESCE(l.quantity, 0)) AS total_qty,
+      SUM(COALESCE(l.duration_seconds, 0)) AS total_time
+    FROM time_logs l
+    LEFT JOIN items i ON i.id = l.item_id
+    LEFT JOIN tasks t ON t.id = l.task_id
+    WHERE l.end_time IS NOT NULL
+      AND COALESCE(l.quantity, 0) > 0
+      AND COALESCE(l.duration_seconds, 0) > 0
+      AND i.name = ?
+      AND t.name = ?
+  `, [itemName, taskName], (err, row) => {
+    if (err) return res.status(500).send(err.message);
+
+    const totalQty = Number(row && row.total_qty) || 0;
+    const totalTime = Number(row && row.total_time) || 0;
+    const unitsPerHour = totalTime ? (totalQty / totalTime) * 3600 : 0;
+
+    res.json({
+      item: itemName,
+      task: taskName,
+      total_qty: totalQty,
+      total_time: totalTime,
+      units_per_hour: unitsPerHour
+    });
+  });
+});
+
 app.put("/admin/entries/:id", (req, res) => {
   const { employee, work_date } = req.body;
   let { item_id, task_id } = req.body;

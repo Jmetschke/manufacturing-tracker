@@ -463,12 +463,14 @@ function normalizeScheduleAssignments(value, days) {
 function normalizeScheduleTask(task) {
   const text = String(task && task.text ? task.text : "").trim();
   const item = String(task && task.item ? task.item : "").trim();
+  const units = Math.max(0, Number.parseFloat(task && task.units) || 0);
   const days = Math.max(1, Number.parseInt(task && task.days, 10) || 1);
   const totalHours = Math.max(0, Number.parseFloat(task && task.totalHours) || 0);
 
   return {
     text,
     item,
+    units,
     days,
     totalHours,
     assignments: normalizeScheduleAssignments(task && task.assignments, days)
@@ -1871,6 +1873,42 @@ function renderScheduleTaskSelect(select, itemName, selectedTask = "") {
     : "";
 }
 
+function formatEstimatedHours(value) {
+  const hours = Number(value) || 0;
+  if (!hours) return "";
+  return String(Math.round(hours * 100) / 100);
+}
+
+async function autoFillScheduleTaskHours(row, force = false) {
+  if (!force && row.dataset.hoursOverridden === "true") return;
+
+  const unitsInput = row.querySelector(".schedule-task-units");
+  const itemSelect = row.querySelector(".schedule-task-item");
+  const taskSelect = row.querySelector(".schedule-task-input");
+  const hoursInput = row.querySelector(".schedule-task-hours");
+  if (!unitsInput || !itemSelect || !taskSelect || !hoursInput) return;
+
+  const units = Number.parseFloat(unitsInput.value);
+  const item = itemSelect.value;
+  const task = taskSelect.value;
+  if (!Number.isFinite(units) || units <= 0 || !item || !task) return;
+
+  const requestId = String(Date.now());
+  row.dataset.rateRequestId = requestId;
+
+  const params = new URLSearchParams({ item, task });
+  const res = await adminFetch(`/admin/item-task-rate?${params.toString()}`);
+  if (!res.ok || row.dataset.rateRequestId !== requestId) return;
+
+  const rate = await res.json();
+  const unitsPerHour = Number(rate.units_per_hour) || 0;
+  if (unitsPerHour <= 0) return;
+
+  hoursInput.value = formatEstimatedHours(units / unitsPerHour);
+  row.dataset.hoursOverridden = "false";
+  updateScheduleTaskRemaining(row);
+}
+
 function addScheduleTask(value = "", daysValue = 1, rowsId = "scheduleTaskRows") {
   const rows = document.getElementById(rowsId);
   const row = document.createElement("div");
@@ -1890,8 +1928,24 @@ function addScheduleTask(value = "", daysValue = 1, rowsId = "scheduleTaskRows")
   renderScheduleTaskSelect(input, itemSelect.value, task.text || "");
   itemSelect.addEventListener("change", () => {
     renderScheduleTaskSelect(input, itemSelect.value);
+    row.dataset.hoursOverridden = "false";
+    autoFillScheduleTaskHours(row, true);
   });
   row.appendChild(input);
+
+  const units = document.createElement("input");
+  units.type = "number";
+  units.className = "schedule-task-units";
+  units.min = "0";
+  units.step = "1";
+  units.value = task.units || "";
+  units.placeholder = "Units";
+  units.title = "Units";
+  units.addEventListener("input", () => {
+    row.dataset.hoursOverridden = "false";
+    autoFillScheduleTaskHours(row, true);
+  });
+  row.appendChild(units);
 
   const totalHours = document.createElement("input");
   totalHours.type = "number";
@@ -1901,8 +1955,16 @@ function addScheduleTask(value = "", daysValue = 1, rowsId = "scheduleTaskRows")
   totalHours.value = task.totalHours || "";
   totalHours.placeholder = "Total hours";
   totalHours.title = "Total hours";
-  totalHours.addEventListener("input", () => updateScheduleTaskRemaining(row));
+  totalHours.addEventListener("input", () => {
+    row.dataset.hoursOverridden = "true";
+    updateScheduleTaskRemaining(row);
+  });
   row.appendChild(totalHours);
+
+  input.addEventListener("change", () => {
+    row.dataset.hoursOverridden = "false";
+    autoFillScheduleTaskHours(row, true);
+  });
 
   const days = document.createElement("input");
   days.type = "number";
@@ -2130,6 +2192,7 @@ function getScheduleTaskValues(selector) {
       return {
         item: row.querySelector(".schedule-task-item").value.trim(),
         text: row.querySelector(".schedule-task-input").value.trim(),
+        units: Math.max(0, Number.parseFloat(row.querySelector(".schedule-task-units").value) || 0),
         totalHours: Math.max(0, Number.parseFloat(row.querySelector(".schedule-task-hours").value) || 0),
         days,
         assignments: Array.from(row.querySelectorAll(".schedule-assignment-row"))
