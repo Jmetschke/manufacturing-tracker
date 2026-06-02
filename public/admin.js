@@ -1408,6 +1408,12 @@ function renderTable() {
     editButton.textContent = "Edit";
     editButton.addEventListener("click", () => editEntry(entry.log_id));
     actionCell.appendChild(editButton);
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.textContent = "Delete";
+    deleteButton.addEventListener("click", () => deleteEntry(entry.log_id));
+    actionCell.appendChild(deleteButton);
     row.appendChild(actionCell);
 
     table.appendChild(row);
@@ -1530,6 +1536,32 @@ async function saveEntryEdit() {
 
   cancelEntryEdit();
   showMessage("Entry updated.", "success");
+  await loadReport();
+}
+
+async function deleteEntry(logId) {
+  const entry = allEntries.find(item => item.log_id === logId);
+  if (!entry) return;
+
+  const label = `${entry.work_date} - ${entry.employee} - ${entry.item} - ${entry.task}`;
+  const shouldDelete = confirm(`Delete this entry?\n\n${label}\n\nThis cannot be undone.`);
+  if (!shouldDelete) return;
+
+  const res = await adminFetch(`/admin/entries/${logId}`, {
+    method: "DELETE"
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Delete failed: " + text, "error");
+    return;
+  }
+
+  if (document.getElementById("edit_log_id").value === String(logId)) {
+    cancelEntryEdit();
+  }
+
+  showMessage("Entry deleted.", "success");
   await loadReport();
 }
 

@@ -2171,6 +2171,24 @@ app.put("/admin/entries/:id", (req, res) => {
   );
 });
 
+app.delete("/admin/entries/:id", (req, res) => {
+  db.run(
+    `DELETE FROM time_logs
+     WHERE id = ?
+     AND end_time IS NOT NULL`,
+    [req.params.id],
+    function (err) {
+      if (err) return res.status(500).send(err.message);
+
+      if (this.changes === 0) {
+        return res.status(404).send("Completed entry not found");
+      }
+
+      res.json({ message: "Entry deleted" });
+    }
+  );
+});
+
 app.get("/admin/database-status", async (req, res) => {
   try {
     const [entryCountRows, incompleteRows] = await Promise.all([
