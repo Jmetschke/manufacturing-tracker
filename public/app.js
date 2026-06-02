@@ -832,11 +832,19 @@ function appendTestPickupList(container, testPickups) {
 function appendProcessingTaskList(container, processingTasks) {
   if (!processingTasks.length) return;
 
-  const list = document.createElement("div");
-  list.className = "calendar-processing-tasks";
+  const wrapper = document.createElement("div");
+  wrapper.className = "calendar-processing-tasks";
+
+  const heading = document.createElement("div");
+  heading.className = "calendar-processing-heading";
+  heading.textContent = "Processing Tasks";
+  wrapper.appendChild(heading);
+
+  const list = document.createElement("ol");
+  list.className = "calendar-processing-task-list";
 
   groupDailyTaskAssignments(processingTasks).forEach(task => {
-    const item = document.createElement("div");
+    const item = document.createElement("li");
     item.className = "calendar-processing-task";
     item.textContent = task.assignedHours > 0
       ? `${getTaskDisplayText(task)} - ${formatTaskHours(task.assignedHours)}`
@@ -846,7 +854,8 @@ function appendProcessingTaskList(container, processingTasks) {
     list.appendChild(item);
   });
 
-  container.appendChild(list);
+  wrapper.appendChild(list);
+  container.appendChild(wrapper);
 }
 
 function appendEventList(container, events) {

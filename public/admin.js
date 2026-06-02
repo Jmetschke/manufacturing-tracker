@@ -645,11 +645,19 @@ function appendTestPickupList(container, payload) {
 function appendProcessingTaskList(container, processingTasks, className = "calendar-processing-tasks") {
   if (!processingTasks.length) return;
 
-  const list = document.createElement("div");
-  list.className = className;
+  const wrapper = document.createElement("div");
+  wrapper.className = className;
+
+  const heading = document.createElement("div");
+  heading.className = "calendar-processing-heading";
+  heading.textContent = "Processing Tasks";
+  wrapper.appendChild(heading);
+
+  const list = document.createElement("ol");
+  list.className = "calendar-processing-task-list";
 
   groupDailyTaskAssignments(processingTasks).forEach(task => {
-    const item = document.createElement("div");
+    const item = document.createElement("li");
     item.className = "calendar-processing-task";
     item.textContent = task.assignedHours > 0
       ? `${getTaskDisplayText(task)} - ${formatTaskHours(task.assignedHours)}`
@@ -659,7 +667,8 @@ function appendProcessingTaskList(container, processingTasks, className = "calen
     list.appendChild(item);
   });
 
-  container.appendChild(list);
+  wrapper.appendChild(list);
+  container.appendChild(wrapper);
 }
 
 function buildAdminExpectedDeliveriesByDate(items, visibleStart, visibleEnd) {
