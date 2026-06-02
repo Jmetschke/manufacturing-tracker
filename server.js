@@ -499,6 +499,10 @@ const itemTaskNames = Object.freeze({
   ]
 });
 
+const globalItemTaskNames = Object.freeze([
+  "Exit Label Stickering"
+]);
+
 function runSql(sql, params = [], database = db) {
   return new Promise((resolve, reject) => {
     database.run(sql, params, function (err) {
@@ -898,7 +902,7 @@ app.get("/item-task-options", async (req, res) => {
       const itemId = itemIdsByName.get(itemName);
       if (!itemId) return;
 
-      optionsByItemId[itemId] = taskNamesForItem
+      optionsByItemId[itemId] = [...new Set([...taskNamesForItem, ...globalItemTaskNames])]
         .map(taskName => taskIdsByName.get(taskName))
         .filter(taskId => taskId !== undefined);
     });
