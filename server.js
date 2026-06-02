@@ -178,6 +178,9 @@ const itemNames = [
   "Mango 1g",
   "Lemon 1g",
   "Watermelon 1g",
+  "Cherry 2g",
+  "Strawberry 2g",
+  "Peach 2g",
   "Big Stick",
   "Small Stick",
   "Tiny Stick",
@@ -203,7 +206,7 @@ const taskNames = [
   "Popping",
   "Sugaring",
   "Nerding",
-  "Sealing",
+  "SB Sealing",
   "Bagging (10's)",
   "Bagging (20's)",
   "Bagging (SB 25's)",
@@ -225,7 +228,6 @@ const itemTaskNames = Object.freeze({
     "FIlling (Slot Machine)",
     "Capping (Tinctures)",
     "Packaging",
-    "Sealing",
     "Counting (5's)",
     "Bagging (20's)"
   ],
@@ -233,28 +235,24 @@ const itemTaskNames = Object.freeze({
     "FIlling (Slot Machine)",
     "Capping (Tinctures)",
     "Packaging",
-    "Sealing",
     "Counting (5's)",
     "Bagging (20's)"
   ],
   "Main Squeeze Party Pouch": [
     "Depositing (Beldos)",
     "Packaging",
-    "Sealing",
     "Counting (5's)",
     "Bagging (10's)"
   ],
   "Micro Dots (50-piece packs)": [
     "Popping",
     "Packaging",
-    "Sealing",
     "Counting (5's)",
     "Bagging (20's)"
   ],
   "RSO Whoopie Hi": [
     "Depositing (Beldos)",
     "Packaging",
-    "Sealing",
     "Counting (5's)",
     "Bagging (10's)",
     "Packaging Labels Stickering",
@@ -266,7 +264,6 @@ const itemTaskNames = Object.freeze({
     "Popping",
     "Sugaring",
     "Packaging",
-    "Sealing",
     "Counting (5's)",
     "Bagging (20's)",
     "Packaging Labels Stickering",
@@ -278,7 +275,6 @@ const itemTaskNames = Object.freeze({
     "Popping",
     "Sugaring",
     "Packaging",
-    "Sealing",
     "Counting (5's)",
     "Bagging (20's)",
     "Packaging Labels Stickering",
@@ -290,7 +286,6 @@ const itemTaskNames = Object.freeze({
     "Popping",
     "Sugaring",
     "Packaging",
-    "Sealing",
     "Counting (5's)",
     "Bagging (20's)",
     "Packaging Labels Stickering",
@@ -302,7 +297,6 @@ const itemTaskNames = Object.freeze({
     "Popping",
     "Sugaring",
     "Packaging",
-    "Sealing",
     "Counting (5's)",
     "Bagging (20's)",
     "Packaging Labels Stickering",
@@ -314,7 +308,6 @@ const itemTaskNames = Object.freeze({
     "Popping",
     "Sugaring",
     "Packaging",
-    "Sealing",
     "Counting (5's)",
     "Bagging (20's)",
     "Packaging Labels Stickering",
@@ -326,7 +319,6 @@ const itemTaskNames = Object.freeze({
     "Popping",
     "Sugaring",
     "Packaging",
-    "Sealing",
     "Counting (5's)",
     "Bagging (20's)",
     "Packaging Labels Stickering",
@@ -338,7 +330,6 @@ const itemTaskNames = Object.freeze({
     "Popping",
     "Sugaring",
     "Packaging",
-    "Sealing",
     "Counting (5's)",
     "Bagging (20's)",
     "Packaging Labels Stickering",
@@ -350,7 +341,6 @@ const itemTaskNames = Object.freeze({
     "Popping",
     "Sugaring",
     "Packaging",
-    "Sealing",
     "Counting (5's)",
     "Bagging (20's)",
     "Packaging Labels Stickering",
@@ -362,7 +352,6 @@ const itemTaskNames = Object.freeze({
     "Popping",
     "Sugaring",
     "Packaging",
-    "Sealing",
     "Counting (5's)",
     "Bagging (20's)",
     "Packaging Labels Stickering",
@@ -374,7 +363,6 @@ const itemTaskNames = Object.freeze({
     "Popping",
     "Sugaring",
     "Packaging",
-    "Sealing",
     "Counting (5's)",
     "Bagging (20's)",
     "Packaging Labels Stickering",
@@ -387,7 +375,6 @@ const itemTaskNames = Object.freeze({
     "Popping",
     "Sugaring",
     "Packaging",
-    "Sealing",
     "Counting (5's)",
     "Bagging (20's)",
     "Packaging Labels Stickering",
@@ -400,7 +387,6 @@ const itemTaskNames = Object.freeze({
     "Popping",
     "Sugaring",
     "Packaging",
-    "Sealing",
     "Counting (5's)",
     "Bagging (20's)",
     "Packaging Labels Stickering",
@@ -412,7 +398,6 @@ const itemTaskNames = Object.freeze({
     "Popping",
     "Sugaring",
     "Packaging",
-    "Sealing",
     "Counting (5's)",
     "Bagging (20's)",
     "Packaging Labels Stickering",
@@ -439,28 +424,49 @@ const itemTaskNames = Object.freeze({
   "Grape 1g": [
     "Filling (SB Vapes)",
     "Capping (SB Vapes)",
-    "Sealing",
+    "SB Sealing",
     "Counting (SB 5's)",
     "Bagging (SB 25's)"
   ],
   "Mango 1g": [
     "Filling (SB Vapes)",
     "Capping (SB Vapes)",
-    "Sealing",
+    "SB Sealing",
     "Counting (SB 5's)",
     "Bagging (SB 25's)"
   ],
   "Lemon 1g": [
     "Filling (SB Vapes)",
     "Capping (SB Vapes)",
-    "Sealing",
+    "SB Sealing",
     "Counting (SB 5's)",
     "Bagging (SB 25's)"
   ],
   "Watermelon 1g": [
     "Filling (SB Vapes)",
     "Capping (SB Vapes)",
-    "Sealing",
+    "SB Sealing",
+    "Counting (SB 5's)",
+    "Bagging (SB 25's)"
+  ],
+  "Cherry 2g": [
+    "Filling (SB Vapes)",
+    "Capping (SB Vapes)",
+    "SB Sealing",
+    "Counting (SB 5's)",
+    "Bagging (SB 25's)"
+  ],
+  "Strawberry 2g": [
+    "Filling (SB Vapes)",
+    "Capping (SB Vapes)",
+    "SB Sealing",
+    "Counting (SB 5's)",
+    "Bagging (SB 25's)"
+  ],
+  "Peach 2g": [
+    "Filling (SB Vapes)",
+    "Capping (SB Vapes)",
+    "SB Sealing",
     "Counting (SB 5's)",
     "Bagging (SB 25's)"
   ],
@@ -468,14 +474,12 @@ const itemTaskNames = Object.freeze({
     "Filling (Filling Machine)",
     "Capping (Topicals)",
     "Packaging",
-    "Sealing",
     "Bagging (10's)"
   ],
   "Small Stick": [
     "Filling (Filling Machine)",
     "Capping (Topicals)",
     "Packaging",
-    "Sealing",
     "Counting (5's)",
     "Bagging (20's)"
   ],
@@ -483,7 +487,6 @@ const itemTaskNames = Object.freeze({
     "Filling (Filling Machine)",
     "Capping (Topicals)",
     "Packaging",
-    "Sealing",
     "Counting (5's)",
     "Bagging (20's)"
   ],
@@ -882,7 +885,7 @@ app.get("/items", (req, res) => {
 
 /* ---------- TASKS ---------- */
 app.get("/tasks", (req, res) => {
-  db.all("SELECT * FROM tasks", [], (err, rows) => {
+  db.all("SELECT * FROM tasks WHERE name <> 'Sealing'", [], (err, rows) => {
     if (err) return res.status(500).send(err.message);
     res.json(rows);
   });
