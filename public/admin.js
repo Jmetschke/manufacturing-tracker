@@ -1998,6 +1998,12 @@ async function updateBatchTrackerChecklist(batch, nextChecklist) {
   await loadBatchTracker();
 }
 
+function formatBatchTrackerDayHeading(isoDate) {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return `${dayNames[date.getDay()]} ${formatDisplayDate(isoDate)}`;
+}
+
 function renderBatchTrackerSection(containerId, batches, emptyText, completed = false) {
   const container = document.getElementById(containerId);
   container.innerHTML = "";
@@ -2010,7 +2016,30 @@ function renderBatchTrackerSection(containerId, batches, emptyText, completed = 
     return;
   }
 
-  batches.forEach(batch => container.appendChild(createBatchTrackerCard(batch, completed)));
+  const batchesByDate = new Map();
+  batches.forEach(batch => {
+    if (!batchesByDate.has(batch.scheduleDate)) {
+      batchesByDate.set(batch.scheduleDate, []);
+    }
+    batchesByDate.get(batch.scheduleDate).push(batch);
+  });
+
+  batchesByDate.forEach((dayBatches, scheduleDate) => {
+    const dayGroup = document.createElement("section");
+    dayGroup.className = "batch-tracker-day";
+
+    const heading = document.createElement("div");
+    heading.className = "batch-tracker-day-heading";
+    heading.textContent = formatBatchTrackerDayHeading(scheduleDate);
+    dayGroup.appendChild(heading);
+
+    const cards = document.createElement("div");
+    cards.className = "batch-tracker-day-cards";
+    dayBatches.forEach(batch => cards.appendChild(createBatchTrackerCard(batch, completed)));
+    dayGroup.appendChild(cards);
+
+    container.appendChild(dayGroup);
+  });
 }
 
 async function loadBatchTracker() {
