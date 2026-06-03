@@ -134,17 +134,59 @@
       border-left: 3px solid #176a2c;
       padding: 5px 6px;
     }
+    .schedule-editor {
+      background: #f8faf5;
+      border: 1px solid #d8ded3;
+      padding: 14px;
+    }
+    .schedule-editor-header h3 {
+      margin: 0 0 4px;
+    }
+    .schedule-editor-flow {
+      display: grid;
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .schedule-editor-group {
+      background: #fff;
+      border: 1px solid #d8ded3;
+      border-left: 5px solid #4f5f47;
+      padding: 12px;
+    }
+    .schedule-editor-group.event-group { border-left-color: #7c5cc4; }
+    .schedule-editor-group.batch-group { border-left-color: #2364aa; }
+    .schedule-editor-group.schedule-task-section { border-left-color: #d08a1f; }
+    .schedule-editor-group.pickup-group { border-left-color: #be5b2a; }
+    .schedule-editor-group.processing-group { border-left-color: #5d9b45; }
+    .schedule-editor-section-header {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .schedule-editor-section-header h4 {
+      border: 0;
+      margin: 0;
+      padding: 0;
+    }
+    .schedule-editor-section-header button {
+      margin: 0;
+    }
     .batch-fields {
       display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 12px;
+    }
+    .batch-field {
+      display: grid;
       gap: 8px;
-      margin-top: 10px;
-      max-width: 860px;
+      min-width: 0;
     }
     .event-fields {
       display: grid;
       gap: 8px;
-      margin-top: 10px;
-      max-width: 980px;
     }
     .event-row {
       border: 1px solid #ccc;
@@ -186,11 +228,14 @@
       width: 100%;
     }
     .batch-row {
+      background: #fbfcfa;
+      border: 1px solid #d8ded3;
       display: grid;
       grid-template-columns: 34px minmax(180px, 1fr) 110px auto;
-      gap: 6px;
+      gap: 8px;
       align-items: center;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
+      padding: 8px;
     }
     .batch-order {
       font-weight: bold;
@@ -210,7 +255,7 @@
       grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
       gap: 6px;
       padding: 8px;
-      background: #fff;
+      background: #f7f8f4;
       border-left: 3px solid #d8ded3;
     }
     .batch-checklist-item {
@@ -242,19 +287,39 @@
     }
     .calendar-day-focus-body {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 10px;
+      gap: 12px;
+      grid-template-columns: 1fr;
     }
+    .calendar-focus-section {
+      background: #fff;
+      border: 1px solid #d8ded3;
+      border-left: 5px solid #4f5f47;
+      padding: 10px;
+    }
+    .calendar-focus-section.focus-events { border-left-color: #7c5cc4; }
+    .calendar-focus-section.focus-batches { border-left-color: #2364aa; }
+    .calendar-focus-section.focus-kitchen { border-left-color: #d08a1f; }
+    .calendar-focus-section.focus-deliveries { border-left-color: #176a2c; }
+    .calendar-focus-section.focus-pickups { border-left-color: #be5b2a; }
+    .calendar-focus-section.focus-processing { border-left-color: #5d9b45; }
     .calendar-focus-section h4 {
-      margin: 0 0 6px;
+      border-bottom: 1px solid #edf0e8;
+      margin: 0 0 8px;
+      padding-bottom: 6px;
     }
     .calendar-focus-item,
     .calendar-focus-empty {
       background: #f7f8f4;
       border-left: 3px solid #4f5f47;
-      padding: 6px 8px;
-      margin-bottom: 6px;
+      padding: 8px;
+      margin-bottom: 8px;
     }
+    .calendar-focus-section.focus-events .calendar-focus-item { border-left-color: #7c5cc4; }
+    .calendar-focus-section.focus-batches .calendar-focus-item { border-left-color: #2364aa; }
+    .calendar-focus-section.focus-kitchen .calendar-focus-item { border-left-color: #d08a1f; }
+    .calendar-focus-section.focus-deliveries .calendar-focus-item { border-left-color: #176a2c; }
+    .calendar-focus-section.focus-pickups .calendar-focus-item { border-left-color: #be5b2a; }
+    .calendar-focus-section.focus-processing .calendar-focus-item { border-left-color: #5d9b45; }
     .calendar-focus-item ul {
       margin: 4px 0 0 18px;
       padding: 0;
@@ -461,19 +526,7 @@
     }
     .schedule-task-section {
       display: grid;
-      gap: 8px;
-      margin-top: 14px;
-      max-width: 1180px;
-    }
-    .schedule-task-section h4 {
-      border-top: 1px solid #d8ded3;
-      margin: 10px 0 0;
-      padding-top: 12px;
-    }
-    .schedule-task-section h4:first-child {
-      border-top: 0;
-      margin-top: 0;
-      padding-top: 0;
+      gap: 10px;
     }
     .schedule-task-row {
       display: grid;
@@ -485,6 +538,9 @@
       border: 1px solid #d8ded3;
       background: #fbfcfa;
       padding: 10px;
+    }
+    .schedule-task-row:last-child {
+      margin-bottom: 0;
     }
     .schedule-task-field {
       display: grid;
@@ -506,10 +562,12 @@
     }
     .schedule-assignment-panel {
       grid-column: 2 / -1;
+      background: #fff;
+      border: 1px solid #e3e8dc;
       border-left: 3px solid #d8ded3;
-      padding-left: 10px;
       display: grid;
       gap: 6px;
+      padding: 8px 10px;
     }
     .schedule-assignment-header,
     .schedule-assignment-row {
@@ -529,12 +587,14 @@
       color: #9a3412;
     }
     .test-pickup-row {
+      background: #fbfcfa;
+      border: 1px solid #d8ded3;
       display: grid;
       grid-template-columns: 34px 110px minmax(220px, 1fr) auto;
-      gap: 6px;
+      gap: 8px;
       align-items: start;
-      margin-bottom: 6px;
-      max-width: 860px;
+      margin-bottom: 8px;
+      padding: 8px;
     }
     .schedule-task-order {
       font-weight: bold;
@@ -1085,38 +1145,63 @@
   </section>
 
   <section id="scheduleEditor" class="edit-panel schedule-editor">
-    <h3>Edit Calendar Day</h3>
+    <div class="schedule-editor-header">
+      <div>
+        <h3>Edit Calendar Day</h3>
+        <div><b id="scheduleEditLabel"></b></div>
+      </div>
+    </div>
     <input type="hidden" id="schedule_edit_date">
-    <div><b id="scheduleEditLabel"></b></div>
-    <div class="event-fields">
-      <div class="batch-field">
-        <label>Events</label>
-        <div id="eventRows"></div>
-        <button type="button" onclick="addEventEntry()">Add Event</button>
-      </div>
-    </div>
-    <div class="batch-fields">
-      <div class="batch-field">
-        <label>Production Batch - Hijnx</label>
-        <div id="batchHijnxRows"></div>
-        <button type="button" onclick="addBatchEntry('hijnx')">Add Hijnx Batch</button>
-      </div>
-      <div class="batch-field">
-        <label>Production Batch - SB</label>
-        <div id="batchSbRows"></div>
-        <button type="button" onclick="addBatchEntry('sb')">Add SB Batch</button>
-      </div>
-    </div>
-    <div class="schedule-task-section">
-      <h4>Kitchen Tasks</h4>
-      <div id="scheduleTaskRows"></div>
-      <button type="button" onclick="addScheduleTask()">Add Task</button>
-      <h4>Test Pick Ups</h4>
-      <div id="testPickupRows"></div>
-      <button type="button" onclick="addTestPickup()">Add Test Pick Up</button>
-      <h4>Processing Tasks</h4>
-      <div id="processingTaskRows"></div>
-      <button type="button" onclick="addScheduleTask('', 1, 'processingTaskRows')">Add Processing Task</button>
+    <div class="schedule-editor-flow">
+      <section class="schedule-editor-group event-group">
+        <div class="schedule-editor-section-header">
+          <h4>Events</h4>
+          <button type="button" onclick="addEventEntry()">Add Event</button>
+        </div>
+        <div class="event-fields">
+          <div class="batch-field">
+            <div id="eventRows"></div>
+          </div>
+        </div>
+      </section>
+      <section class="schedule-editor-group batch-group">
+        <div class="schedule-editor-section-header">
+          <h4>Production Batches</h4>
+        </div>
+        <div class="batch-fields">
+          <div class="batch-field">
+            <label>Hijnx</label>
+            <div id="batchHijnxRows"></div>
+            <button type="button" onclick="addBatchEntry('hijnx')">Add Hijnx Batch</button>
+          </div>
+          <div class="batch-field">
+            <label>SB</label>
+            <div id="batchSbRows"></div>
+            <button type="button" onclick="addBatchEntry('sb')">Add SB Batch</button>
+          </div>
+        </div>
+      </section>
+      <section class="schedule-editor-group schedule-task-section">
+        <div class="schedule-editor-section-header">
+          <h4>Kitchen Tasks</h4>
+          <button type="button" onclick="addScheduleTask()">Add Task</button>
+        </div>
+        <div id="scheduleTaskRows"></div>
+      </section>
+      <section class="schedule-editor-group pickup-group">
+        <div class="schedule-editor-section-header">
+          <h4>Test Pick Ups</h4>
+          <button type="button" onclick="addTestPickup()">Add Test Pick Up</button>
+        </div>
+        <div id="testPickupRows"></div>
+      </section>
+      <section class="schedule-editor-group processing-group">
+        <div class="schedule-editor-section-header">
+          <h4>Processing Tasks</h4>
+          <button type="button" onclick="addScheduleTask('', 1, 'processingTaskRows')">Add Processing Task</button>
+        </div>
+        <div id="processingTaskRows"></div>
+      </section>
     </div>
     <div class="edit-actions">
       <button type="button" onclick="saveScheduleDay()">Save Day</button>

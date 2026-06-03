@@ -1191,9 +1191,9 @@ function renderAdminFocusedDay(isoDate, payload, projectedTasks, projectedProces
   title.textContent = formatDisplayDate(isoDate);
   body.innerHTML = "";
 
-  const section = (headingText, fill) => {
+  const section = (headingText, fill, className) => {
     const block = document.createElement("div");
-    block.className = "calendar-focus-section";
+    block.className = `calendar-focus-section ${className}`;
     const heading = document.createElement("h4");
     heading.textContent = headingText;
     block.appendChild(heading);
@@ -1204,7 +1204,7 @@ function renderAdminFocusedDay(isoDate, payload, projectedTasks, projectedProces
   section("Events", block => appendFocusLines(block, events, event => {
     const timeText = event.start && event.end ? ` ${event.start}-${event.end}` : "";
     return `${event.title}${timeText} - ${event.location} - ${event.company}`;
-  }, "No events scheduled."));
+  }, "No events scheduled."), "focus-events");
 
   section("Production Batches", block => {
     const batches = [
@@ -1216,7 +1216,7 @@ function renderAdminFocusedDay(isoDate, payload, projectedTasks, projectedProces
       return;
     }
     batches.forEach(batch => appendBatchDetail(block, batch));
-  });
+  }, "focus-batches");
 
   section("Kitchen Tasks", block => {
     const groups = groupDailyTaskAssignments(projectedTasks);
@@ -1256,17 +1256,17 @@ function renderAdminFocusedDay(isoDate, payload, projectedTasks, projectedProces
 
       block.appendChild(item);
     });
-  });
+  }, "focus-kitchen");
 
   section("Deliveries", block => appendFocusLines(block, deliveries, delivery =>
     `${delivery.calendar_delivery_status}: ${delivery.item_name} - QTY ${delivery.package_qty || ""}`.trim(),
-  "No deliveries."));
+  "No deliveries."), "focus-deliveries");
 
   section("Test Pick Ups", block => appendFocusLines(block, payload.testPickups, pickup =>
     `Test Pick Up ${pickup.time}: ${pickup.items.join(", ")}`,
-  "No test pick ups."));
+  "No test pick ups."), "focus-pickups");
 
-  section("Processing Tasks", block => appendTaskFocusDetails(block, projectedProcessingTasks, "No processing tasks."));
+  section("Processing Tasks", block => appendTaskFocusDetails(block, projectedProcessingTasks, "No processing tasks."), "focus-processing");
 
   panel.hidden = false;
   panel.scrollIntoView({ block: "start", behavior: "smooth" });
@@ -2769,14 +2769,16 @@ function buildSchedulePayload(includeTasks = true) {
 function editScheduleDay(isoDate) {
   const payload = parseSchedulePayload(adminScheduleRows.get(isoDate));
   const isWeekendDay = isWeekendIsoDate(isoDate);
-  const taskSection = document.querySelector(".schedule-task-section");
+  const taskSections = document.querySelectorAll(".schedule-task-section, .pickup-group, .processing-group");
 
   document.getElementById("schedule_edit_date").value = isoDate;
   document.getElementById("scheduleEditLabel").textContent = formatDisplayDate(isoDate);
   populateEventRows(payload.events);
   populateBatchRows("hijnx", payload.batchHijnx);
   populateBatchRows("sb", payload.batchSb);
-  taskSection.hidden = isWeekendDay;
+  taskSections.forEach(section => {
+    section.hidden = isWeekendDay;
+  });
   populateScheduleTaskRows(isWeekendDay ? "" : adminScheduleRows.get(isoDate) || "");
   populateTestPickupRows(isWeekendDay ? [] : payload.testPickups);
   populateScheduleTaskRows(isWeekendDay ? [] : payload.processingTasks, "processingTaskRows", false);
@@ -2794,7 +2796,9 @@ function cancelScheduleEdit() {
   document.getElementById("scheduleTaskRows").innerHTML = "";
   document.getElementById("testPickupRows").innerHTML = "";
   document.getElementById("processingTaskRows").innerHTML = "";
-  document.querySelector(".schedule-task-section").hidden = false;
+  document.querySelectorAll(".schedule-task-section, .pickup-group, .processing-group").forEach(section => {
+    section.hidden = false;
+  });
 }
 
 async function saveScheduleDay() {
