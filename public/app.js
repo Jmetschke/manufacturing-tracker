@@ -407,6 +407,10 @@ function formatDisplayDate(isoDate) {
   return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
+function isIsoDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+}
+
 function normalizeBatchList(value) {
   if (Array.isArray(value)) {
     return value
@@ -578,12 +582,16 @@ function normalizeScheduleAssignments(value, days) {
 function normalizeScheduleTask(task) {
   const text = String(task && task.text ? task.text : "").trim();
   const item = String(task && task.item ? task.item : "").trim();
+  const units = Math.max(0, Number.parseFloat(task && task.units) || 0);
+  const scheduleDate = isIsoDate(task && task.scheduleDate) ? task.scheduleDate : "";
   const days = Math.max(1, Number.parseInt(task && task.days, 10) || 1);
   const totalHours = Math.max(0, Number.parseFloat(task && task.totalHours) || 0);
 
   return {
     text,
     item,
+    units,
+    scheduleDate,
     days,
     totalHours,
     assignments: normalizeScheduleAssignments(task && task.assignments, days)
@@ -1226,7 +1234,7 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
 
   rows.forEach(row => {
     const [year, month, day] = row.schedule_date.split("-").map(Number);
-    const startDate = new Date(year, month - 1, day);
+    const rowStartDate = new Date(year, month - 1, day);
     const payload = parseSchedulePayload(row.tasks);
 
     if (activeSchedule.has(row.schedule_date)) {
@@ -1234,7 +1242,6 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
       scheduleDay.batchHijnx = payload.batchHijnx;
       scheduleDay.batchSb = payload.batchSb;
       scheduleDay.testPickups = payload.testPickups;
-      scheduleDay.processingTasks = payload.processingTasks;
     }
 
     payload.events.forEach(event => {
@@ -1263,6 +1270,9 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
 
     payload.tasks.forEach(task => {
       let remainingHours = task.totalHours;
+      const startDate = isIsoDate(task.scheduleDate)
+        ? dateOnly(new Date(`${task.scheduleDate}T00:00:00`))
+        : rowStartDate;
       const workDates = getProjectedWorkDates(startDate, task.days);
 
       workDates.forEach((activeDate, dayIndex) => {
@@ -1308,6 +1318,9 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
 
     payload.processingTasks.forEach(task => {
       let remainingHours = task.totalHours;
+      const startDate = isIsoDate(task.scheduleDate)
+        ? dateOnly(new Date(`${task.scheduleDate}T00:00:00`))
+        : rowStartDate;
       const workDates = getProjectedWorkDates(startDate, task.days);
 
       workDates.forEach((activeDate, dayIndex) => {

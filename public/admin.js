@@ -102,11 +102,15 @@ const batchTaskTemplatesByItem = {
   "Space Chunk ALPHA OG 2 chunk (units)": chunkBatchTaskTemplate,
   "Space Chunk REX OG 1 chunk (units)": chunkBatchTaskTemplate,
   "Space Chunk REX OG 2 chunk (units)": chunkBatchTaskTemplate,
+  "Space Chunk ZUUL OG 1 chunk (units)": chunkBatchTaskTemplate,
   "Space Chunk ZUUL OG 2 chunk (units)": chunkBatchTaskTemplate,
+  "Space Chunk 1 chunk CBD 50mg 1-1 (pcs)": chunkBatchTaskTemplate,
+  "Space Chunks CBD 2 chunks 1-1 (units)": chunkBatchTaskTemplate,
   "Space Chunk CBN 1 chunk (pcs)": chunkBatchTaskTemplate,
   "Space Chunk CBN 2 chunk (units)": chunkBatchTaskTemplate,
   "Space Chunk Mini 10 chunk (units)": miniBatchTaskTemplate,
   "Space Chunk SUGAR FREE 10pk (units)": miniBatchTaskTemplate,
+  "Space Chunk SUGAR FREE 2pk (units)": chunkBatchTaskTemplate,
   "Shooters Triple Citrus": shooterBatchTaskTemplate,
   "Shooters Sour Watermelon": shooterBatchTaskTemplate,
   "Shooters Sour Blu Raz": shooterBatchTaskTemplate,
@@ -119,7 +123,7 @@ const batchTaskTemplatesByItem = {
   "Peach 2g": sbVapeBatchTaskTemplate
 };
 const productionBatchItemAliases = {
-  "Alpha Chunk - 1pk": "Space Chunk ALPHA OG 2 chunk (units)",
+  "Alpha Chunk - 1pk": "Space Chunk OG 1 chunk (pcs)",
   "Alpha Chunk - 2pk": "Space Chunk ALPHA OG 2 chunk (units)",
   "Chill Chunk - 1pk": "Space Chunk CBN 1 chunk (pcs)",
   "Chill Chunk - 2pk": "Space Chunk CBN 2 chunk (units)",
@@ -129,6 +133,8 @@ const productionBatchItemAliases = {
   "MiNi's Chunks - 10pk": "Space Chunk Mini 10 chunk (units)",
   "Micro Dots": "Micro Dots (50-piece packs)",
   "Rex Chunk - 2pk": "Space Chunk REX OG 2 chunk (units)",
+  "Sleep Chunk - 1pk": "Space Chunk CBN 1 chunk (pcs)",
+  "Sleep Chunk - 2pk": "Space Chunk CBN 2 chunk (units)",
   "Sugar Free MiNi's - 10pk": "Space Chunk SUGAR FREE 10pk (units)",
   "Whoopie Hi": "RSO Whoopie Hi",
   "Zuul Chunk - 2pk": "Space Chunk ZUUL OG 2 chunk (units)",
@@ -400,6 +406,10 @@ function formatDisplayDate(isoDate) {
   return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
 }
 
+function isIsoDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+}
+
 function normalizeBatchList(value) {
   if (Array.isArray(value)) {
     return value
@@ -574,6 +584,7 @@ function normalizeScheduleTask(task) {
   const units = Math.max(0, Number.parseFloat(task && task.units) || 0);
   const days = Math.max(1, Number.parseInt(task && task.days, 10) || 1);
   const totalHours = Math.max(0, Number.parseFloat(task && task.totalHours) || 0);
+  const scheduleDate = isIsoDate(task && task.scheduleDate) ? task.scheduleDate : "";
   const sourceBatchKey = String(task && task.sourceBatchKey ? task.sourceBatchKey : "").trim();
   const sourceBatchLabel = String(task && task.sourceBatchLabel ? task.sourceBatchLabel : "").trim();
   const sourceTaskOrder = Number.parseInt(task && task.sourceTaskOrder, 10);
@@ -583,6 +594,7 @@ function normalizeScheduleTask(task) {
     text,
     item,
     units,
+    scheduleDate,
     days,
     totalHours,
     assignments: normalizeScheduleAssignments(task && task.assignments, days),
@@ -739,11 +751,14 @@ function buildAdminProjectedTasksByDate(rows, visibleStart, visibleEnd, taskSele
 
   rows.forEach(row => {
     const [year, month, day] = row.schedule_date.split("-").map(Number);
-    const startDate = new Date(year, month - 1, day);
+    const rowStartDate = new Date(year, month - 1, day);
     const payload = parseSchedulePayload(row.tasks);
 
     taskSelector(payload).forEach(task => {
       let remainingHours = task.totalHours;
+      const startDate = isIsoDate(task.scheduleDate)
+        ? dateOnly(new Date(`${task.scheduleDate}T00:00:00`))
+        : rowStartDate;
       const workDates = getProjectedWorkDates(startDate, task.days);
 
       workDates.forEach((activeDate, dayIndex) => {
@@ -1068,6 +1083,9 @@ function syncGeneratedBatchTasksFromBatches() {
           item: itemName,
           text: templateTask.task,
           units: batchUnits,
+          scheduleDate: existing && existing.scheduleDate
+            ? existing.scheduleDate
+            : document.getElementById("schedule_edit_date").value || "",
           totalHours: preserveHours ? existing.totalHours : 0,
           days: existing ? existing.days : 1,
           assignments: existing ? existing.assignments : [],
@@ -2523,6 +2541,13 @@ function createScheduleItemSelect(value = "") {
     select.appendChild(option);
   });
 
+  if (value && !allItems.some(item => item.name === value)) {
+    const existingOption = document.createElement("option");
+    existingOption.value = value;
+    existingOption.text = value;
+    select.appendChild(existingOption);
+  }
+
   select.value = value;
   return select;
 }
@@ -2667,6 +2692,14 @@ function addScheduleTask(value = "", daysValue = 1, rowsId = "scheduleTaskRows")
     updateScheduleTaskRemaining(row);
   });
   row.appendChild(createScheduleTaskField("Hours", totalHours));
+
+  const scheduleDate = document.createElement("input");
+  scheduleDate.type = "date";
+  scheduleDate.className = "schedule-task-date";
+  scheduleDate.value = isIsoDate(task.scheduleDate)
+    ? task.scheduleDate
+    : document.getElementById("schedule_edit_date").value || "";
+  row.appendChild(createScheduleTaskField("Task Date", scheduleDate));
 
   input.addEventListener("change", () => {
     row.dataset.hoursOverridden = "false";
@@ -2911,6 +2944,7 @@ function getScheduleTaskValues(selector) {
         item: row.querySelector(".schedule-task-item").value.trim(),
         text: row.querySelector(".schedule-task-input").value.trim(),
         units: Math.max(0, Number.parseFloat(row.querySelector(".schedule-task-units").value) || 0),
+        scheduleDate: row.querySelector(".schedule-task-date").value || "",
         totalHours: Math.max(0, Number.parseFloat(row.querySelector(".schedule-task-hours").value) || 0),
         days,
         assignments: Array.from(row.querySelectorAll(".schedule-assignment-row"))
