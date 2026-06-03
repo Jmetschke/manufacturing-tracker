@@ -770,6 +770,12 @@ function appendBatchDetail(container, batch) {
     : `${batch.label}: ${batch.item}`;
   item.appendChild(title);
 
+  if (batch.scheduleDate) {
+    const date = document.createElement("div");
+    date.textContent = `Scheduled: ${formatDisplayDate(batch.scheduleDate)}`;
+    item.appendChild(date);
+  }
+
   const status = document.createElement("div");
   status.textContent = getBatchStatusText(batch);
   item.appendChild(status);
@@ -783,6 +789,192 @@ function appendBatchDetail(container, batch) {
   item.appendChild(list);
 
   container.appendChild(item);
+}
+
+function countGroupedTasks(tasks) {
+  return groupDailyTaskAssignments(tasks).length;
+}
+
+function createDailyReportCard({ title, count, note, className, onFocus }) {
+  const card = document.createElement("button");
+  card.type = "button";
+  card.className = `daily-report-card ${className}`;
+  card.addEventListener("click", onFocus);
+
+  const heading = document.createElement("h4");
+  heading.textContent = title;
+  card.appendChild(heading);
+
+  const countElement = document.createElement("div");
+  countElement.className = "daily-report-card-count";
+  countElement.textContent = String(count);
+  card.appendChild(countElement);
+
+  const noteElement = document.createElement("div");
+  noteElement.className = "daily-report-card-note";
+  noteElement.textContent = note;
+  card.appendChild(noteElement);
+
+  return card;
+}
+
+function showDailyReportFocus(titleText, fill) {
+  const panel = document.getElementById("dailyReportFocus");
+  const title = document.getElementById("dailyReportFocusTitle");
+  const body = document.getElementById("dailyReportFocusBody");
+  if (!panel || !title || !body) return;
+
+  title.textContent = titleText;
+  body.innerHTML = "";
+  fill(body);
+  panel.hidden = false;
+}
+
+function getBatchesFromScheduleRows(rows) {
+  return rows.flatMap(row => {
+    const payload = parseSchedulePayload(row.tasks);
+    return [
+      ...payload.batchHijnx.map(batch => ({ label: "Hijnx", scheduleDate: row.schedule_date, ...batch })),
+      ...payload.batchSb.map(batch => ({ label: "SB", scheduleDate: row.schedule_date, ...batch }))
+    ];
+  });
+}
+
+function renderDailyWorkingBatches(batches) {
+  const container = document.getElementById("dailyWorkingBatches");
+  container.innerHTML = "";
+
+  const workingBatches = batches.filter(batch => {
+    const progress = getBatchProgress(batch);
+    return progress.completed < progress.total;
+  });
+
+  if (!workingBatches.length) {
+    const empty = document.createElement("div");
+    empty.className = "calendar-focus-empty";
+    empty.textContent = "No working batches.";
+    container.appendChild(empty);
+    return;
+  }
+
+  workingBatches.forEach(batch => {
+    const progress = getBatchProgress(batch);
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "daily-working-batch";
+    card.addEventListener("click", () => showDailyReportFocus("Working Batch", body => appendBatchDetail(body, batch)));
+
+    const pie = document.createElement("div");
+    pie.className = "daily-batch-pie";
+    pie.style.setProperty("--progress", `${progress.percent}%`);
+    card.appendChild(pie);
+
+    const text = document.createElement("div");
+    const title = document.createElement("div");
+    title.className = "daily-working-batch-title";
+    title.textContent = `${batch.label}: ${batch.item}`;
+    text.appendChild(title);
+
+    if (batch.scheduleDate) {
+      const scheduled = document.createElement("div");
+      scheduled.className = "daily-working-batch-note";
+      scheduled.textContent = formatDisplayDate(batch.scheduleDate);
+      text.appendChild(scheduled);
+    }
+
+    const note = document.createElement("div");
+    note.className = "daily-working-batch-note";
+    note.textContent = getBatchStatusText(batch);
+    text.appendChild(note);
+
+    card.appendChild(text);
+    container.appendChild(card);
+  });
+}
+
+async function loadDailyReport() {
+  const today = toIsoDate(new Date());
+  const todayDate = dateOnly(new Date());
+  const from = toIsoDate(addDays(todayDate, -180));
+  const scheduleRes = await fetch(`/schedule?from=${from}&to=${today}`);
+
+  if (!scheduleRes.ok) {
+    return;
+  }
+
+  const rows = await scheduleRes.json();
+  const scheduleByDate = buildActiveScheduleByDate(rows, todayDate, todayDate);
+  const scheduleDay = scheduleByDate.get(today) || {
+    batchHijnx: [],
+    batchSb: [],
+    events: [],
+    tasks: [],
+    testPickups: [],
+    processingTasks: []
+  };
+  const batches = [
+    ...(scheduleDay.batchHijnx || []).map(batch => ({ label: "Hijnx", ...batch })),
+    ...(scheduleDay.batchSb || []).map(batch => ({ label: "SB", ...batch }))
+  ];
+  const workingBatches = getBatchesFromScheduleRows(rows);
+
+  document.getElementById("dailyReportTitle").textContent = `Daily Report - ${formatDisplayDate(today)}`;
+  document.getElementById("dailyReportFocus").hidden = true;
+
+  const grid = document.getElementById("dailyReportGrid");
+  grid.innerHTML = "";
+
+  const cards = [
+    createDailyReportCard({
+      title: "Production Batches",
+      count: batches.length,
+      note: batches.length ? "Tap to review batch details" : "No batches scheduled",
+      className: "batches",
+      onFocus: () => showDailyReportFocus("Production Batches", body => {
+        if (!batches.length) {
+          body.appendChild(createFocusEmpty("No production batches."));
+          return;
+        }
+        batches.forEach(batch => appendBatchDetail(body, batch));
+      })
+    }),
+    createDailyReportCard({
+      title: "Kitchen Tasks",
+      count: countGroupedTasks(scheduleDay.tasks || []),
+      note: scheduleDay.tasks.length ? "Tap to review assignments" : "No kitchen tasks scheduled",
+      className: "kitchen",
+      onFocus: () => showDailyReportFocus("Kitchen Tasks", body => appendTaskFocusDetails(body, scheduleDay.tasks || [], "No kitchen tasks scheduled."))
+    }),
+    createDailyReportCard({
+      title: "Processing Tasks",
+      count: countGroupedTasks(scheduleDay.processingTasks || []),
+      note: scheduleDay.processingTasks.length ? "Tap to review assignments" : "No processing tasks scheduled",
+      className: "processing",
+      onFocus: () => showDailyReportFocus("Processing Tasks", body => appendTaskFocusDetails(body, scheduleDay.processingTasks || [], "No processing tasks."))
+    }),
+    createDailyReportCard({
+      title: "Events",
+      count: scheduleDay.events.length,
+      note: scheduleDay.events.length ? "Tap to review event details" : "No events scheduled",
+      className: "events",
+      onFocus: () => showDailyReportFocus("Events", body => appendFocusLines(body, scheduleDay.events || [], event => {
+        const timeText = event.start && event.end ? ` ${event.start}-${event.end}` : "";
+        return `${event.title}${timeText} - ${event.location} - ${event.company}`;
+      }, "No events scheduled."))
+    }),
+    createDailyReportCard({
+      title: "Test Pick Ups",
+      count: scheduleDay.testPickups.length,
+      note: scheduleDay.testPickups.length ? "Tap to review pickup details" : "No test pick ups scheduled",
+      className: "pickups",
+      onFocus: () => showDailyReportFocus("Test Pick Ups", body => appendFocusLines(body, scheduleDay.testPickups || [], pickup =>
+        `Test Pick Up ${pickup.time}: ${pickup.items.join(", ")}`,
+      "No test pick ups."))
+    })
+  ];
+
+  cards.forEach(card => grid.appendChild(card));
+  renderDailyWorkingBatches(workingBatches);
 }
 
 function renderFocusedScheduleDay(isoDate, scheduleDay, deliveries) {
@@ -1291,26 +1483,36 @@ function showTab(tabName) {
   const trackerTab = document.getElementById("trackerTab");
   const calculatorTab = document.getElementById("calculatorTab");
   const scheduleTab = document.getElementById("scheduleTab");
+  const dailyTab = document.getElementById("dailyTab");
   const orderedTab = document.getElementById("orderedTab");
   const buttons = document.querySelectorAll(".tab-button");
 
   trackerTab.classList.toggle("active", tabName === "tracker");
   calculatorTab.classList.toggle("active", tabName === "calculator");
   scheduleTab.classList.toggle("active", tabName === "schedule");
+  dailyTab.classList.toggle("active", tabName === "daily");
   orderedTab.classList.toggle("active", tabName === "ordered");
 
   buttons.forEach(button => {
+    const labels = {
+      tracker: "Timer",
+      calculator: "Qty Calculator",
+      schedule: "Schedule",
+      daily: "Daily Report",
+      ordered: "Ordered Items"
+    };
     const isActive =
-      (tabName === "tracker" && button.textContent === "Time Entry") ||
-      (tabName === "calculator" && button.textContent === "Qty Calculator") ||
-      (tabName === "schedule" && button.textContent === "Schedule") ||
-      (tabName === "ordered" && button.textContent === "Ordered Items");
+      button.textContent.trim() === labels[tabName];
 
     button.classList.toggle("active", isActive);
   });
 
   if (tabName === "schedule") {
     loadSchedule();
+  }
+
+  if (tabName === "daily") {
+    loadDailyReport();
   }
 
   if (tabName === "ordered") {

@@ -280,6 +280,104 @@
       margin: 4px 0 0 18px;
       padding: 0;
     }
+    .daily-report-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: baseline;
+      margin-bottom: 12px;
+    }
+    .daily-report-header h3 {
+      margin: 0;
+    }
+    .daily-report-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 10px;
+    }
+    .daily-report-card {
+      border: 1px solid #d8ded3;
+      background: #fff;
+      cursor: pointer;
+      min-height: 112px;
+      padding: 10px;
+      text-align: left;
+    }
+    .daily-report-card:focus,
+    .daily-report-card:hover {
+      outline: 2px solid #8aa36f;
+      outline-offset: 2px;
+    }
+    .daily-report-card h4 {
+      margin: 0 0 8px;
+    }
+    .daily-report-card-count {
+      font-size: 28px;
+      font-weight: bold;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .daily-report-card-note {
+      color: #555;
+      font-size: 13px;
+    }
+    .daily-report-card.batches { border-left: 5px solid #2364aa; background: #f1f6fb; }
+    .daily-report-card.kitchen { border-left: 5px solid #d08a1f; background: #fff5df; }
+    .daily-report-card.processing { border-left: 5px solid #5d9b45; background: #e7f6df; }
+    .daily-report-card.events { border-left: 5px solid #7c5cc4; background: #f5f1ff; }
+    .daily-report-card.pickups { border-left: 5px solid #be5b2a; background: #fff0e8; }
+    .daily-report-focus {
+      margin-top: 14px;
+      border: 1px solid #d8ded3;
+      background: #fff;
+      padding: 12px;
+    }
+    .daily-report-focus h3 {
+      margin-top: 0;
+    }
+    .daily-working-section {
+      margin-top: 14px;
+    }
+    .daily-working-section h3 {
+      margin-bottom: 8px;
+    }
+    .daily-working-batches {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+    }
+    .daily-working-batch {
+      display: grid;
+      grid-template-columns: 58px 1fr;
+      gap: 10px;
+      align-items: center;
+      border: 1px solid #d8ded3;
+      background: #fff;
+      cursor: pointer;
+      padding: 10px;
+      text-align: left;
+    }
+    .daily-working-batch:hover,
+    .daily-working-batch:focus {
+      outline: 2px solid #8aa36f;
+      outline-offset: 2px;
+    }
+    .daily-batch-pie {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: conic-gradient(#2364aa var(--progress), #e1e6dc 0);
+      border: 1px solid #c9d1c0;
+    }
+    .daily-working-batch-title {
+      font-weight: bold;
+    }
+    .daily-working-batch-note {
+      color: #555;
+      font-size: 13px;
+      margin-top: 3px;
+    }
 
     .calendar-processing-tasks {
       display: grid;
@@ -1224,6 +1322,7 @@
   <button class="tab-button active" type="button" onclick="showTab('tracker')">Timer</button>
   <button class="tab-button" type="button" onclick="showTab('calculator')">Qty Calculator</button>
   <button class="tab-button" type="button" onclick="showTab('schedule')">Schedule</button>
+  <button class="tab-button" type="button" onclick="showTab('daily')">Daily Report</button>
   <button class="tab-button" type="button" onclick="showTab('ordered')">Ordered Items</button>
 </div>
 
@@ -1323,6 +1422,22 @@
     <h3>This Week's Kitchen Tasks</h3>
     <div id="weeklyTasks" class="weekly-task-list"></div>
   </div>
+</section>
+
+<section id="dailyTab" class="tab-panel">
+  <div class="daily-report-header">
+    <h3 id="dailyReportTitle">Daily Report</h3>
+    <button type="button" onclick="loadDailyReport()">Refresh</button>
+  </div>
+  <div id="dailyReportGrid" class="daily-report-grid"></div>
+  <section class="daily-working-section">
+    <h3>Working Batches</h3>
+    <div id="dailyWorkingBatches" class="daily-working-batches"></div>
+  </section>
+  <section id="dailyReportFocus" class="daily-report-focus" hidden>
+    <h3 id="dailyReportFocusTitle"></h3>
+    <div id="dailyReportFocusBody" class="calendar-day-focus-body"></div>
+  </section>
 </section>
 
 <section id="orderedTab" class="tab-panel">

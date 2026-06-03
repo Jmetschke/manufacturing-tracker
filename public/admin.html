@@ -357,6 +357,56 @@
       font-size: 13px;
       margin-top: 3px;
     }
+    .batch-tracker-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 12px;
+    }
+    .batch-tracker-section {
+      margin-top: 16px;
+    }
+    .batch-tracker-section h3 {
+      margin-bottom: 8px;
+    }
+    .batch-tracker-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+    }
+    .batch-tracker-card {
+      border: 1px solid #d8ded3;
+      border-left: 5px solid #2364aa;
+      background: #fff;
+      padding: 12px;
+    }
+    .batch-tracker-card.completed {
+      border-left-color: #5d9b45;
+      background: #f5fbf1;
+    }
+    .batch-tracker-title {
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+    .batch-tracker-meta,
+    .batch-tracker-status {
+      color: #555;
+      font-size: 13px;
+      margin-top: 4px;
+    }
+    .batch-tracker-progress {
+      align-items: center;
+      display: grid;
+      grid-template-columns: 52px 1fr;
+      gap: 10px;
+      margin: 10px 0;
+    }
+    .batch-tracker-checklist {
+      margin: 8px 0 0 18px;
+      padding: 0;
+    }
+    .batch-tracker-checklist li {
+      margin-bottom: 3px;
+    }
     .calendar-processing-tasks {
       display: grid;
       gap: 4px;
@@ -914,6 +964,7 @@
 <div class="admin-tabs">
   <button class="admin-tab-button active" type="button" onclick="showAdminTab('entries')">Entries</button>
   <button class="admin-tab-button" type="button" onclick="showAdminTab('daily')">Daily Report</button>
+  <button class="admin-tab-button" type="button" onclick="showAdminTab('batches')">Batch Tracker</button>
   <button class="admin-tab-button" type="button" onclick="showAdminTab('calendar')">Calendar</button>
   <button class="admin-tab-button" type="button" onclick="showAdminTab('ordered')">Ordered Items</button>
 </div>
@@ -973,6 +1024,21 @@
   <section id="dailyReportFocus" class="daily-report-focus" hidden>
     <h3 id="dailyReportFocusTitle"></h3>
     <div id="dailyReportFocusBody" class="calendar-day-focus-body"></div>
+  </section>
+</section>
+
+<section id="batchTrackerPanel" class="admin-panel">
+  <div class="daily-report-header">
+    <h3>Batch Tracker</h3>
+    <button type="button" onclick="loadBatchTracker()">Refresh</button>
+  </div>
+  <section class="batch-tracker-section">
+    <h3>Working Batches</h3>
+    <div id="batchTrackerWorking" class="batch-tracker-list"></div>
+  </section>
+  <section class="batch-tracker-section">
+    <h3>Completed Batches</h3>
+    <div id="batchTrackerCompleted" class="batch-tracker-list"></div>
   </section>
 </section>
 

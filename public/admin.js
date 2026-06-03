@@ -1336,6 +1336,7 @@ function appendTaskFocusDetails(block, projectedTasks, emptyText) {
 function showAdminTab(tabName) {
   document.getElementById("entriesPanel").classList.toggle("active", tabName === "entries");
   document.getElementById("dailyPanel").classList.toggle("active", tabName === "daily");
+  document.getElementById("batchTrackerPanel").classList.toggle("active", tabName === "batches");
   document.getElementById("calendarPanel").classList.toggle("active", tabName === "calendar");
   document.getElementById("orderedPanel").classList.toggle("active", tabName === "ordered");
 
@@ -1343,6 +1344,7 @@ function showAdminTab(tabName) {
     const isActive =
       (tabName === "entries" && button.textContent === "Entries") ||
       (tabName === "daily" && button.textContent === "Daily Report") ||
+      (tabName === "batches" && button.textContent === "Batch Tracker") ||
       (tabName === "calendar" && button.textContent === "Calendar") ||
       (tabName === "ordered" && button.textContent === "Ordered Items");
     button.classList.toggle("active", isActive);
@@ -1356,6 +1358,10 @@ function showAdminTab(tabName) {
 
   if (tabName === "daily") {
     loadDailyReport();
+  }
+
+  if (tabName === "batches") {
+    loadBatchTracker();
   }
 
   if (tabName === "ordered") {
@@ -1851,6 +1857,10 @@ function renderDailyWorkingBatches(batches) {
 }
 
 function getWorkingBatchesFromRows(rows) {
+  return getBatchesFromScheduleRows(rows);
+}
+
+function getBatchesFromScheduleRows(rows) {
   return rows.flatMap(row => {
     const payload = parseSchedulePayload(row.tasks);
     return [
@@ -1858,6 +1868,99 @@ function getWorkingBatchesFromRows(rows) {
       ...payload.batchSb.map(batch => ({ label: "SB", scheduleDate: row.schedule_date, ...batch }))
     ];
   });
+}
+
+function createBatchTrackerCard(batch, completed) {
+  const progress = getBatchProgress(batch);
+  const card = document.createElement("article");
+  card.className = `batch-tracker-card${completed ? " completed" : ""}`;
+
+  const title = document.createElement("div");
+  title.className = "batch-tracker-title";
+  title.textContent = `${batch.label}: ${batch.item}`;
+  card.appendChild(title);
+
+  const scheduled = document.createElement("div");
+  scheduled.className = "batch-tracker-meta";
+  scheduled.textContent = `Scheduled day: ${formatDisplayDate(batch.scheduleDate)}`;
+  card.appendChild(scheduled);
+
+  if (batch.units) {
+    const units = document.createElement("div");
+    units.className = "batch-tracker-meta";
+    units.textContent = `Units: ${batch.units}`;
+    card.appendChild(units);
+  }
+
+  const progressRow = document.createElement("div");
+  progressRow.className = "batch-tracker-progress";
+
+  const pie = document.createElement("div");
+  pie.className = "daily-batch-pie";
+  pie.style.setProperty("--progress", `${progress.percent}%`);
+  progressRow.appendChild(pie);
+
+  const status = document.createElement("div");
+  status.className = "batch-tracker-status";
+  status.textContent = `${progress.percent}% - ${getBatchStatusText(batch)}`;
+  progressRow.appendChild(status);
+  card.appendChild(progressRow);
+
+  const checklist = document.createElement("ul");
+  checklist.className = "batch-tracker-checklist";
+  batchChecklistItems.forEach(check => {
+    const line = document.createElement("li");
+    line.textContent = `${batch.checklist && batch.checklist[check.key] ? "Done" : "Open"} - ${check.label}`;
+    checklist.appendChild(line);
+  });
+  card.appendChild(checklist);
+
+  return card;
+}
+
+function renderBatchTrackerSection(containerId, batches, emptyText, completed = false) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = "";
+
+  if (!batches.length) {
+    const empty = document.createElement("div");
+    empty.className = "calendar-focus-empty";
+    empty.textContent = emptyText;
+    container.appendChild(empty);
+    return;
+  }
+
+  batches.forEach(batch => container.appendChild(createBatchTrackerCard(batch, completed)));
+}
+
+async function loadBatchTracker() {
+  const todayDate = dateOnly(new Date());
+  const from = toIsoDate(addDays(todayDate, -3650));
+  const to = toIsoDate(addDays(todayDate, 1095));
+  const scheduleRes = await fetch(`/schedule?from=${from}&to=${to}`);
+
+  if (!scheduleRes.ok) {
+    showMessage("Could not load batch tracker.", "error");
+    return;
+  }
+
+  const rows = await scheduleRes.json();
+  const batches = getBatchesFromScheduleRows(rows);
+  const workingBatches = batches
+    .filter(batch => {
+      const progress = getBatchProgress(batch);
+      return progress.completed < progress.total;
+    })
+    .sort((a, b) => a.scheduleDate.localeCompare(b.scheduleDate));
+  const completedBatches = batches
+    .filter(batch => {
+      const progress = getBatchProgress(batch);
+      return progress.completed === progress.total;
+    })
+    .sort((a, b) => b.scheduleDate.localeCompare(a.scheduleDate));
+
+  renderBatchTrackerSection("batchTrackerWorking", workingBatches, "No working batches.");
+  renderBatchTrackerSection("batchTrackerCompleted", completedBatches, "No completed batches.", true);
 }
 
 async function loadDailyReport() {
