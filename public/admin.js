@@ -524,8 +524,8 @@ function appendBatchList(container, payload) {
     const item = document.createElement("div");
     item.className = "admin-batch-item";
     item.textContent = batch.units
-      ? `${label}: ${batch.item} - ${batch.units} units`
-      : `${label}: ${batch.item}`;
+      ? `${label}: ${batch.item} - ${batch.units} units - ${getBatchProgress(batch).percent}%`
+      : `${label}: ${batch.item} - ${getBatchProgress(batch).percent}%`;
     batchList.appendChild(item);
   });
 
