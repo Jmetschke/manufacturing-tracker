@@ -206,6 +206,7 @@ const taskNames = [
   "Popping",
   "Sugaring",
   "Nerding",
+  "Sealing",
   "SB Sealing",
   "Bagging (10's)",
   "Bagging (20's)",
@@ -253,6 +254,7 @@ const itemTaskNames = Object.freeze({
   "RSO Whoopie Hi": [
     "Depositing (Beldos)",
     "Packaging",
+    "Sealing",
     "Counting (5's)",
     "Bagging (10's)",
     "Packaging Labels Stickering",
@@ -885,7 +887,7 @@ app.get("/items", (req, res) => {
 
 /* ---------- TASKS ---------- */
 app.get("/tasks", (req, res) => {
-  db.all("SELECT * FROM tasks WHERE name <> 'Sealing'", [], (err, rows) => {
+  db.all("SELECT * FROM tasks", [], (err, rows) => {
     if (err) return res.status(500).send(err.message);
     res.json(rows);
   });
