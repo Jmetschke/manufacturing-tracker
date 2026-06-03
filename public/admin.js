@@ -41,6 +41,14 @@ const sbBatchOptions = [
   "Snackbar Vape - Watermelon Lychee 1g"
 ];
 const productionBatchOptions = [...hijnxBatchOptions, ...sbBatchOptions];
+const batchChecklistItems = [
+  { key: "cooking", label: "Cooking" },
+  { key: "postCookingProcessing", label: "Post cooking processing" },
+  { key: "packaging", label: "Packaging" },
+  { key: "sealed", label: "Sealed" },
+  { key: "counted", label: "Counted" },
+  { key: "finalCountEnteredMetrc", label: "Final count entered in Metrc" }
+];
 
 function showMessage(text, type = "") {
   const message = document.getElementById("message");
@@ -306,22 +314,27 @@ function normalizeBatchList(value) {
     return value
       .map(item => {
         if (item && typeof item === "object") {
+          const checklist = item.checklist && typeof item.checklist === "object" ? item.checklist : {};
           return {
             item: String(item.item || "").trim(),
-            units: String(item.units || "").trim()
+            units: String(item.units || "").trim(),
+            checklist: Object.fromEntries(
+              batchChecklistItems.map(check => [check.key, Boolean(checklist[check.key])])
+            )
           };
         }
 
         return {
           item: String(item || "").trim(),
-          units: ""
+          units: "",
+          checklist: {}
         };
       })
       .filter(batch => batch.item);
   }
 
   const singleValue = String(value || "").trim();
-  return singleValue ? [{ item: singleValue, units: "" }] : [];
+  return singleValue ? [{ item: singleValue, units: "", checklist: {} }] : [];
 }
 
 function isHHMM(value) {
@@ -517,6 +530,54 @@ function appendBatchList(container, payload) {
   });
 
   container.appendChild(batchList);
+}
+
+function getBatchProgress(batch) {
+  const checklist = batch.checklist || {};
+  const completed = batchChecklistItems.filter(check => checklist[check.key]).length;
+  return {
+    completed,
+    total: batchChecklistItems.length,
+    percent: batchChecklistItems.length ? Math.round((completed / batchChecklistItems.length) * 100) : 0
+  };
+}
+
+function getBatchStatusText(batch) {
+  const progress = getBatchProgress(batch);
+  if (progress.completed === 0) return "Not started";
+  if (progress.completed === progress.total) return "Completed";
+  return `${progress.percent}% complete`;
+}
+
+function appendBatchDetail(container, batch) {
+  const item = document.createElement("div");
+  item.className = "calendar-focus-item";
+
+  const title = document.createElement("b");
+  title.textContent = batch.units
+    ? `${batch.label}: ${batch.item} - ${batch.units} units`
+    : `${batch.label}: ${batch.item}`;
+  item.appendChild(title);
+
+  if (batch.scheduleDate) {
+    const date = document.createElement("div");
+    date.textContent = `Scheduled: ${formatDisplayDate(batch.scheduleDate)}`;
+    item.appendChild(date);
+  }
+
+  const status = document.createElement("div");
+  status.textContent = getBatchStatusText(batch);
+  item.appendChild(status);
+
+  const list = document.createElement("ul");
+  batchChecklistItems.forEach(check => {
+    const line = document.createElement("li");
+    line.textContent = `${batch.checklist && batch.checklist[check.key] ? "Done" : "Open"} - ${check.label}`;
+    list.appendChild(line);
+  });
+  item.appendChild(list);
+
+  container.appendChild(item);
 }
 
 function appendEventList(container, events) {
@@ -746,6 +807,7 @@ function addBatchEntry(type, value = "", unitsValue = "") {
 
   const batchValue = value && typeof value === "object" ? value.item : value;
   const batchUnits = value && typeof value === "object" ? value.units : unitsValue;
+  const batchChecklist = value && typeof value === "object" && value.checklist ? value.checklist : {};
 
   const order = document.createElement("span");
   order.className = "batch-order";
@@ -786,6 +848,24 @@ function addBatchEntry(type, value = "", unitsValue = "") {
   units.value = batchUnits;
   row.appendChild(units);
 
+  const checklist = document.createElement("div");
+  checklist.className = "batch-checklist";
+  batchChecklistItems.forEach(check => {
+    const label = document.createElement("label");
+    label.className = "batch-checklist-item";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "batch-checklist-input";
+    checkbox.dataset.checkKey = check.key;
+    checkbox.checked = Boolean(batchChecklist[check.key]);
+
+    label.appendChild(checkbox);
+    label.append(document.createTextNode(check.label));
+    checklist.appendChild(label);
+  });
+  row.appendChild(checklist);
+
   const removeButton = document.createElement("button");
   removeButton.type = "button";
   removeButton.textContent = "Remove";
@@ -820,7 +900,11 @@ function getBatchValues(type) {
   return Array.from(getBatchRows(type).querySelectorAll(".batch-row"))
     .map(row => ({
       item: row.querySelector(".batch-input").value.trim(),
-      units: row.querySelector(".batch-units").value.trim()
+      units: row.querySelector(".batch-units").value.trim(),
+      checklist: Object.fromEntries(
+        Array.from(row.querySelectorAll(".batch-checklist-input"))
+          .map(input => [input.dataset.checkKey, input.checked])
+      )
     }))
     .filter(batch => batch.item);
 }
@@ -1122,10 +1206,17 @@ function renderAdminFocusedDay(isoDate, payload, projectedTasks, projectedProces
     return `${event.title}${timeText} - ${event.location} - ${event.company}`;
   }, "No events scheduled."));
 
-  section("Production Batches", block => appendFocusLines(block, [
-    ...payload.batchHijnx.map(batch => ({ label: "Hijnx", ...batch })),
-    ...payload.batchSb.map(batch => ({ label: "SB", ...batch }))
-  ], batch => batch.units ? `${batch.label}: ${batch.item} - ${batch.units} units` : `${batch.label}: ${batch.item}`, "No production batches."));
+  section("Production Batches", block => {
+    const batches = [
+      ...payload.batchHijnx.map(batch => ({ label: "Hijnx", ...batch })),
+      ...payload.batchSb.map(batch => ({ label: "SB", ...batch }))
+    ];
+    if (!batches.length) {
+      block.appendChild(createFocusEmpty("No production batches."));
+      return;
+    }
+    batches.forEach(batch => appendBatchDetail(block, batch));
+  });
 
   section("Kitchen Tasks", block => {
     const groups = groupDailyTaskAssignments(projectedTasks);
@@ -1707,6 +1798,68 @@ function showDailyReportFocus(titleText, fill) {
   panel.hidden = false;
 }
 
+function renderDailyWorkingBatches(batches) {
+  const container = document.getElementById("dailyWorkingBatches");
+  container.innerHTML = "";
+
+  const workingBatches = batches.filter(batch => {
+    const progress = getBatchProgress(batch);
+    return progress.completed < progress.total;
+  });
+
+  if (!workingBatches.length) {
+    const empty = document.createElement("div");
+    empty.className = "calendar-focus-empty";
+    empty.textContent = "No working batches.";
+    container.appendChild(empty);
+    return;
+  }
+
+  workingBatches.forEach(batch => {
+    const progress = getBatchProgress(batch);
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "daily-working-batch";
+    card.addEventListener("click", () => showDailyReportFocus("Working Batch", body => appendBatchDetail(body, batch)));
+
+    const pie = document.createElement("div");
+    pie.className = "daily-batch-pie";
+    pie.style.setProperty("--progress", `${progress.percent}%`);
+    card.appendChild(pie);
+
+    const text = document.createElement("div");
+    const title = document.createElement("div");
+    title.className = "daily-working-batch-title";
+    title.textContent = `${batch.label}: ${batch.item}`;
+    text.appendChild(title);
+
+    if (batch.scheduleDate) {
+      const scheduled = document.createElement("div");
+      scheduled.className = "daily-working-batch-note";
+      scheduled.textContent = formatDisplayDate(batch.scheduleDate);
+      text.appendChild(scheduled);
+    }
+
+    const note = document.createElement("div");
+    note.className = "daily-working-batch-note";
+    note.textContent = getBatchStatusText(batch);
+    text.appendChild(note);
+
+    card.appendChild(text);
+    container.appendChild(card);
+  });
+}
+
+function getWorkingBatchesFromRows(rows) {
+  return rows.flatMap(row => {
+    const payload = parseSchedulePayload(row.tasks);
+    return [
+      ...payload.batchHijnx.map(batch => ({ label: "Hijnx", scheduleDate: row.schedule_date, ...batch })),
+      ...payload.batchSb.map(batch => ({ label: "SB", scheduleDate: row.schedule_date, ...batch }))
+    ];
+  });
+}
+
 async function loadDailyReport() {
   const today = getTodayIsoDate();
   const todayDate = dateOnly(new Date());
@@ -1728,6 +1881,7 @@ async function loadDailyReport() {
     ...payload.batchHijnx.map(batch => ({ label: "Hijnx", ...batch })),
     ...payload.batchSb.map(batch => ({ label: "SB", ...batch }))
   ];
+  const workingBatches = getWorkingBatchesFromRows(rows);
 
   document.getElementById("dailyReportTitle").textContent = `Daily Report - ${formatDisplayDate(today)}`;
   document.getElementById("dailyReportFocus").hidden = true;
@@ -1741,9 +1895,13 @@ async function loadDailyReport() {
       count: batches.length,
       note: batches.length ? "Tap to review batch details" : "No batches scheduled",
       className: "batches",
-      onFocus: () => showDailyReportFocus("Production Batches", body => appendFocusLines(body, batches, batch =>
-        batch.units ? `${batch.label}: ${batch.item} - ${batch.units} units` : `${batch.label}: ${batch.item}`,
-      "No production batches."))
+      onFocus: () => showDailyReportFocus("Production Batches", body => {
+        if (!batches.length) {
+          body.appendChild(createFocusEmpty("No production batches."));
+          return;
+        }
+        batches.forEach(batch => appendBatchDetail(body, batch));
+      })
     }),
     createDailyReportCard({
       title: "Kitchen Tasks",
@@ -1781,6 +1939,7 @@ async function loadDailyReport() {
   ];
 
   cards.forEach(card => grid.appendChild(card));
+  renderDailyWorkingBatches(workingBatches);
 }
 
 function renderAdminCalendar(gridStart) {

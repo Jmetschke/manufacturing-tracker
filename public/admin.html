@@ -204,6 +204,26 @@
     .batch-units {
       max-width: 110px;
     }
+    .batch-checklist {
+      grid-column: 2 / -1;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 6px;
+      padding: 8px;
+      background: #fff;
+      border-left: 3px solid #d8ded3;
+    }
+    .batch-checklist-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: normal;
+      margin: 0;
+    }
+    .batch-checklist-item input {
+      width: auto;
+      margin: 0;
+    }
     .admin-task-list {
       margin: 0 0 8px 20px;
       padding: 0;
@@ -294,6 +314,48 @@
     }
     .daily-report-focus h3 {
       margin-top: 0;
+    }
+    .daily-working-section {
+      margin-top: 14px;
+    }
+    .daily-working-section h3 {
+      margin-bottom: 8px;
+    }
+    .daily-working-batches {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+    }
+    .daily-working-batch {
+      display: grid;
+      grid-template-columns: 58px 1fr;
+      gap: 10px;
+      align-items: center;
+      border: 1px solid #d8ded3;
+      background: #fff;
+      cursor: pointer;
+      padding: 10px;
+      text-align: left;
+    }
+    .daily-working-batch:hover,
+    .daily-working-batch:focus {
+      outline: 2px solid #8aa36f;
+      outline-offset: 2px;
+    }
+    .daily-batch-pie {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: conic-gradient(#2364aa var(--progress), #e1e6dc 0);
+      border: 1px solid #c9d1c0;
+    }
+    .daily-working-batch-title {
+      font-weight: bold;
+    }
+    .daily-working-batch-note {
+      color: #555;
+      font-size: 13px;
+      margin-top: 3px;
     }
     .calendar-processing-tasks {
       display: grid;
@@ -904,6 +966,10 @@
     <button type="button" onclick="loadDailyReport()">Refresh</button>
   </div>
   <div id="dailyReportGrid" class="daily-report-grid"></div>
+  <section class="daily-working-section">
+    <h3>Working Batches</h3>
+    <div id="dailyWorkingBatches" class="daily-working-batches"></div>
+  </section>
   <section id="dailyReportFocus" class="daily-report-focus" hidden>
     <h3 id="dailyReportFocusTitle"></h3>
     <div id="dailyReportFocusBody" class="calendar-day-focus-body"></div>
