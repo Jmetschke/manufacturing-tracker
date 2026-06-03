@@ -49,6 +49,97 @@ const batchChecklistItems = [
   { key: "counted", label: "Counted" },
   { key: "finalCountEnteredMetrc", label: "Final count entered in Metrc" }
 ];
+const chunkBatchTaskTemplate = [
+  { order: 1, task: "Depositing (truffly)" },
+  { order: 2, task: "Nerding" },
+  { order: 3, task: "Popping" },
+  { order: 4, task: "Sugaring" },
+  { order: 5, task: "Packaging" },
+  { order: 6, task: "Sealing" },
+  { order: 7, task: "Counting (5's)" },
+  { order: 8, task: "Bagging (20's)" }
+];
+const miniBatchTaskTemplate = [
+  { order: 1, task: "Depositing (muffly)" },
+  { order: 1, task: "Depositing (truffly)" },
+  { order: 2, task: "Nerding" },
+  { order: 3, task: "Popping" },
+  { order: 4, task: "Sugaring" },
+  { order: 5, task: "Packaging" },
+  { order: 6, task: "Sealing" },
+  { order: 7, task: "Counting (5's)" },
+  { order: 8, task: "Bagging (20's)" }
+];
+const shooterBatchTaskTemplate = [
+  { order: 1, task: "Filling (Filling Machine)" },
+  { order: 2, task: "Capping (shooters)" },
+  { order: 3, task: "Seal-Stickering (shooters)" },
+  { order: 4, task: "Bagging (10's)" }
+];
+const sbVapeBatchTaskTemplate = [
+  { order: 1, task: "Filling (SB Vapes)" },
+  { order: 2, task: "Capping (SB Vapes)" },
+  { order: 3, task: "SB Sealing" },
+  { order: 4, task: "Counting (SB 5's)" },
+  { order: 5, task: "Bagging (SB 25's)" }
+];
+const batchTaskTemplatesByItem = {
+  "Micro Dots (50-piece packs)": [
+    { order: 1, task: "Popping" },
+    { order: 2, task: "Packaging" },
+    { order: 3, task: "Sealing" },
+    { order: 4, task: "Counting (5's)" },
+    { order: 5, task: "Bagging (20's)" }
+  ],
+  "RSO Whoopie Hi": [
+    { order: 1, task: "Depositing (Beldos)" },
+    { order: 2, task: "Packaging" },
+    { order: 3, task: "Sealing" },
+    { order: 4, task: "Counting (5's)" },
+    { order: 5, task: "Bagging (10's)" }
+  ],
+  "Space Chunk OG 1 chunk (pcs)": chunkBatchTaskTemplate,
+  "Space Chunk ALPHA OG 2 chunk (units)": chunkBatchTaskTemplate,
+  "Space Chunk REX OG 1 chunk (units)": chunkBatchTaskTemplate,
+  "Space Chunk REX OG 2 chunk (units)": chunkBatchTaskTemplate,
+  "Space Chunk ZUUL OG 2 chunk (units)": chunkBatchTaskTemplate,
+  "Space Chunk CBN 1 chunk (pcs)": chunkBatchTaskTemplate,
+  "Space Chunk CBN 2 chunk (units)": chunkBatchTaskTemplate,
+  "Space Chunk Mini 10 chunk (units)": miniBatchTaskTemplate,
+  "Space Chunk SUGAR FREE 10pk (units)": miniBatchTaskTemplate,
+  "Shooters Triple Citrus": shooterBatchTaskTemplate,
+  "Shooters Sour Watermelon": shooterBatchTaskTemplate,
+  "Shooters Sour Blu Raz": shooterBatchTaskTemplate,
+  "Grape 1g": sbVapeBatchTaskTemplate,
+  "Mango 1g": sbVapeBatchTaskTemplate,
+  "Lemon 1g": sbVapeBatchTaskTemplate,
+  "Watermelon 1g": sbVapeBatchTaskTemplate,
+  "Cherry 2g": sbVapeBatchTaskTemplate,
+  "Strawberry 2g": sbVapeBatchTaskTemplate,
+  "Peach 2g": sbVapeBatchTaskTemplate
+};
+const productionBatchItemAliases = {
+  "Alpha Chunk - 1pk": "Space Chunk ALPHA OG 2 chunk (units)",
+  "Alpha Chunk - 2pk": "Space Chunk ALPHA OG 2 chunk (units)",
+  "Chill Chunk - 1pk": "Space Chunk CBN 1 chunk (pcs)",
+  "Chill Chunk - 2pk": "Space Chunk CBN 2 chunk (units)",
+  "Hijnx Shooter - Sour Blue Razz 2oz": "Shooters Sour Blu Raz",
+  "Hijnx Shooter - Triple Citrus": "Shooters Triple Citrus",
+  "Hijnx Shooter - Watermelon": "Shooters Sour Watermelon",
+  "MiNi's Chunks - 10pk": "Space Chunk Mini 10 chunk (units)",
+  "Micro Dots": "Micro Dots (50-piece packs)",
+  "Rex Chunk - 2pk": "Space Chunk REX OG 2 chunk (units)",
+  "Sugar Free MiNi's - 10pk": "Space Chunk SUGAR FREE 10pk (units)",
+  "Whoopie Hi": "RSO Whoopie Hi",
+  "Zuul Chunk - 2pk": "Space Chunk ZUUL OG 2 chunk (units)",
+  "Snackbar Vape - Cherry Pomegranate Lemon 2g": "Cherry 2g",
+  "Snackbar Vape - Grape Crush": "Grape 1g",
+  "Snackbar Vape - Lemon Yuzu": "Lemon 1g",
+  "Snackbar Vape - Mango Magic": "Mango 1g",
+  "Snackbar Vape - Peach Passion Fruit 2g": "Peach 2g",
+  "Snackbar Vape - Strawberry Dragonfruit 2g": "Strawberry 2g",
+  "Snackbar Vape - Watermelon Lychee 1g": "Watermelon 1g"
+};
 
 function showMessage(text, type = "") {
   const message = document.getElementById("message");
@@ -483,6 +574,10 @@ function normalizeScheduleTask(task) {
   const units = Math.max(0, Number.parseFloat(task && task.units) || 0);
   const days = Math.max(1, Number.parseInt(task && task.days, 10) || 1);
   const totalHours = Math.max(0, Number.parseFloat(task && task.totalHours) || 0);
+  const sourceBatchKey = String(task && task.sourceBatchKey ? task.sourceBatchKey : "").trim();
+  const sourceBatchLabel = String(task && task.sourceBatchLabel ? task.sourceBatchLabel : "").trim();
+  const sourceTaskOrder = Number.parseInt(task && task.sourceTaskOrder, 10);
+  const hoursOverridden = Boolean(task && task.hoursOverridden);
 
   return {
     text,
@@ -490,7 +585,12 @@ function normalizeScheduleTask(task) {
     units,
     days,
     totalHours,
-    assignments: normalizeScheduleAssignments(task && task.assignments, days)
+    assignments: normalizeScheduleAssignments(task && task.assignments, days),
+    sourceBatchKey,
+    sourceBatchLabel,
+    sourceTaskOrder: Number.isFinite(sourceTaskOrder) ? sourceTaskOrder : null,
+    autoGenerated: Boolean(task && task.autoGenerated),
+    hoursOverridden
   };
 }
 
@@ -794,6 +894,26 @@ function getBatchRows(type) {
   return document.getElementById(type === "hijnx" ? "batchHijnxRows" : "batchSbRows");
 }
 
+function getBatchTaskItemName(batchItem) {
+  return productionBatchItemAliases[batchItem] || batchItem;
+}
+
+function getBatchTaskTemplate(batchItem) {
+  return batchTaskTemplatesByItem[getBatchTaskItemName(batchItem)] || [];
+}
+
+function getGeneratedBatchTaskKey(batchType, batchIndex, batchItem, order, task) {
+  return `${batchType}:${batchIndex}:${batchItem}:${order}:${task}`;
+}
+
+function getGeneratedProcessingTaskMap() {
+  return new Map(
+    getProcessingTaskValues()
+      .filter(task => task.autoGenerated && task.sourceBatchKey)
+      .map(task => [`${task.sourceBatchKey}:${task.sourceTaskOrder}:${task.text}`, task])
+  );
+}
+
 function refreshBatchRows(type) {
   getBatchRows(type).querySelectorAll(".batch-row").forEach((row, index) => {
     row.querySelector(".batch-order").textContent = `${index + 1}.`;
@@ -837,6 +957,7 @@ function addBatchEntry(type, value = "", unitsValue = "") {
   }
 
   input.value = batchValue;
+  input.addEventListener("change", syncGeneratedBatchTasksFromBatches);
   row.appendChild(input);
 
   const units = document.createElement("input");
@@ -846,6 +967,7 @@ function addBatchEntry(type, value = "", unitsValue = "") {
   units.step = "1";
   units.placeholder = "Units";
   units.value = batchUnits;
+  units.addEventListener("input", syncGeneratedBatchTasksFromBatches);
   row.appendChild(units);
 
   const checklist = document.createElement("div");
@@ -873,9 +995,11 @@ function addBatchEntry(type, value = "", unitsValue = "") {
     row.remove();
     if (!rows.children.length) {
       addBatchEntry(type);
+      syncGeneratedBatchTasksFromBatches();
       return;
     }
     refreshBatchRows(type);
+    syncGeneratedBatchTasksFromBatches();
   });
   row.appendChild(removeButton);
 
@@ -907,6 +1031,59 @@ function getBatchValues(type) {
       )
     }))
     .filter(batch => batch.item);
+}
+
+function syncGeneratedBatchTasksFromBatches() {
+  const processingRows = document.getElementById("processingTaskRows");
+  if (!processingRows) return;
+
+  const existingGeneratedTasks = getGeneratedProcessingTaskMap();
+  processingRows.querySelectorAll(".schedule-task-row.batch-generated-task").forEach(row => row.remove());
+
+  const batchRows = [
+    ...Array.from(getBatchRows("hijnx").querySelectorAll(".batch-row")).map((row, index) => ({ type: "hijnx", index, row })),
+    ...Array.from(getBatchRows("sb").querySelectorAll(".batch-row")).map((row, index) => ({ type: "sb", index, row }))
+  ];
+
+  batchRows.forEach(({ type, index, row }) => {
+    const batchItem = row.querySelector(".batch-input").value.trim();
+    const batchUnits = Math.max(0, Number.parseFloat(row.querySelector(".batch-units").value) || 0);
+    if (!batchItem) return;
+
+    const itemName = getBatchTaskItemName(batchItem);
+    const template = getBatchTaskTemplate(batchItem);
+    if (!template.length) return;
+
+    const sourceBatchLabel = `${type === "hijnx" ? "Hijnx" : "SB"} batch ${index + 1}: ${batchItem}`;
+
+    template
+      .slice()
+      .sort((a, b) => a.order - b.order || a.task.localeCompare(b.task))
+      .forEach(templateTask => {
+        const sourceBatchKey = getGeneratedBatchTaskKey(type, index, batchItem, templateTask.order, templateTask.task);
+        const existingKey = `${sourceBatchKey}:${templateTask.order}:${templateTask.task}`;
+        const existing = existingGeneratedTasks.get(existingKey);
+        const preserveHours = existing && existing.hoursOverridden;
+        const taskValue = {
+          item: itemName,
+          text: templateTask.task,
+          units: batchUnits,
+          totalHours: preserveHours ? existing.totalHours : 0,
+          days: existing ? existing.days : 1,
+          assignments: existing ? existing.assignments : [],
+          autoGenerated: true,
+          sourceBatchKey,
+          sourceBatchLabel,
+          sourceTaskOrder: templateTask.order,
+          hoursOverridden: Boolean(preserveHours)
+        };
+        const taskSelect = addScheduleTask(taskValue, taskValue.days, "processingTaskRows");
+        const taskRow = taskSelect.closest(".schedule-task-row");
+        if (taskRow && !preserveHours) {
+          autoFillScheduleTaskHours(taskRow, true);
+        }
+      });
+  });
 }
 
 function refreshEventRows() {
@@ -2437,6 +2614,14 @@ function addScheduleTask(value = "", daysValue = 1, rowsId = "scheduleTaskRows")
   row.className = "schedule-task-row";
   row.dataset.rowsId = rowsId;
   const task = value && typeof value === "object" ? value : { text: value, days: daysValue };
+  row.dataset.hoursOverridden = task.hoursOverridden ? "true" : "false";
+  if (task.autoGenerated) {
+    row.classList.add("batch-generated-task");
+    row.dataset.autoGenerated = "true";
+    row.dataset.sourceBatchKey = task.sourceBatchKey || "";
+    row.dataset.sourceBatchLabel = task.sourceBatchLabel || "";
+    row.dataset.sourceTaskOrder = task.sourceTaskOrder === null || task.sourceTaskOrder === undefined ? "" : String(task.sourceTaskOrder);
+  }
 
   const order = document.createElement("span");
   order.className = "schedule-task-order";
@@ -2544,6 +2729,13 @@ function addScheduleTask(value = "", daysValue = 1, rowsId = "scheduleTaskRows")
 
   const assignmentPanel = document.createElement("div");
   assignmentPanel.className = "schedule-assignment-panel";
+
+  if (task.autoGenerated && task.sourceBatchLabel) {
+    const generatedNote = document.createElement("div");
+    generatedNote.className = "schedule-generated-note";
+    generatedNote.textContent = `Generated from ${task.sourceBatchLabel}`;
+    assignmentPanel.appendChild(generatedNote);
+  }
 
   const assignmentHeader = document.createElement("div");
   assignmentHeader.className = "schedule-assignment-header";
@@ -2727,7 +2919,12 @@ function getScheduleTaskValues(selector) {
             employee: assignmentRow.querySelector(".schedule-assignment-employee").value.trim(),
             hours: Math.max(0, Number.parseFloat(assignmentRow.querySelector(".schedule-assignment-hours").value) || 0)
           }))
-          .filter(assignment => assignment.dayIndex < days && assignment.employee && assignment.hours > 0)
+          .filter(assignment => assignment.dayIndex < days && assignment.employee && assignment.hours > 0),
+        autoGenerated: row.dataset.autoGenerated === "true",
+        sourceBatchKey: row.dataset.sourceBatchKey || "",
+        sourceBatchLabel: row.dataset.sourceBatchLabel || "",
+        sourceTaskOrder: row.dataset.sourceTaskOrder === "" ? null : Number.parseInt(row.dataset.sourceTaskOrder, 10),
+        hoursOverridden: row.dataset.hoursOverridden === "true"
       };
     })
     .filter(task => task.text);
@@ -2782,6 +2979,9 @@ function editScheduleDay(isoDate) {
   populateScheduleTaskRows(isWeekendDay ? "" : adminScheduleRows.get(isoDate) || "");
   populateTestPickupRows(isWeekendDay ? [] : payload.testPickups);
   populateScheduleTaskRows(isWeekendDay ? [] : payload.processingTasks, "processingTaskRows", false);
+  if (!isWeekendDay) {
+    syncGeneratedBatchTasksFromBatches();
+  }
   document.getElementById("scheduleEditor").classList.add("active");
   showMessage("");
   getBatchRows("hijnx").querySelector(".batch-input").focus();
