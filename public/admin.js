@@ -236,6 +236,10 @@ function toIsoDate(date) {
   return `${year}-${month}-${day}`;
 }
 
+function getTodayIsoDate() {
+  return toIsoDate(new Date());
+}
+
 function toMonthValue(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -1240,12 +1244,14 @@ function appendTaskFocusDetails(block, projectedTasks, emptyText) {
 
 function showAdminTab(tabName) {
   document.getElementById("entriesPanel").classList.toggle("active", tabName === "entries");
+  document.getElementById("dailyPanel").classList.toggle("active", tabName === "daily");
   document.getElementById("calendarPanel").classList.toggle("active", tabName === "calendar");
   document.getElementById("orderedPanel").classList.toggle("active", tabName === "ordered");
 
   document.querySelectorAll(".admin-tab-button").forEach(button => {
     const isActive =
       (tabName === "entries" && button.textContent === "Entries") ||
+      (tabName === "daily" && button.textContent === "Daily Report") ||
       (tabName === "calendar" && button.textContent === "Calendar") ||
       (tabName === "ordered" && button.textContent === "Ordered Items");
     button.classList.toggle("active", isActive);
@@ -1255,6 +1261,10 @@ function showAdminTab(tabName) {
 
   if (tabName === "calendar") {
     loadAdminCalendar();
+  }
+
+  if (tabName === "daily") {
+    loadDailyReport();
   }
 
   if (tabName === "ordered") {
@@ -1656,6 +1666,121 @@ async function loadAdminCalendar() {
   adminProjectedProcessingTasksByDate = buildAdminProjectedTasksByDate(rows, gridStart, gridEnd, payload => payload.processingTasks);
   updateCalendarRangeLabel(gridStart, gridEnd);
   renderAdminCalendar(gridStart);
+}
+
+function countGroupedTasks(tasks) {
+  return groupDailyTaskAssignments(tasks).length;
+}
+
+function createDailyReportCard({ title, count, note, className, onFocus }) {
+  const card = document.createElement("button");
+  card.type = "button";
+  card.className = `daily-report-card ${className}`;
+  card.addEventListener("click", onFocus);
+
+  const heading = document.createElement("h4");
+  heading.textContent = title;
+  card.appendChild(heading);
+
+  const countElement = document.createElement("div");
+  countElement.className = "daily-report-card-count";
+  countElement.textContent = String(count);
+  card.appendChild(countElement);
+
+  const noteElement = document.createElement("div");
+  noteElement.className = "daily-report-card-note";
+  noteElement.textContent = note;
+  card.appendChild(noteElement);
+
+  return card;
+}
+
+function showDailyReportFocus(titleText, fill) {
+  const panel = document.getElementById("dailyReportFocus");
+  const title = document.getElementById("dailyReportFocusTitle");
+  const body = document.getElementById("dailyReportFocusBody");
+  if (!panel || !title || !body) return;
+
+  title.textContent = titleText;
+  body.innerHTML = "";
+  fill(body);
+  panel.hidden = false;
+}
+
+async function loadDailyReport() {
+  const today = getTodayIsoDate();
+  const todayDate = dateOnly(new Date());
+  const from = toIsoDate(addDays(todayDate, -180));
+  const scheduleRes = await fetch(`/schedule?from=${from}&to=${today}`);
+
+  if (!scheduleRes.ok) {
+    showMessage("Could not load daily report.", "error");
+    return;
+  }
+
+  const rows = await scheduleRes.json();
+  const scheduleMap = new Map(rows.map(row => [row.schedule_date, row.tasks || ""]));
+  const payload = parseSchedulePayload(scheduleMap.get(today));
+  const projectedKitchenTasks = buildAdminProjectedTasksByDate(rows, todayDate, todayDate).get(today) || [];
+  const projectedProcessingTasks = buildAdminProjectedTasksByDate(rows, todayDate, todayDate, parsed => parsed.processingTasks).get(today) || [];
+  const events = buildAdminEventsByDate(rows, todayDate, todayDate).get(today) || [];
+  const batches = [
+    ...payload.batchHijnx.map(batch => ({ label: "Hijnx", ...batch })),
+    ...payload.batchSb.map(batch => ({ label: "SB", ...batch }))
+  ];
+
+  document.getElementById("dailyReportTitle").textContent = `Daily Report - ${formatDisplayDate(today)}`;
+  document.getElementById("dailyReportFocus").hidden = true;
+
+  const grid = document.getElementById("dailyReportGrid");
+  grid.innerHTML = "";
+
+  const cards = [
+    createDailyReportCard({
+      title: "Production Batches",
+      count: batches.length,
+      note: batches.length ? "Tap to review batch details" : "No batches scheduled",
+      className: "batches",
+      onFocus: () => showDailyReportFocus("Production Batches", body => appendFocusLines(body, batches, batch =>
+        batch.units ? `${batch.label}: ${batch.item} - ${batch.units} units` : `${batch.label}: ${batch.item}`,
+      "No production batches."))
+    }),
+    createDailyReportCard({
+      title: "Kitchen Tasks",
+      count: countGroupedTasks(projectedKitchenTasks),
+      note: projectedKitchenTasks.length ? "Tap to review assignments" : "No kitchen tasks scheduled",
+      className: "kitchen",
+      onFocus: () => showDailyReportFocus("Kitchen Tasks", body => appendTaskFocusDetails(body, projectedKitchenTasks, "No kitchen tasks scheduled."))
+    }),
+    createDailyReportCard({
+      title: "Processing Tasks",
+      count: countGroupedTasks(projectedProcessingTasks),
+      note: projectedProcessingTasks.length ? "Tap to review assignments" : "No processing tasks scheduled",
+      className: "processing",
+      onFocus: () => showDailyReportFocus("Processing Tasks", body => appendTaskFocusDetails(body, projectedProcessingTasks, "No processing tasks scheduled."))
+    }),
+    createDailyReportCard({
+      title: "Events",
+      count: events.length,
+      note: events.length ? "Tap to review event details" : "No events scheduled",
+      className: "events",
+      onFocus: () => showDailyReportFocus("Events", body => appendFocusLines(body, events, event => {
+        const timeText = event.start && event.end ? ` ${event.start}-${event.end}` : "";
+        return `${event.title}${timeText} - ${event.location} - ${event.company}`;
+      }, "No events scheduled."))
+    }),
+    createDailyReportCard({
+      title: "Test Pick Ups",
+      count: payload.testPickups.length,
+      note: payload.testPickups.length ? "Tap to review pickup details" : "No test pick ups scheduled",
+      className: "pickups",
+      onFocus: () => showDailyReportFocus("Test Pick Ups", body => appendFocusLines(body, payload.testPickups, pickup =>
+        `Test Pick Up ${pickup.time}: ${pickup.items.join(", ")}`,
+      "No test pick ups."))
+    })
+  ];
+
+  cards.forEach(card => grid.appendChild(card));
 }
 
 function renderAdminCalendar(gridStart) {
