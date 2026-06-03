@@ -1864,8 +1864,20 @@ function getBatchesFromScheduleRows(rows) {
   return rows.flatMap(row => {
     const payload = parseSchedulePayload(row.tasks);
     return [
-      ...payload.batchHijnx.map(batch => ({ label: "Hijnx", scheduleDate: row.schedule_date, ...batch })),
-      ...payload.batchSb.map(batch => ({ label: "SB", scheduleDate: row.schedule_date, ...batch }))
+      ...payload.batchHijnx.map((batch, index) => ({
+        label: "Hijnx",
+        batchType: "hijnx",
+        batchIndex: index,
+        scheduleDate: row.schedule_date,
+        ...batch
+      })),
+      ...payload.batchSb.map((batch, index) => ({
+        label: "SB",
+        batchType: "sb",
+        batchIndex: index,
+        scheduleDate: row.schedule_date,
+        ...batch
+      }))
     ];
   });
 }
@@ -1906,16 +1918,84 @@ function createBatchTrackerCard(batch, completed) {
   progressRow.appendChild(status);
   card.appendChild(progressRow);
 
+  const controls = document.createElement("div");
+  controls.className = "batch-tracker-controls";
+  const checkAllButton = document.createElement("button");
+  checkAllButton.type = "button";
+  checkAllButton.textContent = "Check All";
+  checkAllButton.disabled = progress.completed === progress.total;
+  checkAllButton.addEventListener("click", () => {
+    const checklist = Object.fromEntries(batchChecklistItems.map(check => [check.key, true]));
+    updateBatchTrackerChecklist(batch, checklist);
+  });
+  controls.appendChild(checkAllButton);
+  card.appendChild(controls);
+
   const checklist = document.createElement("ul");
   checklist.className = "batch-tracker-checklist";
   batchChecklistItems.forEach(check => {
     const line = document.createElement("li");
-    line.textContent = `${batch.checklist && batch.checklist[check.key] ? "Done" : "Open"} - ${check.label}`;
+    const label = document.createElement("label");
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = Boolean(batch.checklist && batch.checklist[check.key]);
+    input.addEventListener("change", () => {
+      updateBatchTrackerChecklist(batch, {
+        ...(batch.checklist || {}),
+        [check.key]: input.checked
+      });
+    });
+
+    label.appendChild(input);
+    label.append(document.createTextNode(check.label));
+    line.appendChild(label);
     checklist.appendChild(line);
   });
   card.appendChild(checklist);
 
   return card;
+}
+
+async function updateBatchTrackerChecklist(batch, nextChecklist) {
+  const scheduleRes = await fetch(`/schedule?from=${batch.scheduleDate}&to=${batch.scheduleDate}`);
+
+  if (!scheduleRes.ok) {
+    showMessage("Could not load the calendar day for this batch.", "error");
+    await loadBatchTracker();
+    return;
+  }
+
+  const rows = await scheduleRes.json();
+  const row = rows.find(item => item.schedule_date === batch.scheduleDate);
+  const payload = parseSchedulePayload(row && row.tasks);
+  const batchList = batch.batchType === "hijnx" ? payload.batchHijnx : payload.batchSb;
+  const currentBatch = batchList[batch.batchIndex];
+
+  if (!currentBatch) {
+    showMessage("That batch is no longer on the calendar.", "error");
+    await loadBatchTracker();
+    return;
+  }
+
+  currentBatch.checklist = Object.fromEntries(
+    batchChecklistItems.map(check => [check.key, Boolean(nextChecklist[check.key])])
+  );
+
+  const saveRes = await adminFetch(`/admin/schedule/${batch.scheduleDate}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tasks: JSON.stringify(payload) })
+  });
+
+  if (!saveRes.ok) {
+    const text = await saveRes.text();
+    showMessage("Batch update failed: " + text, "error");
+    await loadBatchTracker();
+    return;
+  }
+
+  showMessage("Batch progress updated.", "success");
+  await loadBatchTracker();
 }
 
 function renderBatchTrackerSection(containerId, batches, emptyText, completed = false) {
