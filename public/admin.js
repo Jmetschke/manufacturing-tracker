@@ -89,7 +89,7 @@ const batchTaskTemplatesByItem = {
     { order: 2, task: "Packaging" },
     { order: 3, task: "Sealing" },
     { order: 4, task: "Counting (5's)" },
-    { order: 5, task: "Bagging (20's)" }
+    { order: 5, task: "Bagging (10's)" }
   ],
   "RSO Whoopie Hi": [
     { order: 1, task: "Depositing (Beldos)" },

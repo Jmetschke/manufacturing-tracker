@@ -248,8 +248,9 @@ const itemTaskNames = Object.freeze({
   "Micro Dots (50-piece packs)": [
     "Popping",
     "Packaging",
+    "Sealing",
     "Counting (5's)",
-    "Bagging (20's)"
+    "Bagging (10's)"
   ],
   "RSO Whoopie Hi": [
     "Depositing (Beldos)",
