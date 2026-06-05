@@ -814,6 +814,51 @@
       margin: 0;
       padding-left: 20px;
     }
+    .printable-report {
+      border: 1px solid #ccc;
+      background: #fff;
+      margin-top: 18px;
+      padding: 14px;
+    }
+    .printable-report-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+      margin-bottom: 10px;
+    }
+    .printable-report h3 {
+      margin: 0 0 4px;
+    }
+    .printable-report-meta {
+      color: #555;
+      line-height: 1.4;
+    }
+    .printable-report-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .printable-report-actions button {
+      margin: 0;
+    }
+    .printable-report-empty {
+      margin: 0;
+      color: #555;
+    }
+    .item-task-rate-table th,
+    .item-task-rate-table td {
+      vertical-align: top;
+    }
+    .item-task-rate-table .item-group-row td {
+      background: #f4f6f2;
+      font-weight: bold;
+    }
+    .item-task-rate-table .number-cell {
+      text-align: right;
+      white-space: nowrap;
+    }
     .request-order-form {
       display: none;
       grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -859,6 +904,9 @@
       .admin-tab-button { width: 100%; margin-left: 0; margin-right: 0; padding: 14px 12px; text-align: left; font-size: 18px; }
       .summary-line { display: block; }
       .summary-line span { display: block; margin-bottom: 4px; }
+      .printable-report-header,
+      .printable-report-actions { display: block; }
+      .printable-report-actions button { width: 100%; margin-top: 8px; }
       .controls input, .controls select, .controls button,
       .edit-grid input, .edit-grid select, .edit-actions button,
       .calendar-tools input, .calendar-tools button { width: 100%; margin-left: 0; margin-right: 0; }
@@ -1049,6 +1097,40 @@
         display: flex;
       }
     }
+
+    @media print {
+      body.printing-item-task-report {
+        padding: 0;
+      }
+      body.printing-item-task-report .page-header,
+      body.printing-item-task-report .admin-tabs,
+      body.printing-item-task-report #message,
+      body.printing-item-task-report #entriesPanel > :not(#itemTaskRateReport) {
+        display: none !important;
+      }
+      body.printing-item-task-report #entriesPanel,
+      body.printing-item-task-report #itemTaskRateReport {
+        display: block !important;
+      }
+      body.printing-item-task-report .printable-report {
+        border: 0;
+        margin: 0;
+        padding: 0;
+      }
+      body.printing-item-task-report .printable-report-actions {
+        display: none !important;
+      }
+      body.printing-item-task-report table {
+        page-break-inside: auto;
+      }
+      body.printing-item-task-report tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+      }
+      body.printing-item-task-report th {
+        background: #eee !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1085,6 +1167,7 @@
       <option value="">All Tasks</option>
     </select>
     <button onclick="loadReport()">Filter</button>
+    <button type="button" onclick="generateItemTaskRateReport()">Task Avg Report</button>
     <button onclick="exportCSV()">Export CSV</button>
   </div>
 
@@ -1109,6 +1192,7 @@
 
   <div id="summary"></div>
   <div id="table"></div>
+  <section id="itemTaskRateReport" class="printable-report" hidden></section>
 </section>
 
 <section id="dailyPanel" class="admin-panel">

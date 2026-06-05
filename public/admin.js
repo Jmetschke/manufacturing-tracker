@@ -1592,6 +1592,11 @@ async function loadReport() {
 
   renderTable();
   renderSummary();
+
+  const itemTaskReport = document.getElementById("itemTaskRateReport");
+  if (itemTaskReport && !itemTaskReport.hidden) {
+    renderItemTaskRateReport();
+  }
 }
 
 function appendCell(row, value, label = "") {
@@ -1639,12 +1644,14 @@ function summarizeProductionRates(entries, groupKeys) {
     if (!groups.has(mapKey)) {
       groups.set(mapKey, {
         values,
+        entries: 0,
         quantity: 0,
         seconds: 0
       });
     }
 
     const group = groups.get(mapKey);
+    group.entries += 1;
     group.quantity += quantity;
     group.seconds += seconds;
   });
@@ -1681,6 +1688,136 @@ function appendAverageSummaryList(container, heading, rows, formatRow) {
   section.appendChild(list);
 
   container.appendChild(section);
+}
+
+function getEntriesFilterDescription() {
+  const from = document.getElementById("from_date").value;
+  const to = document.getElementById("to_date").value;
+  const employee = document.getElementById("employee_filter").value;
+  const item = document.getElementById("item_filter").value;
+  const task = document.getElementById("task_filter").value;
+  const filters = [];
+
+  if (from || to) {
+    filters.push(`Dates: ${from || "Any"} to ${to || "Any"}`);
+  }
+  if (employee) filters.push(`Employee: ${employee}`);
+  if (item) filters.push(`Item: ${item}`);
+  if (task) filters.push(`Task: ${task}`);
+
+  return filters.length ? filters.join(" | ") : "All entries";
+}
+
+function appendReportCell(row, value, className = "") {
+  const cell = document.createElement("td");
+  if (className) cell.className = className;
+  cell.textContent = value;
+  row.appendChild(cell);
+}
+
+function renderItemTaskRateReport() {
+  const container = document.getElementById("itemTaskRateReport");
+  const rows = summarizeProductionRates(reportData, ["item", "task"]);
+  container.hidden = false;
+  container.innerHTML = "";
+
+  const header = document.createElement("div");
+  header.className = "printable-report-header";
+
+  const titleBlock = document.createElement("div");
+  const title = document.createElement("h3");
+  title.textContent = "Task Average Seconds Per Unit by Item";
+  titleBlock.appendChild(title);
+
+  const meta = document.createElement("div");
+  meta.className = "printable-report-meta";
+  meta.textContent = `${getEntriesFilterDescription()} | Generated ${new Date().toLocaleString()}`;
+  titleBlock.appendChild(meta);
+  header.appendChild(titleBlock);
+
+  const actions = document.createElement("div");
+  actions.className = "printable-report-actions";
+
+  const printButton = document.createElement("button");
+  printButton.type = "button";
+  printButton.textContent = "Print Report";
+  printButton.addEventListener("click", printItemTaskRateReport);
+  actions.appendChild(printButton);
+
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.textContent = "Hide Report";
+  closeButton.addEventListener("click", () => {
+    container.hidden = true;
+  });
+  actions.appendChild(closeButton);
+
+  header.appendChild(actions);
+  container.appendChild(header);
+
+  if (!rows.length) {
+    const empty = document.createElement("p");
+    empty.className = "printable-report-empty";
+    empty.textContent = "No completed entries with quantity and time match the current filters.";
+    container.appendChild(empty);
+    return;
+  }
+
+  const table = document.createElement("table");
+  table.className = "item-task-rate-table";
+  const headerRow = document.createElement("tr");
+  ["Task", "Entries", "Total Qty", "Total Time", "Avg Sec/Unit", "Avg Units/Hour"].forEach(label => {
+    const cell = document.createElement("th");
+    cell.textContent = label;
+    headerRow.appendChild(cell);
+  });
+  table.appendChild(headerRow);
+
+  const rowsByItem = new Map();
+  rows.forEach(row => {
+    const item = row.values[0];
+    if (!rowsByItem.has(item)) rowsByItem.set(item, []);
+    rowsByItem.get(item).push(row);
+  });
+
+  rowsByItem.forEach((itemRows, itemName) => {
+    const itemRow = document.createElement("tr");
+    itemRow.className = "item-group-row";
+    const itemCell = document.createElement("td");
+    itemCell.colSpan = 6;
+    itemCell.textContent = itemName;
+    itemRow.appendChild(itemCell);
+    table.appendChild(itemRow);
+
+    itemRows.forEach(row => {
+      const taskRow = document.createElement("tr");
+      appendReportCell(taskRow, row.values[1]);
+      appendReportCell(taskRow, row.entries, "number-cell");
+      appendReportCell(taskRow, row.quantity.toLocaleString(), "number-cell");
+      appendReportCell(taskRow, secondsToHMS(row.seconds), "number-cell");
+      appendReportCell(taskRow, formatSecondsPerUnit(row.secondsPerUnit), "number-cell");
+      appendReportCell(taskRow, formatUnitsPerHour(row.unitsPerHour), "number-cell");
+      table.appendChild(taskRow);
+    });
+  });
+
+  container.appendChild(table);
+}
+
+async function generateItemTaskRateReport() {
+  await loadReport();
+  renderItemTaskRateReport();
+  document.getElementById("itemTaskRateReport").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function printItemTaskRateReport() {
+  const container = document.getElementById("itemTaskRateReport");
+  if (container.hidden) {
+    renderItemTaskRateReport();
+  }
+
+  document.body.classList.add("printing-item-task-report");
+  window.print();
 }
 
 function renderTable() {
@@ -3869,6 +4006,10 @@ document.addEventListener("keydown", event => {
   if (event.key === "Escape") {
     closeAdminManualReceivedWindow();
   }
+});
+
+window.addEventListener("afterprint", () => {
+  document.body.classList.remove("printing-item-task-report");
 });
 
 async function initAdmin() {
