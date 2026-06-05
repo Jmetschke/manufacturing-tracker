@@ -1590,6 +1590,7 @@ async function loadReport() {
     return true;
   });
 
+  closeEntryFocusWindow();
   renderTable();
   renderSummary();
 
@@ -1715,6 +1716,21 @@ function appendReportCell(row, value, className = "") {
   row.appendChild(cell);
 }
 
+function getEntryFilterValues() {
+  return {
+    from: document.getElementById("from_date").value,
+    to: document.getElementById("to_date").value,
+    employee: document.getElementById("employee_filter").value,
+    item: document.getElementById("item_filter").value,
+    task: document.getElementById("task_filter").value
+  };
+}
+
+function shouldShowDetailedEntriesTable() {
+  const filters = getEntryFilterValues();
+  return Boolean(filters.from && filters.to && filters.item && filters.task);
+}
+
 function renderItemTaskRateReport() {
   const container = document.getElementById("itemTaskRateReport");
   const rows = summarizeProductionRates(reportData, ["item", "task"]);
@@ -1820,10 +1836,7 @@ function printItemTaskRateReport() {
   window.print();
 }
 
-function renderTable() {
-  const container = document.getElementById("table");
-  container.innerHTML = "";
-
+function createDetailedEntriesTable(entries) {
   const table = document.createElement("table");
   table.className = "mobile-stack";
   const headerRow = document.createElement("tr");
@@ -1837,7 +1850,7 @@ function renderTable() {
   });
   table.appendChild(headerRow);
 
-  reportData.forEach(entry => {
+  entries.forEach(entry => {
     const row = document.createElement("tr");
     const dataStatus = getEntryDataStatus(entry);
     if (dataStatus === "test data") {
@@ -1874,7 +1887,123 @@ function renderTable() {
     table.appendChild(row);
   });
 
-  container.appendChild(table);
+  return table;
+}
+
+function getEntryGroupLabel(item, task) {
+  return `${item} - ${task}`;
+}
+
+function groupEntriesByItemAndTask(entries) {
+  const groups = new Map();
+
+  entries.forEach(entry => {
+    const item = entry.item || "Unknown Item";
+    const task = entry.task || "Unknown Task";
+    const key = `${item}\n${task}`;
+    if (!groups.has(key)) {
+      groups.set(key, { item, task });
+    }
+  });
+
+  return Array.from(groups.values()).sort((a, b) =>
+    getEntryGroupLabel(a.item, a.task).localeCompare(getEntryGroupLabel(b.item, b.task))
+  );
+}
+
+function createGroupedEntriesTable() {
+  const groups = groupEntriesByItemAndTask(reportData);
+  const table = document.createElement("table");
+  table.className = "mobile-stack";
+  const headerRow = document.createElement("tr");
+  headerRow.className = "table-heading-row";
+
+  ["Label", "Item", "Task"].forEach(label => {
+    const th = document.createElement("th");
+    th.textContent = label;
+    headerRow.appendChild(th);
+  });
+  table.appendChild(headerRow);
+
+  groups.forEach(group => {
+    const item = group.item;
+    const task = group.task;
+    const row = document.createElement("tr");
+    row.className = "entry-group-row";
+    row.tabIndex = 0;
+    row.setAttribute("role", "button");
+    row.setAttribute("aria-label", `Show entries for ${getEntryGroupLabel(item, task)}`);
+
+    appendCell(row, getEntryGroupLabel(item, task), "Label");
+    appendCell(row, item, "Item");
+    appendCell(row, task, "Task");
+
+    row.addEventListener("click", () => showEntryFocusWindow(item, task));
+    row.addEventListener("keydown", event => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      showEntryFocusWindow(item, task);
+    });
+
+    table.appendChild(row);
+  });
+
+  return table;
+}
+
+function renderTable() {
+  const container = document.getElementById("table");
+  container.innerHTML = "";
+
+  if (shouldShowDetailedEntriesTable()) {
+    container.appendChild(createDetailedEntriesTable(reportData));
+    return;
+  }
+
+  container.appendChild(createGroupedEntriesTable());
+}
+
+function showEntryFocusWindow(item, task) {
+  const container = document.getElementById("entryFocusWindow");
+  const entries = reportData.filter(entry => entry.item === item && entry.task === task);
+  const totalQty = entries.reduce((sum, entry) => sum + (Number(entry.quantity) || 0), 0);
+  const totalTime = entries.reduce((sum, entry) => sum + (Number(entry.duration_seconds) || 0), 0);
+  const avgSeconds = totalQty ? totalTime / totalQty : 0;
+  const unitsPerHour = totalTime ? (totalQty / totalTime) * 3600 : 0;
+
+  container.hidden = false;
+  container.innerHTML = "";
+
+  const header = document.createElement("div");
+  header.className = "entry-focus-header";
+
+  const titleBlock = document.createElement("div");
+  const title = document.createElement("h3");
+  title.textContent = getEntryGroupLabel(item, task);
+  titleBlock.appendChild(title);
+
+  const meta = document.createElement("div");
+  meta.className = "entry-focus-meta";
+  meta.textContent = `${entries.length} entries | Total Qty: ${totalQty.toLocaleString()} | Total Time: ${secondsToHMS(totalTime)} | ${formatSecondsPerUnit(avgSeconds)} | ${formatUnitsPerHour(unitsPerHour)}`;
+  titleBlock.appendChild(meta);
+  header.appendChild(titleBlock);
+
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.textContent = "Close";
+  closeButton.addEventListener("click", closeEntryFocusWindow);
+  header.appendChild(closeButton);
+
+  container.appendChild(header);
+  container.appendChild(createDetailedEntriesTable(entries));
+  container.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function closeEntryFocusWindow() {
+  const container = document.getElementById("entryFocusWindow");
+  if (!container) return;
+  container.hidden = true;
+  container.innerHTML = "";
 }
 
 function renderSummary() {

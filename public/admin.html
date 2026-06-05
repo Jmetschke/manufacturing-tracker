@@ -859,6 +859,36 @@
       text-align: right;
       white-space: nowrap;
     }
+    .entry-focus-window {
+      border: 1px solid #ccc;
+      background: #fff;
+      margin: 16px 0;
+      padding: 14px;
+    }
+    .entry-focus-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+      margin-bottom: 10px;
+    }
+    .entry-focus-header h3 {
+      margin: 0 0 4px;
+    }
+    .entry-focus-meta {
+      color: #555;
+      line-height: 1.4;
+    }
+    .entry-group-row {
+      cursor: pointer;
+    }
+    .entry-group-row:hover,
+    .entry-group-row:focus {
+      background: #f4f6f2;
+      outline: 2px solid #8aa36f;
+      outline-offset: -2px;
+    }
     .request-order-form {
       display: none;
       grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -905,6 +935,7 @@
       .summary-line { display: block; }
       .summary-line span { display: block; margin-bottom: 4px; }
       .printable-report-header,
+      .entry-focus-header,
       .printable-report-actions { display: block; }
       .printable-report-actions button { width: 100%; margin-top: 8px; }
       .controls input, .controls select, .controls button,
@@ -1139,6 +1170,7 @@
   <h2>Admin Dashboard</h2>
   <div class="header-actions">
     <a class="screen-link" href="https://delivery-schedele.onrender.com" target="_blank" rel="noopener">Delivery Schedule</a>
+    <a class="screen-link" href="https://swag-inventory.onrender.com" target="_blank" rel="noopener">Swag Inventory</a>
     <a class="screen-link" href="/">Production Tracker</a>
   </div>
 </div>
@@ -1191,6 +1223,7 @@
   </section>
 
   <div id="summary"></div>
+  <section id="entryFocusWindow" class="entry-focus-window" hidden></section>
   <div id="table"></div>
   <section id="itemTaskRateReport" class="printable-report" hidden></section>
 </section>
