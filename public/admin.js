@@ -929,6 +929,171 @@ function getGeneratedProcessingTaskMap() {
   );
 }
 
+function getGeneratedProcessingRows() {
+  return Array.from(document.querySelectorAll("#processingTaskRows .schedule-task-row.batch-generated-task"));
+}
+
+function getIsoDateOffset(baseIsoDate, offsetDays) {
+  if (!isIsoDate(baseIsoDate)) return "";
+  const [year, month, day] = baseIsoDate.split("-").map(Number);
+  return toIsoDate(addDays(new Date(year, month - 1, day), offsetDays));
+}
+
+function getDayIndexFromTaskDate(taskDate) {
+  const baseIsoDate = document.getElementById("schedule_edit_date").value;
+  if (!isIsoDate(baseIsoDate) || !isIsoDate(taskDate)) return 0;
+
+  const [baseYear, baseMonth, baseDay] = baseIsoDate.split("-").map(Number);
+  const [taskYear, taskMonth, taskDay] = taskDate.split("-").map(Number);
+  const baseDate = dateOnly(new Date(baseYear, baseMonth - 1, baseDay));
+  const task = dateOnly(new Date(taskYear, taskMonth - 1, taskDay));
+  return Math.max(0, Math.round((task - baseDate) / 86400000));
+}
+
+function getFirstPlannerAssignment(row) {
+  return row.querySelector(".schedule-assignment-row");
+}
+
+function ensurePlannerAssignment(row) {
+  let assignment = getFirstPlannerAssignment(row);
+  if (!assignment) {
+    addScheduleAssignment(row, {
+      dayIndex: 0,
+      employee: "Open",
+      hours: Number.parseFloat(row.querySelector(".schedule-task-hours").value) || 0
+    });
+    assignment = getFirstPlannerAssignment(row);
+  }
+  return assignment;
+}
+
+function setPlannerAssignment(row, employeeValue, hoursValue) {
+  const assignment = ensurePlannerAssignment(row);
+  assignment.querySelector(".schedule-assignment-day").value = "0";
+  assignment.querySelector(".schedule-assignment-employee").value = employeeValue;
+  assignment.querySelector(".schedule-assignment-hours").value = hoursValue;
+  updateScheduleTaskRemaining(row);
+}
+
+function createBatchPlannerField(labelText, control) {
+  const field = document.createElement("div");
+  field.className = "batch-plan-field";
+
+  const label = document.createElement("label");
+  label.textContent = labelText;
+  field.appendChild(label);
+  field.appendChild(control);
+
+  return field;
+}
+
+function renderBatchTaskPlanner() {
+  const planner = document.getElementById("batchTaskPlanner");
+  if (!planner) return;
+
+  const generatedRows = getGeneratedProcessingRows();
+  planner.innerHTML = "";
+  planner.hidden = !generatedRows.length;
+  if (!generatedRows.length) return;
+
+  const rowsByBatch = new Map();
+  generatedRows.forEach(row => {
+    const batchLabel = row.dataset.sourceBatchLabel || "Generated batch";
+    if (!rowsByBatch.has(batchLabel)) rowsByBatch.set(batchLabel, []);
+    rowsByBatch.get(batchLabel).push(row);
+  });
+
+  rowsByBatch.forEach((rows, batchLabel) => {
+    rows.sort((a, b) =>
+      (Number.parseInt(a.dataset.sourceTaskOrder, 10) || 0) - (Number.parseInt(b.dataset.sourceTaskOrder, 10) || 0)
+    );
+
+    const card = document.createElement("section");
+    card.className = "batch-plan-card";
+
+    const heading = document.createElement("h5");
+    heading.textContent = batchLabel;
+    card.appendChild(heading);
+
+    rows.forEach(row => {
+      const taskLine = document.createElement("div");
+      taskLine.className = "batch-plan-task";
+
+      const itemName = row.querySelector(".schedule-task-item").value;
+      const taskName = row.querySelector(".schedule-task-input").value;
+      const units = Number.parseFloat(row.querySelector(".schedule-task-units").value) || 0;
+      const taskDate = row.querySelector(".schedule-task-date").value;
+      const currentDayIndex = getDayIndexFromTaskDate(taskDate);
+      const assignment = getFirstPlannerAssignment(row);
+
+      const title = document.createElement("div");
+      title.className = "batch-plan-task-title";
+      const taskLabel = document.createElement("b");
+      taskLabel.textContent = taskName || "Generated task";
+      title.appendChild(taskLabel);
+      const taskMeta = document.createElement("span");
+      taskMeta.textContent = `${itemName || "No item"}${units ? ` - ${units.toLocaleString()} units` : ""}`;
+      title.appendChild(taskMeta);
+      taskLine.appendChild(title);
+
+      const daySelect = document.createElement("select");
+      const dayOptionCount = Math.max(7, currentDayIndex + 1);
+      for (let index = 0; index < dayOptionCount; index += 1) {
+        const option = document.createElement("option");
+        option.value = String(index);
+        option.text = `Day ${index + 1}`;
+        daySelect.appendChild(option);
+      }
+      daySelect.value = String(currentDayIndex);
+      daySelect.addEventListener("change", () => {
+        const dayIndex = Math.max(0, Number.parseInt(daySelect.value, 10) || 0);
+        row.querySelector(".schedule-task-date").value = getIsoDateOffset(document.getElementById("schedule_edit_date").value, dayIndex);
+        row.querySelector(".schedule-task-days").value = "1";
+        refreshScheduleAssignmentDays(row);
+        const currentAssignment = getFirstPlannerAssignment(row);
+        if (currentAssignment) currentAssignment.querySelector(".schedule-assignment-day").value = "0";
+      });
+      taskLine.appendChild(createBatchPlannerField("Day", daySelect));
+
+      const hoursInput = document.createElement("input");
+      hoursInput.type = "number";
+      hoursInput.min = "0";
+      hoursInput.step = "0.25";
+      hoursInput.value = row.querySelector(".schedule-task-hours").value || "";
+      hoursInput.addEventListener("input", () => {
+        row.querySelector(".schedule-task-hours").value = hoursInput.value;
+        row.dataset.hoursOverridden = "true";
+        const currentAssignment = getFirstPlannerAssignment(row);
+        if (currentAssignment) {
+          currentAssignment.querySelector(".schedule-assignment-hours").value = hoursInput.value;
+        }
+        updateScheduleTaskRemaining(row);
+      });
+      taskLine.appendChild(createBatchPlannerField("Hours", hoursInput));
+
+      const employeeInput = createEmployeeInput(assignment ? assignment.querySelector(".schedule-assignment-employee").value : "Open");
+      employeeInput.addEventListener("input", () => {
+        const assignedHours = row.querySelector(".schedule-task-hours").value || "";
+        setPlannerAssignment(row, employeeInput.value, assignedHours);
+      });
+      taskLine.appendChild(createBatchPlannerField("Person", employeeInput));
+
+      const detailButton = document.createElement("button");
+      detailButton.type = "button";
+      detailButton.textContent = row.classList.contains("batch-planner-detail-open") ? "Hide Details" : "Details";
+      detailButton.addEventListener("click", () => {
+        row.classList.toggle("batch-planner-detail-open");
+        detailButton.textContent = row.classList.contains("batch-planner-detail-open") ? "Hide Details" : "Details";
+      });
+      taskLine.appendChild(detailButton);
+
+      card.appendChild(taskLine);
+    });
+
+    planner.appendChild(card);
+  });
+}
+
 function refreshBatchRows(type) {
   getBatchRows(type).querySelectorAll(".batch-row").forEach((row, index) => {
     row.querySelector(".batch-order").textContent = `${index + 1}.`;
@@ -1102,6 +1267,8 @@ function syncGeneratedBatchTasksFromBatches() {
         }
       });
   });
+
+  renderBatchTaskPlanner();
 }
 
 function refreshEventRows() {
@@ -2897,6 +3064,11 @@ async function autoFillScheduleTaskHours(row, force = false) {
   hoursInput.value = formatEstimatedHours(units / unitsPerHour);
   row.dataset.hoursOverridden = "false";
   updateScheduleTaskRemaining(row);
+  if (row.classList.contains("batch-generated-task")) {
+    const assignment = getFirstPlannerAssignment(row);
+    if (assignment) assignment.querySelector(".schedule-assignment-hours").value = hoursInput.value;
+    renderBatchTaskPlanner();
+  }
 }
 
 function addScheduleTask(value = "", daysValue = 1, rowsId = "scheduleTaskRows") {
@@ -3296,6 +3468,11 @@ function cancelScheduleEdit() {
   document.getElementById("scheduleTaskRows").innerHTML = "";
   document.getElementById("testPickupRows").innerHTML = "";
   document.getElementById("processingTaskRows").innerHTML = "";
+  const planner = document.getElementById("batchTaskPlanner");
+  if (planner) {
+    planner.innerHTML = "";
+    planner.hidden = true;
+  }
   document.querySelectorAll(".schedule-task-section, .pickup-group, .processing-group").forEach(section => {
     section.hidden = false;
   });

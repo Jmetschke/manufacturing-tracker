@@ -546,6 +546,66 @@
       border-left: 4px solid #2364aa;
       background: #f4f8fc;
     }
+    .processing-group #processingTaskRows > .batch-generated-task:not(.batch-planner-detail-open) {
+      display: none;
+    }
+    .batch-task-planner {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .batch-task-planner[hidden] {
+      display: none;
+    }
+    .batch-plan-card {
+      border: 1px solid #d8ded3;
+      border-left: 5px solid #2364aa;
+      background: #fbfcfa;
+      padding: 10px;
+    }
+    .batch-plan-card h5 {
+      margin: 0 0 8px;
+      font-size: 15px;
+    }
+    .batch-plan-task {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) 88px 90px minmax(150px, 1fr) auto;
+      gap: 8px;
+      align-items: end;
+      border-top: 1px solid #edf0e8;
+      padding: 8px 0;
+    }
+    .batch-plan-task:first-of-type {
+      border-top: 0;
+      padding-top: 0;
+    }
+    .batch-plan-task-title {
+      min-width: 0;
+    }
+    .batch-plan-task-title b {
+      display: block;
+    }
+    .batch-plan-task-title span {
+      color: #555;
+      display: block;
+      font-size: 12px;
+      margin-top: 2px;
+    }
+    .batch-plan-field {
+      display: grid;
+      gap: 4px;
+    }
+    .batch-plan-field label {
+      color: #4f5f47;
+      font-size: 12px;
+      font-weight: bold;
+      margin: 0;
+    }
+    .batch-plan-field input,
+    .batch-plan-field select {
+      margin: 0;
+      width: 100%;
+    }
     .schedule-task-field {
       display: grid;
       gap: 4px;
@@ -996,6 +1056,7 @@
       .batch-row,
       .schedule-task-row,
       .test-pickup-row { grid-template-columns: 28px 1fr; }
+      .batch-plan-task { grid-template-columns: 1fr; }
       .schedule-task-field,
       .schedule-task-actions { grid-column: 2 / -1; }
       .schedule-task-actions { justify-content: flex-start; }
@@ -1329,6 +1390,7 @@
           <h4>Processing Tasks</h4>
           <button type="button" onclick="addScheduleTask('', 1, 'processingTaskRows')">Add Processing Task</button>
         </div>
+        <div id="batchTaskPlanner" class="batch-task-planner" hidden></div>
         <div id="processingTaskRows"></div>
       </section>
     </div>
