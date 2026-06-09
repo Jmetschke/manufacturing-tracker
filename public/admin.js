@@ -933,23 +933,6 @@ function getGeneratedProcessingRows() {
   return Array.from(document.querySelectorAll("#processingTaskRows .schedule-task-row.batch-generated-task"));
 }
 
-function getIsoDateOffset(baseIsoDate, offsetDays) {
-  if (!isIsoDate(baseIsoDate)) return "";
-  const [year, month, day] = baseIsoDate.split("-").map(Number);
-  return toIsoDate(addDays(new Date(year, month - 1, day), offsetDays));
-}
-
-function getDayIndexFromTaskDate(taskDate) {
-  const baseIsoDate = document.getElementById("schedule_edit_date").value;
-  if (!isIsoDate(baseIsoDate) || !isIsoDate(taskDate)) return 0;
-
-  const [baseYear, baseMonth, baseDay] = baseIsoDate.split("-").map(Number);
-  const [taskYear, taskMonth, taskDay] = taskDate.split("-").map(Number);
-  const baseDate = dateOnly(new Date(baseYear, baseMonth - 1, baseDay));
-  const task = dateOnly(new Date(taskYear, taskMonth - 1, taskDay));
-  return Math.max(0, Math.round((task - baseDate) / 86400000));
-}
-
 function getFirstPlannerAssignment(row) {
   return row.querySelector(".schedule-assignment-row");
 }
@@ -1022,8 +1005,8 @@ function renderBatchTaskPlanner() {
       const itemName = row.querySelector(".schedule-task-item").value;
       const taskName = row.querySelector(".schedule-task-input").value;
       const units = Number.parseFloat(row.querySelector(".schedule-task-units").value) || 0;
-      const taskDate = row.querySelector(".schedule-task-date").value;
-      const currentDayIndex = getDayIndexFromTaskDate(taskDate);
+      const scheduleDateInput = row.querySelector(".schedule-task-date");
+      const taskDate = scheduleDateInput.value;
       const assignment = getFirstPlannerAssignment(row);
 
       const title = document.createElement("div");
@@ -1036,24 +1019,17 @@ function renderBatchTaskPlanner() {
       title.appendChild(taskMeta);
       taskLine.appendChild(title);
 
-      const daySelect = document.createElement("select");
-      const dayOptionCount = Math.max(7, currentDayIndex + 1);
-      for (let index = 0; index < dayOptionCount; index += 1) {
-        const option = document.createElement("option");
-        option.value = String(index);
-        option.text = `Day ${index + 1}`;
-        daySelect.appendChild(option);
-      }
-      daySelect.value = String(currentDayIndex);
-      daySelect.addEventListener("change", () => {
-        const dayIndex = Math.max(0, Number.parseInt(daySelect.value, 10) || 0);
-        row.querySelector(".schedule-task-date").value = getIsoDateOffset(document.getElementById("schedule_edit_date").value, dayIndex);
+      const dateInput = document.createElement("input");
+      dateInput.type = "date";
+      dateInput.value = taskDate;
+      dateInput.addEventListener("change", () => {
+        scheduleDateInput.value = dateInput.value;
         row.querySelector(".schedule-task-days").value = "1";
         refreshScheduleAssignmentDays(row);
         const currentAssignment = getFirstPlannerAssignment(row);
         if (currentAssignment) currentAssignment.querySelector(".schedule-assignment-day").value = "0";
       });
-      taskLine.appendChild(createBatchPlannerField("Day", daySelect));
+      taskLine.appendChild(createBatchPlannerField("Date", dateInput));
 
       const hoursInput = document.createElement("input");
       hoursInput.type = "number";
