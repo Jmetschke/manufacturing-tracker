@@ -16,6 +16,7 @@ const ADMIN_ACCESS_CODE = process.env.ADMIN_ACCESS_CODE || "0187";
 const ACCESS_COOKIE = "manufacturing_tracker_access";
 const ADMIN_ACCESS_COOKIE = "manufacturing_tracker_admin_access";
 const ACCESS_SECRET = process.env.ACCESS_SESSION_SECRET || `${ACCESS_CODE}:${ADMIN_ACCESS_CODE}`;
+const MAX_SCHEDULE_TASKS_LENGTH = 100000;
 
 function parseCookies(header = "") {
   return Object.fromEntries(
@@ -948,8 +949,8 @@ app.put("/admin/schedule/:date", (req, res) => {
     return res.status(400).send("Invalid schedule date");
   }
 
-  if (tasks.length > 5000) {
-    return res.status(400).send("Tasks are too long");
+  if (tasks.length > MAX_SCHEDULE_TASKS_LENGTH) {
+    return res.status(400).send("Schedule payload is too large");
   }
 
   const savedTasks = isWeekendIsoDate(scheduleDate) ? removeScheduleTasks(tasks) : tasks;
