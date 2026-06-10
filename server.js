@@ -24,6 +24,18 @@ const entryAlertThresholdsByKey = new Map(
     Number(rule.secondsPerUnitAlertLevel) || 0
   ])
 );
+const entryAlertThresholdsByTaskKey = new Map();
+
+entryAlertThresholds.forEach(rule => {
+  const threshold = Number(rule.secondsPerUnitAlertLevel) || 0;
+  if (threshold <= 0) return;
+
+  const taskKey = normalizeEntryAlertName(rule.task);
+  const currentThreshold = entryAlertThresholdsByTaskKey.get(taskKey);
+  if (!currentThreshold || threshold < currentThreshold) {
+    entryAlertThresholdsByTaskKey.set(taskKey, threshold);
+  }
+});
 
 function normalizeEntryAlertName(value) {
   return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
@@ -39,13 +51,17 @@ function getEntryAlertThreshold(item, task) {
 
   const normalizedTask = normalizeEntryAlertName(task);
   if (normalizedTask === "sb sealing") {
-    return entryAlertThresholdsByKey.get(getEntryAlertThresholdKey(item, "Sealing")) || 0;
+    const sealingThreshold = entryAlertThresholdsByKey.get(getEntryAlertThresholdKey(item, "Sealing")) || 0;
+    if (sealingThreshold) return sealingThreshold;
+    return entryAlertThresholdsByTaskKey.get(normalizeEntryAlertName("Sealing")) || 0;
   }
   if (normalizedTask === "bagging (10's)") {
-    return entryAlertThresholdsByKey.get(getEntryAlertThresholdKey(item, "Bagging (20's)")) || 0;
+    const baggingThreshold = entryAlertThresholdsByKey.get(getEntryAlertThresholdKey(item, "Bagging (20's)")) || 0;
+    if (baggingThreshold) return baggingThreshold;
+    return entryAlertThresholdsByTaskKey.get(normalizeEntryAlertName("Bagging (20's)")) || 0;
   }
 
-  return 0;
+  return entryAlertThresholdsByTaskKey.get(normalizedTask) || 0;
 }
 
 function getEntrySecondsPerUnit(durationSeconds, quantity) {
@@ -65,8 +81,8 @@ function getEntryAlertReason(entry) {
   if (secondsPerUnit === 0) return "0 sec/unit";
 
   const threshold = getEntryAlertThreshold(entry.item, entry.task);
-  if (threshold > 0 && secondsPerUnit > threshold) {
-    return `${formatSecondsPerUnit(secondsPerUnit)} over ${formatSecondsPerUnit(threshold)} alert level`;
+  if (threshold > 0 && secondsPerUnit >= threshold) {
+    return `${formatSecondsPerUnit(secondsPerUnit)} at or over ${formatSecondsPerUnit(threshold)} alert level`;
   }
 
   return "";

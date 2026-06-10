@@ -8,6 +8,7 @@ let pendingEntry = null;
 let savedEntries = [];
 let flaggedEntries = [];
 let entryAlertThresholdsByKey = new Map();
+let entryAlertThresholdsByTaskKey = new Map();
 let orderedItems = [];
 let orderRequests = [];
 let pausedSeconds = 0;
@@ -1493,10 +1494,17 @@ function getEntryAlertThresholdKey(item, task) {
 
 function setEntryAlertThresholds(thresholds) {
   entryAlertThresholdsByKey = new Map();
+  entryAlertThresholdsByTaskKey = new Map();
   (Array.isArray(thresholds) ? thresholds : []).forEach(rule => {
     const threshold = Number(rule.secondsPerUnitAlertLevel) || 0;
     if (threshold <= 0) return;
     entryAlertThresholdsByKey.set(getEntryAlertThresholdKey(rule.item, rule.task), threshold);
+
+    const taskKey = normalizeEntryAlertName(rule.task);
+    const currentThreshold = entryAlertThresholdsByTaskKey.get(taskKey);
+    if (!currentThreshold || threshold < currentThreshold) {
+      entryAlertThresholdsByTaskKey.set(taskKey, threshold);
+    }
   });
 }
 
@@ -1506,13 +1514,17 @@ function getEntryAlertThreshold(item, task) {
 
   const normalizedTask = normalizeEntryAlertName(task);
   if (normalizedTask === "sb sealing") {
-    return entryAlertThresholdsByKey.get(getEntryAlertThresholdKey(item, "Sealing")) || 0;
+    const sealingThreshold = entryAlertThresholdsByKey.get(getEntryAlertThresholdKey(item, "Sealing")) || 0;
+    if (sealingThreshold) return sealingThreshold;
+    return entryAlertThresholdsByTaskKey.get(normalizeEntryAlertName("Sealing")) || 0;
   }
   if (normalizedTask === "bagging (10's)") {
-    return entryAlertThresholdsByKey.get(getEntryAlertThresholdKey(item, "Bagging (20's)")) || 0;
+    const baggingThreshold = entryAlertThresholdsByKey.get(getEntryAlertThresholdKey(item, "Bagging (20's)")) || 0;
+    if (baggingThreshold) return baggingThreshold;
+    return entryAlertThresholdsByTaskKey.get(normalizeEntryAlertName("Bagging (20's)")) || 0;
   }
 
-  return 0;
+  return entryAlertThresholdsByTaskKey.get(normalizedTask) || 0;
 }
 
 function getEntrySecondsPerUnit(durationSeconds, quantity) {
@@ -1526,8 +1538,8 @@ function getSuspiciousEntryReason(durationSeconds, quantity, item, task) {
   if (secondsPerUnit === 0) return "0 sec/unit";
 
   const threshold = getEntryAlertThreshold(item, task);
-  if (threshold > 0 && secondsPerUnit > threshold) {
-    return `${formatEntrySecondsPerUnit(secondsPerUnit)} over ${formatEntrySecondsPerUnit(threshold)} alert level`;
+  if (threshold > 0 && secondsPerUnit >= threshold) {
+    return `${formatEntrySecondsPerUnit(secondsPerUnit)} at or over ${formatEntrySecondsPerUnit(threshold)} alert level`;
   }
 
   return "";
