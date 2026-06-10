@@ -2112,6 +2112,40 @@ app.delete("/entries/:id", (req, res) => {
   );
 });
 
+app.get("/flagged-entries", (req, res) => {
+  db.all(`
+    SELECT
+      l.id AS log_id,
+      COALESCE(l.dispensary_name, '') AS dispensary_name,
+      COALESCE(i.name, 'Unknown Item') AS item,
+      COALESCE(t.name, 'Unknown Task') AS task,
+      l.employee,
+      l.work_date,
+      COALESCE(l.quantity, 0) AS quantity,
+      COALESCE(l.duration_seconds, 0) AS duration_seconds,
+      CASE
+        WHEN COALESCE(l.quantity, 0) = 0 THEN 0
+        ELSE (COALESCE(l.duration_seconds, 0) * 1.0) / COALESCE(l.quantity, 0)
+      END AS sec_per_unit
+    FROM time_logs l
+    LEFT JOIN items i ON i.id = l.item_id
+    LEFT JOIN tasks t ON t.id = l.task_id
+    WHERE l.end_time IS NOT NULL
+      AND (
+        COALESCE(l.quantity, 0) = 0
+        OR COALESCE(l.duration_seconds, 0) = 0
+        OR (
+          COALESCE(l.quantity, 0) > 0
+          AND ((COALESCE(l.duration_seconds, 0) * 1.0) / COALESCE(l.quantity, 0)) > 30
+        )
+      )
+    ORDER BY l.work_date DESC, l.id DESC
+  `, [], (err, rows) => {
+    if (err) return res.status(500).send(err.message);
+    res.json(rows);
+  });
+});
+
 /* ---------- ADMIN ENTRIES ---------- */
 app.get("/admin/entries", (req, res) => {
   db.all(`

@@ -449,6 +449,49 @@
       margin-top: 24px;
     }
 
+    .flagged-entry-review {
+      border: 1px solid #c97d16;
+      background: #fffaf0;
+      margin-top: 18px;
+      padding: 12px;
+    }
+
+    .flagged-entry-review[hidden] {
+      display: none;
+    }
+
+    .flagged-entry-review-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .flagged-entry-review-header h3 {
+      margin: 0;
+    }
+
+    .flagged-entry-review-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    #flaggedEntryList {
+      overflow-x: auto;
+      width: 100%;
+    }
+
+    .flagged-entry-row {
+      background: #fff5df;
+    }
+
+    .flagged-entry-reason {
+      color: #8a4f00;
+      font-weight: bold;
+    }
+
     #savedEntries {
       overflow-x: auto;
       width: 100%;
@@ -1402,6 +1445,16 @@
       <div id="timerMessage" class="timer-message"></div>
       <div id="entryQualityAlert" class="entry-quality-alert" hidden></div>
     </div>
+
+    <section id="flaggedEntryReview" class="flagged-entry-review" hidden>
+      <div class="flagged-entry-review-header">
+        <h3>Flagged Entries</h3>
+        <div class="flagged-entry-review-actions">
+          <button type="button" id="refreshFlaggedEntriesBtn" onclick="loadFlaggedEntries()">Refresh</button>
+        </div>
+      </div>
+      <div id="flaggedEntryList"></div>
+    </section>
 
     <details class="saved-entries">
       <summary>Recent Saved Entries</summary>
