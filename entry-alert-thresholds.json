@@ -1,0 +1,942 @@
+[
+  {
+    "item": "Daytime Focus Micro Pump",
+    "task": "FIlling (Slot Machine)",
+    "secondsPerUnitAlertLevel": 10
+  },
+  {
+    "item": "Daytime Focus Micro Pump",
+    "task": "Capping (Tinctures)",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Daytime Focus Micro Pump",
+    "task": "Packaging",
+    "secondsPerUnitAlertLevel": 10
+  },
+  {
+    "item": "Daytime Focus Micro Pump",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Daytime Focus Micro Pump",
+    "task": "Counting (5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Daytime Focus Micro Pump",
+    "task": "Bagging (20's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Good Night Sleep Micro Pump",
+    "task": "FIlling (Slot Machine)",
+    "secondsPerUnitAlertLevel": 10
+  },
+  {
+    "item": "Good Night Sleep Micro Pump",
+    "task": "Capping (Tinctures)",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Good Night Sleep Micro Pump",
+    "task": "Packaging",
+    "secondsPerUnitAlertLevel": 10
+  },
+  {
+    "item": "Good Night Sleep Micro Pump",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Good Night Sleep Micro Pump",
+    "task": "Counting (5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Good Night Sleep Micro Pump",
+    "task": "Bagging (20's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Main Squeeze Party Pouch",
+    "task": "Depositing (Beldos)",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Main Squeeze Party Pouch",
+    "task": "Packaging",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Main Squeeze Party Pouch",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Main Squeeze Party Pouch",
+    "task": "Counting (5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Main Squeeze Party Pouch",
+    "task": "Bagging (10's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Micro Dots (50-piece packs)",
+    "task": "Popping",
+    "secondsPerUnitAlertLevel": 10
+  },
+  {
+    "item": "Micro Dots (50-piece packs)",
+    "task": "Packaging",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Micro Dots (50-piece packs)",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Micro Dots (50-piece packs)",
+    "task": "Counting (5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Micro Dots (50-piece packs)",
+    "task": "Bagging (20's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "RSO Whoopie Hi",
+    "task": "Depositing (Beldos)",
+    "secondsPerUnitAlertLevel": 15
+  },
+  {
+    "item": "RSO Whoopie Hi",
+    "task": "Packaging",
+    "secondsPerUnitAlertLevel": 10
+  },
+  {
+    "item": "RSO Whoopie Hi",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "RSO Whoopie Hi",
+    "task": "Counting (5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "RSO Whoopie Hi",
+    "task": "Bagging (10's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk OG 1 chunk (pcs)",
+    "task": "Depositing (truffly)",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk OG 1 chunk (pcs)",
+    "task": "Nerding",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk OG 1 chunk (pcs)",
+    "task": "Popping",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk OG 1 chunk (pcs)",
+    "task": "Sugaring",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk OG 1 chunk (pcs)",
+    "task": "Packaging",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Space Chunk OG 1 chunk (pcs)",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Space Chunk OG 1 chunk (pcs)",
+    "task": "Counting (5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk OG 1 chunk (pcs)",
+    "task": "Bagging (20's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk ALPHA OG 2 chunk (units)",
+    "task": "Depositing (truffly)",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk ALPHA OG 2 chunk (units)",
+    "task": "Nerding",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk ALPHA OG 2 chunk (units)",
+    "task": "Popping",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk ALPHA OG 2 chunk (units)",
+    "task": "Sugaring",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk ALPHA OG 2 chunk (units)",
+    "task": "Packaging",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Space Chunk ALPHA OG 2 chunk (units)",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Space Chunk ALPHA OG 2 chunk (units)",
+    "task": "Counting (5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk ALPHA OG 2 chunk (units)",
+    "task": "Bagging (20's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk REX OG 1 chunk (units)",
+    "task": "Depositing (truffly)",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk REX OG 1 chunk (units)",
+    "task": "Nerding",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk REX OG 1 chunk (units)",
+    "task": "Popping",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk REX OG 1 chunk (units)",
+    "task": "Sugaring",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk REX OG 1 chunk (units)",
+    "task": "Packaging",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Space Chunk REX OG 1 chunk (units)",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Space Chunk REX OG 1 chunk (units)",
+    "task": "Counting (5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk REX OG 1 chunk (units)",
+    "task": "Bagging (20's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk REX OG 2 chunk (units)",
+    "task": "Depositing (truffly)",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk REX OG 2 chunk (units)",
+    "task": "Nerding",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk REX OG 2 chunk (units)",
+    "task": "Popping",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk REX OG 2 chunk (units)",
+    "task": "Sugaring",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk REX OG 2 chunk (units)",
+    "task": "Packaging",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Space Chunk REX OG 2 chunk (units)",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Space Chunk REX OG 2 chunk (units)",
+    "task": "Counting (5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk REX OG 2 chunk (units)",
+    "task": "Bagging (20's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk ZUUL OG 1 chunk (units)",
+    "task": "Depositing (truffly)",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk ZUUL OG 1 chunk (units)",
+    "task": "Nerding",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk ZUUL OG 1 chunk (units)",
+    "task": "Popping",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk ZUUL OG 1 chunk (units)",
+    "task": "Sugaring",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk ZUUL OG 1 chunk (units)",
+    "task": "Packaging",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Space Chunk ZUUL OG 1 chunk (units)",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Space Chunk ZUUL OG 1 chunk (units)",
+    "task": "Counting (5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk ZUUL OG 1 chunk (units)",
+    "task": "Bagging (20's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk ZUUL OG 2 chunk (units)",
+    "task": "Depositing (truffly)",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk ZUUL OG 2 chunk (units)",
+    "task": "Nerding",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk ZUUL OG 2 chunk (units)",
+    "task": "Popping",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk ZUUL OG 2 chunk (units)",
+    "task": "Sugaring",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk ZUUL OG 2 chunk (units)",
+    "task": "Packaging",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Space Chunk ZUUL OG 2 chunk (units)",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Space Chunk ZUUL OG 2 chunk (units)",
+    "task": "Counting (5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk ZUUL OG 2 chunk (units)",
+    "task": "Bagging (20's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk 1 chunk CBD 50mg 1-1 (pcs)",
+    "task": "Depositing (truffly)",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk 1 chunk CBD 50mg 1-1 (pcs)",
+    "task": "Nerding",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk 1 chunk CBD 50mg 1-1 (pcs)",
+    "task": "Popping",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk 1 chunk CBD 50mg 1-1 (pcs)",
+    "task": "Sugaring",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk 1 chunk CBD 50mg 1-1 (pcs)",
+    "task": "Packaging",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Space Chunk 1 chunk CBD 50mg 1-1 (pcs)",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Space Chunk 1 chunk CBD 50mg 1-1 (pcs)",
+    "task": "Counting (5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk 1 chunk CBD 50mg 1-1 (pcs)",
+    "task": "Bagging (20's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunks CBD 2 chunks 1-1 (units)",
+    "task": "Depositing (truffly)",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunks CBD 2 chunks 1-1 (units)",
+    "task": "Nerding",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunks CBD 2 chunks 1-1 (units)",
+    "task": "Popping",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunks CBD 2 chunks 1-1 (units)",
+    "task": "Sugaring",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunks CBD 2 chunks 1-1 (units)",
+    "task": "Packaging",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Space Chunks CBD 2 chunks 1-1 (units)",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Space Chunks CBD 2 chunks 1-1 (units)",
+    "task": "Counting (5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunks CBD 2 chunks 1-1 (units)",
+    "task": "Bagging (20's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk CBN 1 chunk (pcs)",
+    "task": "Depositing (truffly)",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk CBN 1 chunk (pcs)",
+    "task": "Nerding",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk CBN 1 chunk (pcs)",
+    "task": "Popping",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk CBN 1 chunk (pcs)",
+    "task": "Sugaring",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk CBN 1 chunk (pcs)",
+    "task": "Packaging",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Space Chunk CBN 1 chunk (pcs)",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Space Chunk CBN 1 chunk (pcs)",
+    "task": "Counting (5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk CBN 1 chunk (pcs)",
+    "task": "Bagging (20's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk CBN 2 chunk (units)",
+    "task": "Depositing (truffly)",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk CBN 2 chunk (units)",
+    "task": "Nerding",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk CBN 2 chunk (units)",
+    "task": "Popping",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk CBN 2 chunk (units)",
+    "task": "Sugaring",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk CBN 2 chunk (units)",
+    "task": "Packaging",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Space Chunk CBN 2 chunk (units)",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Space Chunk CBN 2 chunk (units)",
+    "task": "Counting (5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk CBN 2 chunk (units)",
+    "task": "Bagging (20's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk Mini 10 chunk (units)",
+    "task": "Depositing (muffly)",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk Mini 10 chunk (units)",
+    "task": "Depositing (truffly)",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk Mini 10 chunk (units)",
+    "task": "Nerding",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk Mini 10 chunk (units)",
+    "task": "Popping",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk Mini 10 chunk (units)",
+    "task": "Sugaring",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk Mini 10 chunk (units)",
+    "task": "Packaging",
+    "secondsPerUnitAlertLevel": 25
+  },
+  {
+    "item": "Space Chunk Mini 10 chunk (units)",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Space Chunk Mini 10 chunk (units)",
+    "task": "Counting (5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk Mini 10 chunk (units)",
+    "task": "Bagging (20's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk SUGAR FREE 10pk (units)",
+    "task": "Depositing (muffly)",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk SUGAR FREE 10pk (units)",
+    "task": "Depositing (truffly)",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk SUGAR FREE 10pk (units)",
+    "task": "Nerding",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk SUGAR FREE 10pk (units)",
+    "task": "Popping",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk SUGAR FREE 10pk (units)",
+    "task": "Sugaring",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk SUGAR FREE 10pk (units)",
+    "task": "Packaging",
+    "secondsPerUnitAlertLevel": 25
+  },
+  {
+    "item": "Space Chunk SUGAR FREE 10pk (units)",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Space Chunk SUGAR FREE 10pk (units)",
+    "task": "Counting (5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk SUGAR FREE 10pk (units)",
+    "task": "Bagging (20's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk SUGAR FREE 2pk (units)",
+    "task": "Depositing (truffly)",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk SUGAR FREE 2pk (units)",
+    "task": "Nerding",
+    "secondsPerUnitAlertLevel": 4
+  },
+  {
+    "item": "Space Chunk SUGAR FREE 2pk (units)",
+    "task": "Popping",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk SUGAR FREE 2pk (units)",
+    "task": "Sugaring",
+    "secondsPerUnitAlertLevel": 6
+  },
+  {
+    "item": "Space Chunk SUGAR FREE 2pk (units)",
+    "task": "Packaging",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Space Chunk SUGAR FREE 2pk (units)",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Space Chunk SUGAR FREE 2pk (units)",
+    "task": "Counting (5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Space Chunk SUGAR FREE 2pk (units)",
+    "task": "Bagging (20's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Shooters Triple Citrus",
+    "task": "Filling (Filling Machine)",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Shooters Triple Citrus",
+    "task": "Capping (shooters)",
+    "secondsPerUnitAlertLevel": 15
+  },
+  {
+    "item": "Shooters Triple Citrus",
+    "task": "Seal-Stickering (shooters)",
+    "secondsPerUnitAlertLevel": 30
+  },
+  {
+    "item": "Shooters Triple Citrus",
+    "task": "Bagging (10's)",
+    "secondsPerUnitAlertLevel": 15
+  },
+  {
+    "item": "Shooters Sour Watermelon",
+    "task": "Filling (Filling Machine)",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Shooters Sour Watermelon",
+    "task": "Capping (shooters)",
+    "secondsPerUnitAlertLevel": 15
+  },
+  {
+    "item": "Shooters Sour Watermelon",
+    "task": "Seal-Stickering (shooters)",
+    "secondsPerUnitAlertLevel": 30
+  },
+  {
+    "item": "Shooters Sour Watermelon",
+    "task": "Bagging (10's)",
+    "secondsPerUnitAlertLevel": 15
+  },
+  {
+    "item": "Shooters Sour Blu Raz",
+    "task": "Filling (Filling Machine)",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Shooters Sour Blu Raz",
+    "task": "Capping (shooters)",
+    "secondsPerUnitAlertLevel": 15
+  },
+  {
+    "item": "Shooters Sour Blu Raz",
+    "task": "Seal-Stickering (shooters)",
+    "secondsPerUnitAlertLevel": 30
+  },
+  {
+    "item": "Shooters Sour Blu Raz",
+    "task": "Bagging (10's)",
+    "secondsPerUnitAlertLevel": 15
+  },
+  {
+    "item": "Grape 1g",
+    "task": "Filling (SB Vapes)",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Grape 1g",
+    "task": "Capping (SB Vapes)",
+    "secondsPerUnitAlertLevel": 7
+  },
+  {
+    "item": "Grape 1g",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Grape 1g",
+    "task": "Counting (SB 5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Grape 1g",
+    "task": "Bagging (SB 25's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Mango 1g",
+    "task": "Filling (SB Vapes)",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Mango 1g",
+    "task": "Capping (SB Vapes)",
+    "secondsPerUnitAlertLevel": 7
+  },
+  {
+    "item": "Mango 1g",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Mango 1g",
+    "task": "Counting (SB 5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Mango 1g",
+    "task": "Bagging (SB 25's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Lemon 1g",
+    "task": "Filling (SB Vapes)",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Lemon 1g",
+    "task": "Capping (SB Vapes)",
+    "secondsPerUnitAlertLevel": 7
+  },
+  {
+    "item": "Lemon 1g",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Lemon 1g",
+    "task": "Counting (SB 5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Lemon 1g",
+    "task": "Bagging (SB 25's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Watermelon 1g",
+    "task": "Filling (SB Vapes)",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Watermelon 1g",
+    "task": "Capping (SB Vapes)",
+    "secondsPerUnitAlertLevel": 7
+  },
+  {
+    "item": "Watermelon 1g",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Watermelon 1g",
+    "task": "Counting (SB 5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Watermelon 1g",
+    "task": "Bagging (SB 25's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Big Stick",
+    "task": "Filling (Filling Machine)",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Big Stick",
+    "task": "Capping (Topicals)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Big Stick",
+    "task": "Packaging",
+    "secondsPerUnitAlertLevel": 7
+  },
+  {
+    "item": "Big Stick",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Big Stick",
+    "task": "Bagging (10's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Small Stick",
+    "task": "Filling (Filling Machine)",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Small Stick",
+    "task": "Capping (Topicals)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Small Stick",
+    "task": "Packaging",
+    "secondsPerUnitAlertLevel": 7
+  },
+  {
+    "item": "Small Stick",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Small Stick",
+    "task": "Counting (5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Small Stick",
+    "task": "Bagging (20's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Tiny Stick",
+    "task": "Filling (Filling Machine)",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Tiny Stick",
+    "task": "Capping (Topicals)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Tiny Stick",
+    "task": "Packaging",
+    "secondsPerUnitAlertLevel": 7
+  },
+  {
+    "item": "Tiny Stick",
+    "task": "Sealing",
+    "secondsPerUnitAlertLevel": 8
+  },
+  {
+    "item": "Tiny Stick",
+    "task": "Counting (5's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Tiny Stick",
+    "task": "Bagging (20's)",
+    "secondsPerUnitAlertLevel": 5
+  },
+  {
+    "item": "Swag",
+    "task": "Swag Press",
+    "secondsPerUnitAlertLevel": 120
+  },
+  {
+    "item": "Swag",
+    "task": "Swag Assembly",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Swag",
+    "task": "Swag Counting",
+    "secondsPerUnitAlertLevel": 10
+  },
+  {
+    "item": "Delivery Order",
+    "task": "Exit Label Stickering",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Delivery Order",
+    "task": "Pulling/Seperating Order",
+    "secondsPerUnitAlertLevel": 20
+  },
+  {
+    "item": "Delivery Order",
+    "task": "Counting/Verifying Order",
+    "secondsPerUnitAlertLevel": 20
+  }
+]

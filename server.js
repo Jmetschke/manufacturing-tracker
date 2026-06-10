@@ -4,6 +4,7 @@ const express = require("express");
 const crypto = require("crypto");
 const path = require("path");
 const db = require("./db");
+const entryAlertThresholds = require("./entry-alert-thresholds.json");
 const calendarDb = db.calendar || db;
 const hasSeparateCalendarDb = calendarDb !== db;
 const app = express();
@@ -17,6 +18,59 @@ const ACCESS_COOKIE = "manufacturing_tracker_access";
 const ADMIN_ACCESS_COOKIE = "manufacturing_tracker_admin_access";
 const ACCESS_SECRET = process.env.ACCESS_SESSION_SECRET || `${ACCESS_CODE}:${ADMIN_ACCESS_CODE}`;
 const MAX_SCHEDULE_TASKS_LENGTH = 100000;
+const entryAlertThresholdsByKey = new Map(
+  entryAlertThresholds.map(rule => [
+    getEntryAlertThresholdKey(rule.item, rule.task),
+    Number(rule.secondsPerUnitAlertLevel) || 0
+  ])
+);
+
+function normalizeEntryAlertName(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function getEntryAlertThresholdKey(item, task) {
+  return `${normalizeEntryAlertName(item)}\n${normalizeEntryAlertName(task)}`;
+}
+
+function getEntryAlertThreshold(item, task) {
+  const directThreshold = entryAlertThresholdsByKey.get(getEntryAlertThresholdKey(item, task)) || 0;
+  if (directThreshold) return directThreshold;
+
+  const normalizedTask = normalizeEntryAlertName(task);
+  if (normalizedTask === "sb sealing") {
+    return entryAlertThresholdsByKey.get(getEntryAlertThresholdKey(item, "Sealing")) || 0;
+  }
+  if (normalizedTask === "bagging (10's)") {
+    return entryAlertThresholdsByKey.get(getEntryAlertThresholdKey(item, "Bagging (20's)")) || 0;
+  }
+
+  return 0;
+}
+
+function getEntrySecondsPerUnit(durationSeconds, quantity) {
+  const qty = Number(quantity) || 0;
+  if (qty <= 0) return 0;
+  return (Number(durationSeconds) || 0) / qty;
+}
+
+function formatSecondsPerUnit(value) {
+  const secondsPerUnit = Number(value) || 0;
+  if (!secondsPerUnit) return "0 sec/unit";
+  return `${secondsPerUnit.toLocaleString(undefined, { maximumFractionDigits: 2 })} sec/unit`;
+}
+
+function getEntryAlertReason(entry) {
+  const secondsPerUnit = getEntrySecondsPerUnit(entry.duration_seconds, entry.quantity);
+  if (secondsPerUnit === 0) return "0 sec/unit";
+
+  const threshold = getEntryAlertThreshold(entry.item, entry.task);
+  if (threshold > 0 && secondsPerUnit > threshold) {
+    return `${formatSecondsPerUnit(secondsPerUnit)} over ${formatSecondsPerUnit(threshold)} alert level`;
+  }
+
+  return "";
+}
 
 function parseCookies(header = "") {
   return Object.fromEntries(
@@ -2112,6 +2166,10 @@ app.delete("/entries/:id", (req, res) => {
   );
 });
 
+app.get("/entry-alert-thresholds", (req, res) => {
+  res.json(entryAlertThresholds);
+});
+
 app.get("/flagged-entries", (req, res) => {
   db.all(`
     SELECT
@@ -2131,18 +2189,19 @@ app.get("/flagged-entries", (req, res) => {
     LEFT JOIN items i ON i.id = l.item_id
     LEFT JOIN tasks t ON t.id = l.task_id
     WHERE l.end_time IS NOT NULL
-      AND (
-        COALESCE(l.quantity, 0) = 0
-        OR COALESCE(l.duration_seconds, 0) = 0
-        OR (
-          COALESCE(l.quantity, 0) > 0
-          AND ((COALESCE(l.duration_seconds, 0) * 1.0) / COALESCE(l.quantity, 0)) > 30
-        )
-      )
     ORDER BY l.work_date DESC, l.id DESC
   `, [], (err, rows) => {
     if (err) return res.status(500).send(err.message);
-    res.json(rows);
+    res.json(rows
+      .map(row => {
+        const threshold = getEntryAlertThreshold(row.item, row.task);
+        return {
+          ...row,
+          seconds_per_unit_alert_level: threshold,
+          flag_reason: getEntryAlertReason(row)
+        };
+      })
+      .filter(row => row.flag_reason));
   });
 });
 

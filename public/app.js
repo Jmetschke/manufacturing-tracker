@@ -7,6 +7,7 @@ let itemTaskOptionsByItemId = {};
 let pendingEntry = null;
 let savedEntries = [];
 let flaggedEntries = [];
+let entryAlertThresholdsByKey = new Map();
 let orderedItems = [];
 let orderRequests = [];
 let pausedSeconds = 0;
@@ -15,7 +16,6 @@ let pausedElapsedSeconds = 0;
 let calculatorLinkedToQty = false;
 const pendingTimerStorageKey = "productionTracker.pendingTimer";
 const dailyEntryDefaultsStorageKey = "productionTracker.dailyEntryDefaults";
-const suspiciousEntrySecondsPerUnitMax = 30;
 const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const batchChecklistItems = [
   { key: "cooking", label: "Cooking" },
@@ -1483,23 +1483,58 @@ function formatEntrySecondsPerUnit(value) {
   return `${secondsPerUnit.toLocaleString(undefined, { maximumFractionDigits: 2 })} sec/unit`;
 }
 
+function normalizeEntryAlertName(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function getEntryAlertThresholdKey(item, task) {
+  return `${normalizeEntryAlertName(item)}\n${normalizeEntryAlertName(task)}`;
+}
+
+function setEntryAlertThresholds(thresholds) {
+  entryAlertThresholdsByKey = new Map();
+  (Array.isArray(thresholds) ? thresholds : []).forEach(rule => {
+    const threshold = Number(rule.secondsPerUnitAlertLevel) || 0;
+    if (threshold <= 0) return;
+    entryAlertThresholdsByKey.set(getEntryAlertThresholdKey(rule.item, rule.task), threshold);
+  });
+}
+
+function getEntryAlertThreshold(item, task) {
+  const directThreshold = entryAlertThresholdsByKey.get(getEntryAlertThresholdKey(item, task)) || 0;
+  if (directThreshold) return directThreshold;
+
+  const normalizedTask = normalizeEntryAlertName(task);
+  if (normalizedTask === "sb sealing") {
+    return entryAlertThresholdsByKey.get(getEntryAlertThresholdKey(item, "Sealing")) || 0;
+  }
+  if (normalizedTask === "bagging (10's)") {
+    return entryAlertThresholdsByKey.get(getEntryAlertThresholdKey(item, "Bagging (20's)")) || 0;
+  }
+
+  return 0;
+}
+
 function getEntrySecondsPerUnit(durationSeconds, quantity) {
   const qty = Number(quantity) || 0;
   if (qty <= 0) return 0;
   return (Number(durationSeconds) || 0) / qty;
 }
 
-function getSuspiciousEntryReason(durationSeconds, quantity) {
+function getSuspiciousEntryReason(durationSeconds, quantity, item, task) {
   const secondsPerUnit = getEntrySecondsPerUnit(durationSeconds, quantity);
   if (secondsPerUnit === 0) return "0 sec/unit";
-  if (secondsPerUnit > suspiciousEntrySecondsPerUnitMax) {
-    return `${secondsPerUnit.toLocaleString(undefined, { maximumFractionDigits: 2 })} sec/unit`;
+
+  const threshold = getEntryAlertThreshold(item, task);
+  if (threshold > 0 && secondsPerUnit > threshold) {
+    return `${formatEntrySecondsPerUnit(secondsPerUnit)} over ${formatEntrySecondsPerUnit(threshold)} alert level`;
   }
+
   return "";
 }
 
 function getFlaggedEntryReason(entry) {
-  return getSuspiciousEntryReason(entry.duration_seconds, entry.quantity);
+  return entry.flag_reason || getSuspiciousEntryReason(entry.duration_seconds, entry.quantity, entry.item, entry.task);
 }
 
 function renderFlaggedEntries() {
@@ -1522,7 +1557,7 @@ function renderFlaggedEntries() {
   table.className = "mobile-stack";
   const thead = document.createElement("thead");
   const headerRow = document.createElement("tr");
-  const labels = ["Date", "Employee", "Item", "Dispensary", "Task", "Qty", "Time", "Sec/Unit", "Reason", "Action"];
+  const labels = ["Date", "Employee", "Item", "Dispensary", "Task", "Qty", "Time", "Sec/Unit", "Alert Level", "Reason", "Action"];
   labels.forEach(label => {
     const th = document.createElement("th");
     th.textContent = label === "Action" ? "" : label;
@@ -1544,6 +1579,7 @@ function renderFlaggedEntries() {
       entry.quantity || 0,
       formatSeconds(Number(entry.duration_seconds) || 0),
       formatEntrySecondsPerUnit(entry.sec_per_unit),
+      entry.seconds_per_unit_alert_level ? formatEntrySecondsPerUnit(entry.seconds_per_unit_alert_level) : "",
       getFlaggedEntryReason(entry)
     ];
 
@@ -1558,7 +1594,7 @@ function renderFlaggedEntries() {
     });
 
     const actionCell = document.createElement("td");
-    actionCell.dataset.label = labels[9];
+    actionCell.dataset.label = labels[10];
 
     const adminLink = document.createElement("a");
     adminLink.className = "screen-link";
@@ -1726,14 +1762,16 @@ const bulkTypes = [
 async function load() {
   loadEmployeeOptions();
 
-  const [items, tasks, taskOptions] = await Promise.all([
+  const [items, tasks, taskOptions, entryAlertThresholds] = await Promise.all([
     fetch("/items").then(r => r.json()),
     fetch("/tasks").then(r => r.json()),
-    fetch("/item-task-options").then(r => r.json())
+    fetch("/item-task-options").then(r => r.json()),
+    fetch("/entry-alert-thresholds").then(r => r.json())
   ]);
   loadedItems = items;
   loadedTasks = tasks;
   itemTaskOptionsByItemId = taskOptions;
+  setEntryAlertThresholds(entryAlertThresholds);
 
   const itemSel = document.getElementById("item");
   const taskSel = document.getElementById("task");
@@ -2134,7 +2172,9 @@ async function saveQuantity() {
   }
 
   const durationSeconds = pendingEntry ? Number(pendingEntry.durationSeconds) || 0 : 0;
-  const suspiciousReason = getSuspiciousEntryReason(durationSeconds, quantity);
+  const selectedItemText = getSelectedOptionText(itemSel);
+  const selectedTaskText = getSelectedOptionText(taskSel);
+  const suspiciousReason = getSuspiciousEntryReason(durationSeconds, quantity, selectedItemText, selectedTaskText);
   if (suspiciousReason) {
     showEntryQualityAlert(logId, suspiciousReason);
     keepSuspiciousEntryForEditing(suspiciousReason);
@@ -2145,8 +2185,8 @@ async function saveQuantity() {
 
   savedEntries.unshift({
     ...pendingEntry,
-    item: getSelectedOptionText(itemSel),
-    task: getSelectedOptionText(taskSel),
+    item: selectedItemText,
+    task: selectedTaskText,
     dispensaryName,
     quantity
   });
