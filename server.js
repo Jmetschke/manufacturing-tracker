@@ -2069,7 +2069,7 @@ app.post("/update-qty", (req, res) => {
   }
 
   quantity = parseInt(quantity);
-  if (isNaN(quantity)) {
+  if (!Number.isInteger(quantity) || quantity < 0) {
     return res.status(400).send("Invalid quantity");
   }
 
@@ -2090,6 +2090,24 @@ app.post("/update-qty", (req, res) => {
       }
 
       res.json({ message: "Quantity updated" });
+    }
+  );
+});
+
+app.delete("/entries/:id", (req, res) => {
+  db.run(
+    `DELETE FROM time_logs
+     WHERE id = ?
+     AND end_time IS NOT NULL`,
+    [req.params.id],
+    function (err) {
+      if (err) return res.status(500).send(err.message);
+
+      if (this.changes === 0) {
+        return res.status(404).send("Completed entry not found");
+      }
+
+      res.json({ message: "Entry deleted" });
     }
   );
 });

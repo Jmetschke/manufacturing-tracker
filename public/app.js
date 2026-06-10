@@ -14,6 +14,7 @@ let pausedElapsedSeconds = 0;
 let calculatorLinkedToQty = false;
 const pendingTimerStorageKey = "productionTracker.pendingTimer";
 const dailyEntryDefaultsStorageKey = "productionTracker.dailyEntryDefaults";
+const suspiciousEntrySecondsPerUnitMax = 30;
 const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const batchChecklistItems = [
   { key: "cooking", label: "Cooking" },
@@ -586,6 +587,8 @@ function normalizeScheduleTask(task) {
   const scheduleDate = isIsoDate(task && task.scheduleDate) ? task.scheduleDate : "";
   const days = Math.max(1, Number.parseInt(task && task.days, 10) || 1);
   const totalHours = Math.max(0, Number.parseFloat(task && task.totalHours) || 0);
+  const sourceBatchKey = String(task && task.sourceBatchKey ? task.sourceBatchKey : "").trim();
+  const sourceBatchLabel = String(task && task.sourceBatchLabel ? task.sourceBatchLabel : "").trim();
 
   return {
     text,
@@ -594,7 +597,9 @@ function normalizeScheduleTask(task) {
     scheduleDate,
     days,
     totalHours,
-    assignments: normalizeScheduleAssignments(task && task.assignments, days)
+    assignments: normalizeScheduleAssignments(task && task.assignments, days),
+    sourceBatchKey,
+    sourceBatchLabel
   };
 }
 
@@ -609,6 +614,34 @@ function formatTaskHours(value) {
   return `${rounded.toLocaleString(undefined, { maximumFractionDigits: 2 })} hr${rounded === 1 ? "" : "s"}`;
 }
 
+const batchTaskColors = [
+  { background: "#eef5fb", border: "#2364aa", text: "#123c69" },
+  { background: "#f1f8ea", border: "#5d9b45", text: "#24451c" },
+  { background: "#fff5df", border: "#d08a1f", text: "#5a3a10" },
+  { background: "#f5eefb", border: "#7a4fb0", text: "#3f285c" },
+  { background: "#eef8f6", border: "#258579", text: "#174f48" },
+  { background: "#fdeff2", border: "#c7556b", text: "#6c2635" }
+];
+
+function getBatchColorIndex(sourceBatchKey) {
+  const key = String(sourceBatchKey || "");
+  let total = 0;
+  for (let index = 0; index < key.length; index += 1) {
+    total = (total + key.charCodeAt(index) * (index + 1)) % batchTaskColors.length;
+  }
+  return total;
+}
+
+function applyBatchTaskColor(element, task) {
+  if (!task || !task.sourceBatchKey) return;
+  const color = batchTaskColors[getBatchColorIndex(task.sourceBatchKey)];
+  element.classList.add("batch-colored-task");
+  element.style.setProperty("--batch-task-bg", color.background);
+  element.style.setProperty("--batch-task-border", color.border);
+  element.style.setProperty("--batch-task-text", color.text);
+  element.title = task.sourceBatchLabel || "";
+}
+
 function appendTaskList(container, tasks) {
   if (!tasks.length) return;
 
@@ -617,6 +650,7 @@ function appendTaskList(container, tasks) {
 
   tasks.forEach(task => {
     const item = document.createElement("li");
+    applyBatchTaskColor(item, task);
     const parts = [getTaskDisplayText(task)];
     if (task.employee && task.hours) {
       parts.push(`${task.employee}: ${formatTaskHours(task.hours)}`);
@@ -639,11 +673,13 @@ function groupDailyTaskAssignments(tasks) {
   const groups = new Map();
 
   tasks.forEach(task => {
-    const key = `${task.item || ""}\n${task.text}`;
+    const key = `${task.sourceBatchKey || ""}\n${task.item || ""}\n${task.text}`;
     if (!groups.has(key)) {
       groups.set(key, {
         item: task.item || "",
         text: task.text,
+        sourceBatchKey: task.sourceBatchKey || "",
+        sourceBatchLabel: task.sourceBatchLabel || "",
         assignedHours: 0,
         remainingHours: task.remainingHours,
         people: new Map(),
@@ -679,6 +715,7 @@ function appendCalendarTaskSummary(container, tasks) {
 
   groupDailyTaskAssignments(tasks).forEach(task => {
     const item = document.createElement("li");
+    applyBatchTaskColor(item, task);
     item.textContent = task.assignedHours > 0
       ? `${getTaskDisplayText(task)} - ${formatTaskHours(task.assignedHours)}`
       : task.legacyDays > 1
@@ -700,6 +737,7 @@ function appendTaskFocusDetails(block, projectedTasks, emptyText) {
   groups.forEach(task => {
     const item = document.createElement("div");
     item.className = "calendar-focus-item";
+    applyBatchTaskColor(item, task);
     const titleLine = document.createElement("b");
     titleLine.textContent = `${getTaskDisplayText(task)} - ${formatTaskHours(task.assignedHours)} assigned`;
     item.appendChild(titleLine);
@@ -1033,6 +1071,7 @@ function renderFocusedScheduleDay(isoDate, scheduleDay, deliveries) {
     groups.forEach(task => {
       const item = document.createElement("div");
       item.className = "calendar-focus-item";
+      applyBatchTaskColor(item, task);
       const titleLine = document.createElement("b");
       titleLine.textContent = `${getTaskDisplayText(task)} - ${formatTaskHours(task.assignedHours)} assigned`;
       item.appendChild(titleLine);
@@ -1110,6 +1149,7 @@ function appendProcessingTaskList(container, processingTasks) {
   groupDailyTaskAssignments(processingTasks).forEach(task => {
     const item = document.createElement("li");
     item.className = "calendar-processing-task";
+    applyBatchTaskColor(item, task);
     item.textContent = task.assignedHours > 0
       ? `${getTaskDisplayText(task)} - ${formatTaskHours(task.assignedHours)}`
       : task.legacyDays > 1
@@ -1292,7 +1332,9 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
               employee: assignment.employee,
               hours: appliedHours,
               remainingHours,
-              totalHours: task.totalHours
+              totalHours: task.totalHours,
+              sourceBatchKey: task.sourceBatchKey,
+              sourceBatchLabel: task.sourceBatchLabel
             });
           });
         } else if (task.totalHours > 0) {
@@ -1300,10 +1342,18 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
             item: task.item,
             text: task.text,
             remainingHours,
-            totalHours: task.totalHours
+            totalHours: task.totalHours,
+            sourceBatchKey: task.sourceBatchKey,
+            sourceBatchLabel: task.sourceBatchLabel
           });
         } else {
-          projectedTasks.push({ item: task.item, text: task.text, days: task.days });
+          projectedTasks.push({
+            item: task.item,
+            text: task.text,
+            days: task.days,
+            sourceBatchKey: task.sourceBatchKey,
+            sourceBatchLabel: task.sourceBatchLabel
+          });
         }
 
         if (activeDate < rangeStart || activeDate > rangeEnd) return;
@@ -1340,7 +1390,9 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
               employee: assignment.employee,
               hours: appliedHours,
               remainingHours,
-              totalHours: task.totalHours
+              totalHours: task.totalHours,
+              sourceBatchKey: task.sourceBatchKey,
+              sourceBatchLabel: task.sourceBatchLabel
             });
           });
         } else if (task.totalHours > 0) {
@@ -1348,10 +1400,18 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
             item: task.item,
             text: task.text,
             remainingHours,
-            totalHours: task.totalHours
+            totalHours: task.totalHours,
+            sourceBatchKey: task.sourceBatchKey,
+            sourceBatchLabel: task.sourceBatchLabel
           });
         } else {
-          projectedTasks.push({ item: task.item, text: task.text, days: task.days });
+          projectedTasks.push({
+            item: task.item,
+            text: task.text,
+            days: task.days,
+            sourceBatchKey: task.sourceBatchKey,
+            sourceBatchLabel: task.sourceBatchLabel
+          });
         }
 
         if (activeDate < rangeStart || activeDate > rangeEnd) return;
@@ -1414,6 +1474,110 @@ function renderSavedEntries() {
   });
   table.appendChild(tbody);
   container.appendChild(table);
+}
+
+function getEntrySecondsPerUnit(durationSeconds, quantity) {
+  const qty = Number(quantity) || 0;
+  if (qty <= 0) return 0;
+  return (Number(durationSeconds) || 0) / qty;
+}
+
+function getSuspiciousEntryReason(durationSeconds, quantity) {
+  const secondsPerUnit = getEntrySecondsPerUnit(durationSeconds, quantity);
+  if (secondsPerUnit === 0) return "0 sec/unit";
+  if (secondsPerUnit > suspiciousEntrySecondsPerUnitMax) {
+    return `${secondsPerUnit.toLocaleString(undefined, { maximumFractionDigits: 2 })} sec/unit`;
+  }
+  return "";
+}
+
+function hideEntryQualityAlert() {
+  const alert = document.getElementById("entryQualityAlert");
+  if (!alert) return;
+  alert.hidden = true;
+  alert.innerHTML = "";
+}
+
+function resetCompletedEntryForm() {
+  const qtyInput = document.getElementById("qty");
+  const saveBtn = document.getElementById("saveBtn");
+
+  currentLogId = null;
+  pendingEntry = null;
+  startTime = null;
+  pausedSeconds = 0;
+  isTimerPaused = false;
+  pausedElapsedSeconds = 0;
+  clearPendingTimer();
+  qtyInput.value = "";
+  document.getElementById("dispensary_name").value = "";
+  qtyInput.disabled = true;
+  saveBtn.disabled = true;
+  document.getElementById("timer").innerText = "00:00:00";
+  hideEntryQualityAlert();
+  updateTimerWorkflowUI();
+}
+
+function keepSuspiciousEntryForEditing(reason) {
+  const qtyInput = document.getElementById("qty");
+  const saveBtn = document.getElementById("saveBtn");
+
+  qtyInput.disabled = false;
+  saveBtn.disabled = false;
+  qtyInput.focus();
+  setTimerMessage(`Entry flagged at ${reason}. Edit the fields, then save again.`, "error");
+}
+
+async function deleteSuspiciousEntry(logId) {
+  const shouldDelete = confirm("Delete this flagged entry? This cannot be undone.");
+  if (!shouldDelete) return;
+
+  const res = await fetch(`/entries/${logId}`, {
+    method: "DELETE"
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    setTimerMessage("Delete failed: " + text, "error");
+    return;
+  }
+
+  resetCompletedEntryForm();
+  setTimerMessage("Flagged entry deleted.");
+}
+
+function showEntryQualityAlert(logId, reason) {
+  const alert = document.getElementById("entryQualityAlert");
+  if (!alert) return;
+
+  alert.hidden = false;
+  alert.innerHTML = "";
+
+  const title = document.createElement("div");
+  title.className = "entry-quality-alert-title";
+  title.textContent = "Entry flagged";
+  alert.appendChild(title);
+
+  const message = document.createElement("div");
+  message.textContent = `This entry calculated at ${reason}. Edit it or delete it before moving on.`;
+  alert.appendChild(message);
+
+  const actions = document.createElement("div");
+  actions.className = "entry-quality-alert-actions";
+
+  const editButton = document.createElement("button");
+  editButton.type = "button";
+  editButton.textContent = "Edit Entry";
+  editButton.addEventListener("click", () => keepSuspiciousEntryForEditing(reason));
+  actions.appendChild(editButton);
+
+  const deleteButton = document.createElement("button");
+  deleteButton.type = "button";
+  deleteButton.textContent = "Delete Entry";
+  deleteButton.addEventListener("click", () => deleteSuspiciousEntry(logId));
+  actions.appendChild(deleteButton);
+
+  alert.appendChild(actions);
 }
 
 const bulkTypes = [
@@ -1799,6 +1963,7 @@ async function saveQuantity() {
   const qtyInput = document.getElementById("qty");
   const saveBtn = document.getElementById("saveBtn");
   const quantity = qtyInput.value;
+  const logId = currentLogId;
   const itemSel = document.getElementById("item");
   const taskSel = document.getElementById("task");
   const item_id = itemSel.value;
@@ -1822,11 +1987,13 @@ async function saveQuantity() {
     return;
   }
 
+  hideEntryQualityAlert();
+
   const res = await fetch("/update-qty", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      log_id: currentLogId,
+      log_id: logId,
       item_id,
       task_id,
       dispensary_name: dispensaryName,
@@ -1840,6 +2007,15 @@ async function saveQuantity() {
     return;
   }
 
+  const durationSeconds = pendingEntry ? Number(pendingEntry.durationSeconds) || 0 : 0;
+  const suspiciousReason = getSuspiciousEntryReason(durationSeconds, quantity);
+  if (suspiciousReason) {
+    showEntryQualityAlert(logId, suspiciousReason);
+    keepSuspiciousEntryForEditing(suspiciousReason);
+    updateTimerWorkflowUI();
+    return;
+  }
+
   savedEntries.unshift({
     ...pendingEntry,
     item: getSelectedOptionText(itemSel),
@@ -1849,20 +2025,8 @@ async function saveQuantity() {
   });
   renderSavedEntries();
 
-  currentLogId = null;
-  pendingEntry = null;
-  startTime = null;
-  pausedSeconds = 0;
-  isTimerPaused = false;
-  pausedElapsedSeconds = 0;
-  clearPendingTimer();
-  qtyInput.value = "";
-  document.getElementById("dispensary_name").value = "";
-  qtyInput.disabled = true;
-  saveBtn.disabled = true;
-  document.getElementById("timer").innerText = "00:00:00";
+  resetCompletedEntryForm();
   setTimerMessage("Entry completed and saved.");
-  updateTimerWorkflowUI();
 }
 
 function updateTimer() {

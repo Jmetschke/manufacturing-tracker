@@ -247,6 +247,12 @@
       padding: 5px 6px;
     }
 
+    .batch-colored-task {
+      background: var(--batch-task-bg) !important;
+      border-left-color: var(--batch-task-border) !important;
+      color: var(--batch-task-text) !important;
+    }
+
     .calendar-day-focus {
       margin-top: 12px;
       padding: 12px;
@@ -578,6 +584,30 @@
 
     .timer-message.error {
       color: #a00000;
+    }
+
+    .entry-quality-alert {
+      border: 1px solid #c97d16;
+      background: #fff5df;
+      color: #5a3a10;
+      margin-top: 10px;
+      padding: 10px;
+    }
+
+    .entry-quality-alert[hidden] {
+      display: none;
+    }
+
+    .entry-quality-alert-title {
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+
+    .entry-quality-alert-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
     }
 
     .finish-entry-panel {
@@ -1370,6 +1400,7 @@
         </div>
       </div>
       <div id="timerMessage" class="timer-message"></div>
+      <div id="entryQualityAlert" class="entry-quality-alert" hidden></div>
     </div>
 
     <details class="saved-entries">

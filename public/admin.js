@@ -629,6 +629,34 @@ function formatTaskHours(value) {
   return `${rounded.toLocaleString(undefined, { maximumFractionDigits: 2 })} hr${rounded === 1 ? "" : "s"}`;
 }
 
+const batchTaskColors = [
+  { background: "#eef5fb", border: "#2364aa", text: "#123c69" },
+  { background: "#f1f8ea", border: "#5d9b45", text: "#24451c" },
+  { background: "#fff5df", border: "#d08a1f", text: "#5a3a10" },
+  { background: "#f5eefb", border: "#7a4fb0", text: "#3f285c" },
+  { background: "#eef8f6", border: "#258579", text: "#174f48" },
+  { background: "#fdeff2", border: "#c7556b", text: "#6c2635" }
+];
+
+function getBatchColorIndex(sourceBatchKey) {
+  const key = String(sourceBatchKey || "");
+  let total = 0;
+  for (let index = 0; index < key.length; index += 1) {
+    total = (total + key.charCodeAt(index) * (index + 1)) % batchTaskColors.length;
+  }
+  return total;
+}
+
+function applyBatchTaskColor(element, task) {
+  if (!task || !task.sourceBatchKey) return;
+  const color = batchTaskColors[getBatchColorIndex(task.sourceBatchKey)];
+  element.classList.add("batch-colored-task");
+  element.style.setProperty("--batch-task-bg", color.background);
+  element.style.setProperty("--batch-task-border", color.border);
+  element.style.setProperty("--batch-task-text", color.text);
+  element.title = task.sourceBatchLabel || "";
+}
+
 function appendBatchList(container, payload) {
   const batches = [
     ...payload.batchHijnx.map(batch => ["Production Batch - Hijnx", batch]),
@@ -786,7 +814,9 @@ function buildAdminProjectedTasksByDate(rows, visibleStart, visibleEnd, taskSele
               employee: assignment.employee,
               hours: appliedHours,
               remainingHours,
-              totalHours: task.totalHours
+              totalHours: task.totalHours,
+              sourceBatchKey: task.sourceBatchKey,
+              sourceBatchLabel: task.sourceBatchLabel
             });
           });
         } else if (task.totalHours > 0) {
@@ -794,10 +824,18 @@ function buildAdminProjectedTasksByDate(rows, visibleStart, visibleEnd, taskSele
             item: task.item,
             text: task.text,
             remainingHours,
-            totalHours: task.totalHours
+            totalHours: task.totalHours,
+            sourceBatchKey: task.sourceBatchKey,
+            sourceBatchLabel: task.sourceBatchLabel
           });
         } else {
-          projectedTasks.push({ item: task.item, text: task.text, days: task.days });
+          projectedTasks.push({
+            item: task.item,
+            text: task.text,
+            days: task.days,
+            sourceBatchKey: task.sourceBatchKey,
+            sourceBatchLabel: task.sourceBatchLabel
+          });
         }
 
         if (activeDate < rangeStart || activeDate > rangeEnd) return;
@@ -847,6 +885,7 @@ function appendProcessingTaskList(container, processingTasks, className = "calen
   groupDailyTaskAssignments(processingTasks).forEach(task => {
     const item = document.createElement("li");
     item.className = "calendar-processing-task";
+    applyBatchTaskColor(item, task);
     item.textContent = task.assignedHours > 0
       ? `${getTaskDisplayText(task)} - ${formatTaskHours(task.assignedHours)}`
       : task.legacyDays > 1
@@ -1469,6 +1508,7 @@ function appendOrderedTaskList(container, tasks, className) {
 
   lines.forEach(task => {
     const item = document.createElement("li");
+    applyBatchTaskColor(item, task);
     const parts = [getTaskDisplayText(task)];
     if (task.employee && task.hours) {
       parts.push(`${task.employee}: ${formatTaskHours(task.hours)}`);
@@ -1491,11 +1531,13 @@ function groupDailyTaskAssignments(tasks) {
   const groups = new Map();
 
   tasks.forEach(task => {
-    const key = `${task.item || ""}\n${task.text}`;
+    const key = `${task.sourceBatchKey || ""}\n${task.item || ""}\n${task.text}`;
     if (!groups.has(key)) {
       groups.set(key, {
         item: task.item || "",
         text: task.text,
+        sourceBatchKey: task.sourceBatchKey || "",
+        sourceBatchLabel: task.sourceBatchLabel || "",
         assignedHours: 0,
         remainingHours: task.remainingHours,
         people: new Map(),
@@ -1532,6 +1574,7 @@ function appendCalendarTaskSummary(container, tasks, className) {
 
   groupDailyTaskAssignments(lines).forEach(task => {
     const item = document.createElement("li");
+    applyBatchTaskColor(item, task);
     item.textContent = task.assignedHours > 0
       ? `${getTaskDisplayText(task)} - ${formatTaskHours(task.assignedHours)}`
       : task.legacyDays > 1
@@ -1589,6 +1632,7 @@ function renderAdminFocusedDay(isoDate, payload, projectedTasks, projectedProces
     groups.forEach(task => {
       const item = document.createElement("div");
       item.className = "calendar-focus-item";
+      applyBatchTaskColor(item, task);
       const titleLine = document.createElement("b");
       titleLine.textContent = `${getTaskDisplayText(task)} - ${formatTaskHours(task.assignedHours)} assigned`;
       item.appendChild(titleLine);
@@ -1664,6 +1708,7 @@ function appendTaskFocusDetails(block, projectedTasks, emptyText) {
   groups.forEach(task => {
     const item = document.createElement("div");
     item.className = "calendar-focus-item";
+    applyBatchTaskColor(item, task);
     const titleLine = document.createElement("b");
     titleLine.textContent = `${getTaskDisplayText(task)} - ${formatTaskHours(task.assignedHours)} assigned`;
     item.appendChild(titleLine);
