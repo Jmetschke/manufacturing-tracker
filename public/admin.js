@@ -1,5 +1,6 @@
 let reportData = [];
 let allEntries = [];
+let flaggedReviewEntries = [];
 let allItems = [];
 let allTasks = [];
 let itemTaskOptionsByItemId = {};
@@ -223,6 +224,19 @@ function fillTaskFilterOptions(selectedTask = document.getElementById("task_filt
   }
 }
 
+function fillReviewTaskOptions(itemId, selectedTaskId = document.getElementById("review_edit_task").value) {
+  const allowedTaskIds = new Set((itemTaskOptionsByItemId[String(itemId)] || []).map(String));
+  const taskOptions = allTasks
+    .filter(task => allowedTaskIds.size === 0 || allowedTaskIds.has(String(task.id)))
+    .map(task => ({ value: task.id, text: task.name }));
+
+  fillSelect(document.getElementById("review_edit_task"), taskOptions);
+
+  if (selectedTaskId && taskOptions.some(task => String(task.value) === String(selectedTaskId))) {
+    document.getElementById("review_edit_task").value = String(selectedTaskId);
+  }
+}
+
 function getSelectText(select) {
   if (!select || !select.value) return "";
   const option = select.options[select.selectedIndex];
@@ -276,9 +290,19 @@ async function loadLookups() {
   document.getElementById("edit_item").addEventListener("change", updateAdminDispensaryField);
 
   fillSelect(
+    document.getElementById("review_edit_item"),
+    allItems.map(item => ({ value: item.id, text: item.name }))
+  );
+  document.getElementById("review_edit_item").addEventListener("change", () => {
+    fillReviewTaskOptions(document.getElementById("review_edit_item").value);
+  });
+
+  fillSelect(
     document.getElementById("edit_task"),
     allTasks.map(task => ({ value: task.id, text: task.name }))
   );
+
+  fillReviewTaskOptions(document.getElementById("review_edit_item").value);
 
   fillTaskFilterOptions();
   document.getElementById("item_filter").addEventListener("change", () => fillTaskFilterOptions());
@@ -295,6 +319,7 @@ function loadEmployeeSelects() {
 
   fillSelect(document.getElementById("employee_filter"), employees, "All Employees");
   fillSelect(document.getElementById("edit_employee"), employees);
+  fillSelect(document.getElementById("review_edit_employee"), employees);
 }
 
 function secondsToHMS(sec) {
@@ -1741,6 +1766,7 @@ function appendTaskFocusDetails(block, projectedTasks, emptyText) {
 
 function showAdminTab(tabName) {
   document.getElementById("entriesPanel").classList.toggle("active", tabName === "entries");
+  document.getElementById("reviewPanel").classList.toggle("active", tabName === "review");
   document.getElementById("dailyPanel").classList.toggle("active", tabName === "daily");
   document.getElementById("batchTrackerPanel").classList.toggle("active", tabName === "batches");
   document.getElementById("calendarPanel").classList.toggle("active", tabName === "calendar");
@@ -1749,6 +1775,7 @@ function showAdminTab(tabName) {
   document.querySelectorAll(".admin-tab-button").forEach(button => {
     const isActive =
       (tabName === "entries" && button.textContent === "Entries") ||
+      (tabName === "review" && button.textContent === "Entries for Review") ||
       (tabName === "daily" && button.textContent === "Daily Report") ||
       (tabName === "batches" && button.textContent === "Batch Tracker") ||
       (tabName === "calendar" && button.textContent === "Calendar") ||
@@ -1764,6 +1791,10 @@ function showAdminTab(tabName) {
 
   if (tabName === "daily") {
     loadDailyReport();
+  }
+
+  if (tabName === "review") {
+    loadFlaggedEntryReview();
   }
 
   if (tabName === "batches") {
@@ -2358,6 +2389,178 @@ async function deleteEntry(logId) {
 
   showMessage("Entry deleted.", "success");
   await loadReport();
+}
+
+function renderFlaggedEntryReview() {
+  const container = document.getElementById("flaggedEntryReviewTable");
+  container.innerHTML = "";
+
+  if (!flaggedReviewEntries.length) {
+    const empty = document.createElement("p");
+    empty.className = "printable-report-empty";
+    empty.textContent = "No entries need review.";
+    container.appendChild(empty);
+    return;
+  }
+
+  const table = document.createElement("table");
+  table.className = "mobile-stack";
+  const headerRow = document.createElement("tr");
+  headerRow.className = "table-heading-row";
+  const labels = ["Date", "Employee", "Item", "Dispensary", "Task", "Qty", "Time", "Sec/Unit", "Alert Level", "Reason", "Action"];
+
+  labels.forEach(label => {
+    const th = document.createElement("th");
+    th.textContent = label === "Action" ? "" : label;
+    headerRow.appendChild(th);
+  });
+  table.appendChild(headerRow);
+
+  flaggedReviewEntries.forEach(entry => {
+    const row = document.createElement("tr");
+    row.className = "flagged-entry-row";
+
+    [
+      entry.work_date,
+      entry.employee,
+      entry.item,
+      entry.dispensary_name || "",
+      entry.task,
+      entry.quantity || 0,
+      secondsToHMS(entry.duration_seconds),
+      formatSecondsPerUnit(entry.sec_per_unit),
+      entry.seconds_per_unit_alert_level ? formatSecondsPerUnit(entry.seconds_per_unit_alert_level) : "",
+      entry.flag_reason || ""
+    ].forEach((value, index) => {
+      const cell = document.createElement("td");
+      cell.dataset.label = labels[index];
+      cell.textContent = value;
+      if (labels[index] === "Reason") {
+        cell.className = "flagged-entry-reason";
+      }
+      row.appendChild(cell);
+    });
+
+    const actionCell = document.createElement("td");
+    actionCell.dataset.label = labels[10];
+
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.textContent = "Edit";
+    editButton.addEventListener("click", () => editReviewEntry(entry.log_id));
+    actionCell.appendChild(editButton);
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.textContent = "Delete";
+    deleteButton.addEventListener("click", () => deleteReviewEntry(entry.log_id));
+    actionCell.appendChild(deleteButton);
+
+    row.appendChild(actionCell);
+    table.appendChild(row);
+  });
+
+  container.appendChild(table);
+}
+
+async function loadFlaggedEntryReview() {
+  const res = await adminFetch("/admin/flagged-entries");
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Entries for review load failed: " + text, "error");
+    return;
+  }
+
+  flaggedReviewEntries = await res.json();
+  renderFlaggedEntryReview();
+}
+
+function editReviewEntry(logId) {
+  const entry = flaggedReviewEntries.find(item => item.log_id === logId);
+  if (!entry) return;
+
+  document.getElementById("review_edit_log_id").value = entry.log_id;
+  document.getElementById("review_edit_work_date").value = entry.work_date;
+  document.getElementById("review_edit_employee").value = entry.employee;
+  document.getElementById("review_edit_item").value = String(entry.item_id);
+  fillReviewTaskOptions(entry.item_id, entry.task_id);
+  document.getElementById("review_edit_task").value = String(entry.task_id);
+  document.getElementById("review_edit_dispensary_name").value = entry.dispensary_name || "";
+  document.getElementById("review_edit_quantity").value = entry.quantity || 0;
+  document.getElementById("review_edit_time").value = secondsToHMS(entry.duration_seconds);
+  document.getElementById("reviewEditPanel").classList.add("active");
+  showMessage("");
+  document.getElementById("review_edit_quantity").focus();
+}
+
+function cancelReviewEntryEdit() {
+  document.getElementById("reviewEditPanel").classList.remove("active");
+  document.getElementById("review_edit_log_id").value = "";
+  showMessage("");
+}
+
+async function saveReviewEntryEdit() {
+  const logId = document.getElementById("review_edit_log_id").value;
+  const durationSeconds = parseHMSToSeconds(document.getElementById("review_edit_time").value);
+
+  if (!logId) return;
+
+  if (durationSeconds === null) {
+    showMessage("Enter time as HH:MM:SS, MM:SS, or total seconds.", "error");
+    return;
+  }
+
+  const payload = {
+    work_date: document.getElementById("review_edit_work_date").value,
+    employee: document.getElementById("review_edit_employee").value,
+    item_id: document.getElementById("review_edit_item").value,
+    task_id: document.getElementById("review_edit_task").value,
+    dispensary_name: document.getElementById("review_edit_dispensary_name").value,
+    quantity: document.getElementById("review_edit_quantity").value,
+    duration_seconds: durationSeconds
+  };
+
+  const res = await adminFetch(`/admin/entries/${logId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Save failed: " + text, "error");
+    return;
+  }
+
+  cancelReviewEntryEdit();
+  showMessage("Entry updated.", "success");
+  await loadFlaggedEntryReview();
+}
+
+async function deleteReviewEntry(logId) {
+  const entry = flaggedReviewEntries.find(item => item.log_id === logId);
+  if (!entry) return;
+
+  const label = `${entry.work_date} - ${entry.employee} - ${entry.item} - ${entry.task}`;
+  const shouldDelete = confirm(`Delete this entry?\n\n${label}\n\nThis cannot be undone.`);
+  if (!shouldDelete) return;
+
+  const res = await adminFetch(`/admin/entries/${logId}`, {
+    method: "DELETE"
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Delete failed: " + text, "error");
+    return;
+  }
+
+  if (document.getElementById("review_edit_log_id").value === String(logId)) {
+    cancelReviewEntryEdit();
+  }
+
+  showMessage("Entry deleted.", "success");
+  await loadFlaggedEntryReview();
 }
 
 function exportCSV() {

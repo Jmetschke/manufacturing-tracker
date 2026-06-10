@@ -6,7 +6,6 @@ let loadedTasks = [];
 let itemTaskOptionsByItemId = {};
 let pendingEntry = null;
 let savedEntries = [];
-let flaggedEntries = [];
 let entryAlertThresholdsByKey = new Map();
 let entryAlertThresholdsByTaskKey = new Map();
 let orderedItems = [];
@@ -1545,101 +1544,6 @@ function getSuspiciousEntryReason(durationSeconds, quantity, item, task) {
   return "";
 }
 
-function getFlaggedEntryReason(entry) {
-  return entry.flag_reason || getSuspiciousEntryReason(entry.duration_seconds, entry.quantity, entry.item, entry.task);
-}
-
-function renderFlaggedEntries() {
-  const panel = document.getElementById("flaggedEntryReview");
-  const container = document.getElementById("flaggedEntryList");
-  if (!panel || !container) return;
-
-  panel.hidden = false;
-  container.innerHTML = "";
-
-  if (!flaggedEntries.length) {
-    const empty = document.createElement("div");
-    empty.className = "empty-entries";
-    empty.textContent = "No entries need review.";
-    container.appendChild(empty);
-    return;
-  }
-
-  const table = document.createElement("table");
-  table.className = "mobile-stack";
-  const thead = document.createElement("thead");
-  const headerRow = document.createElement("tr");
-  const labels = ["Date", "Employee", "Item", "Dispensary", "Task", "Qty", "Time", "Sec/Unit", "Alert Level", "Reason", "Action"];
-  labels.forEach(label => {
-    const th = document.createElement("th");
-    th.textContent = label === "Action" ? "" : label;
-    headerRow.appendChild(th);
-  });
-  thead.appendChild(headerRow);
-  table.appendChild(thead);
-
-  const tbody = document.createElement("tbody");
-  flaggedEntries.forEach(entry => {
-    const row = document.createElement("tr");
-    row.className = "flagged-entry-row";
-    const values = [
-      entry.work_date,
-      entry.employee,
-      entry.item,
-      entry.dispensary_name || "",
-      entry.task,
-      entry.quantity || 0,
-      formatSeconds(Number(entry.duration_seconds) || 0),
-      formatEntrySecondsPerUnit(entry.sec_per_unit),
-      entry.seconds_per_unit_alert_level ? formatEntrySecondsPerUnit(entry.seconds_per_unit_alert_level) : "",
-      getFlaggedEntryReason(entry)
-    ];
-
-    values.forEach((value, index) => {
-      const td = document.createElement("td");
-      td.dataset.label = labels[index];
-      td.textContent = value;
-      if (labels[index] === "Reason") {
-        td.className = "flagged-entry-reason";
-      }
-      row.appendChild(td);
-    });
-
-    const actionCell = document.createElement("td");
-    actionCell.dataset.label = labels[10];
-
-    const adminLink = document.createElement("a");
-    adminLink.className = "screen-link";
-    adminLink.href = "/admin.html";
-    adminLink.textContent = "Edit";
-    actionCell.appendChild(adminLink);
-
-    const deleteButton = document.createElement("button");
-    deleteButton.type = "button";
-    deleteButton.textContent = "Delete";
-    deleteButton.addEventListener("click", () => deleteFlaggedEntry(entry.log_id));
-    actionCell.appendChild(deleteButton);
-
-    row.appendChild(actionCell);
-    tbody.appendChild(row);
-  });
-
-  table.appendChild(tbody);
-  container.appendChild(table);
-}
-
-async function loadFlaggedEntries() {
-  const res = await fetch("/flagged-entries");
-  if (!res.ok) {
-    const text = await res.text();
-    setTimerMessage("Could not load flagged entries: " + text, "error");
-    return;
-  }
-
-  flaggedEntries = await res.json();
-  renderFlaggedEntries();
-}
-
 function hideEntryQualityAlert() {
   const alert = document.getElementById("entryQualityAlert");
   if (!alert) return;
@@ -1692,30 +1596,6 @@ async function deleteSuspiciousEntry(logId) {
   }
 
   resetCompletedEntryForm();
-  await loadFlaggedEntries();
-  setTimerMessage("Flagged entry deleted.");
-}
-
-async function deleteFlaggedEntry(logId) {
-  const entry = flaggedEntries.find(item => item.log_id === logId);
-  const label = entry
-    ? `${entry.work_date} - ${entry.employee} - ${entry.item} - ${entry.task}`
-    : "this flagged entry";
-  const shouldDelete = confirm(`Delete ${label}? This cannot be undone.`);
-  if (!shouldDelete) return;
-
-  const res = await fetch(`/entries/${logId}`, {
-    method: "DELETE"
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    setTimerMessage("Delete failed: " + text, "error");
-    return;
-  }
-
-  flaggedEntries = flaggedEntries.filter(item => item.log_id !== logId);
-  renderFlaggedEntries();
   setTimerMessage("Flagged entry deleted.");
 }
 
@@ -1823,7 +1703,6 @@ async function load() {
   document.getElementById("saveBtn").disabled = true;
 
   renderSavedEntries();
-  await loadFlaggedEntries();
   resetOrderRequestForm();
   resetManualReceivedForm();
   setupTimeInput("manual_received_time");
@@ -1871,6 +1750,7 @@ function showTab(tabName) {
   if (tabName === "ordered") {
     loadOrderedTab();
   }
+
 }
 
 function createBulkTypeSelect() {
@@ -2190,7 +2070,6 @@ async function saveQuantity() {
   if (suspiciousReason) {
     showEntryQualityAlert(logId, suspiciousReason);
     keepSuspiciousEntryForEditing(suspiciousReason);
-    await loadFlaggedEntries();
     updateTimerWorkflowUI();
     return;
   }
@@ -2203,7 +2082,6 @@ async function saveQuantity() {
     quantity
   });
   renderSavedEntries();
-  await loadFlaggedEntries();
 
   resetCompletedEntryForm();
   setTimerMessage("Entry completed and saved.");

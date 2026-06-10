@@ -42,6 +42,9 @@
     .edit-grid { display: flex; flex-wrap: wrap; gap: 8px; }
     .edit-grid input, .edit-grid select { flex: 1 1 180px; min-width: 0; }
     .edit-actions { margin-top: 8px; }
+    .flagged-entry-row { background: #fff5df; }
+    .flagged-entry-reason { color: #8a4f00; font-weight: bold; }
+    .flagged-review-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
     .message { margin: 10px 0; }
     .message.error { color: #a00000; }
     .message.success { color: #176a2c; }
@@ -1243,6 +1246,7 @@
 
 <div class="admin-tabs">
   <button class="admin-tab-button active" type="button" onclick="showAdminTab('entries')">Entries</button>
+  <button class="admin-tab-button" type="button" onclick="showAdminTab('review')">Entries for Review</button>
   <button class="admin-tab-button" type="button" onclick="showAdminTab('daily')">Daily Report</button>
   <button class="admin-tab-button" type="button" onclick="showAdminTab('batches')">Batch Tracker</button>
   <button class="admin-tab-button" type="button" onclick="showAdminTab('calendar')">Calendar</button>
@@ -1292,6 +1296,32 @@
   <section id="entryFocusWindow" class="entry-focus-window" hidden></section>
   <div id="table"></div>
   <section id="itemTaskRateReport" class="printable-report" hidden></section>
+</section>
+
+<section id="reviewPanel" class="admin-panel">
+  <div class="flagged-review-actions">
+    <button type="button" onclick="loadFlaggedEntryReview()">Refresh</button>
+  </div>
+
+  <section id="reviewEditPanel" class="edit-panel">
+    <h3>Edit Entry</h3>
+    <input type="hidden" id="review_edit_log_id">
+    <div class="edit-grid">
+      <input type="date" id="review_edit_work_date">
+      <select id="review_edit_employee"></select>
+      <select id="review_edit_item"></select>
+      <select id="review_edit_task"></select>
+      <input type="text" id="review_edit_dispensary_name" list="adminDispensaryLocations" placeholder="Dispensary Name">
+      <input type="number" id="review_edit_quantity" min="0" step="1" placeholder="Quantity">
+      <input type="text" id="review_edit_time" placeholder="Time HH:MM:SS">
+    </div>
+    <div class="edit-actions">
+      <button type="button" onclick="saveReviewEntryEdit()">Save Changes</button>
+      <button type="button" onclick="cancelReviewEntryEdit()">Cancel</button>
+    </div>
+  </section>
+
+  <div id="flaggedEntryReviewTable"></div>
 </section>
 
 <section id="dailyPanel" class="admin-panel">

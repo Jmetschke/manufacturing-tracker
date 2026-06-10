@@ -2187,10 +2187,12 @@ app.get("/entry-alert-thresholds", (req, res) => {
   res.json(entryAlertThresholds);
 });
 
-app.get("/flagged-entries", (req, res) => {
+app.get("/admin/flagged-entries", (req, res) => {
   db.all(`
     SELECT
       l.id AS log_id,
+      l.item_id,
+      l.task_id,
       COALESCE(l.dispensary_name, '') AS dispensary_name,
       COALESCE(i.name, 'Unknown Item') AS item,
       COALESCE(t.name, 'Unknown Task') AS task,
