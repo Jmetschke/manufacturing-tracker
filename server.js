@@ -577,7 +577,8 @@ const itemTaskNames = Object.freeze({
 });
 
 const globalItemTaskNames = Object.freeze([
-  "Exit Label Stickering"
+  "Exit Label Stickering",
+  "Sealing"
 ]);
 
 function runSql(sql, params = [], database = db) {
