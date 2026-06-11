@@ -6,8 +6,6 @@ let loadedTasks = [];
 let itemTaskOptionsByItemId = {};
 let pendingEntry = null;
 let savedEntries = [];
-let entryAlertThresholdsByKey = new Map();
-let entryAlertThresholdsByTaskKey = new Map();
 let orderedItems = [];
 let orderRequests = [];
 let pausedSeconds = 0;
@@ -1477,80 +1475,6 @@ function renderSavedEntries() {
   container.appendChild(table);
 }
 
-function formatEntrySecondsPerUnit(value) {
-  const secondsPerUnit = Number(value) || 0;
-  if (!secondsPerUnit) return "0 sec/unit";
-  return `${secondsPerUnit.toLocaleString(undefined, { maximumFractionDigits: 2 })} sec/unit`;
-}
-
-function normalizeEntryAlertName(value) {
-  return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
-}
-
-function getEntryAlertThresholdKey(item, task) {
-  return `${normalizeEntryAlertName(item)}\n${normalizeEntryAlertName(task)}`;
-}
-
-function setEntryAlertThresholds(thresholds) {
-  entryAlertThresholdsByKey = new Map();
-  entryAlertThresholdsByTaskKey = new Map();
-  (Array.isArray(thresholds) ? thresholds : []).forEach(rule => {
-    const threshold = Number(rule.secondsPerUnitAlertLevel) || 0;
-    if (threshold <= 0) return;
-    entryAlertThresholdsByKey.set(getEntryAlertThresholdKey(rule.item, rule.task), threshold);
-
-    const taskKey = normalizeEntryAlertName(rule.task);
-    const currentThreshold = entryAlertThresholdsByTaskKey.get(taskKey);
-    if (!currentThreshold || threshold < currentThreshold) {
-      entryAlertThresholdsByTaskKey.set(taskKey, threshold);
-    }
-  });
-}
-
-function getEntryAlertThreshold(item, task) {
-  const directThreshold = entryAlertThresholdsByKey.get(getEntryAlertThresholdKey(item, task)) || 0;
-  if (directThreshold) return directThreshold;
-
-  const normalizedTask = normalizeEntryAlertName(task);
-  if (normalizedTask === "sb sealing") {
-    const sealingThreshold = entryAlertThresholdsByKey.get(getEntryAlertThresholdKey(item, "Sealing")) || 0;
-    if (sealingThreshold) return sealingThreshold;
-    return entryAlertThresholdsByTaskKey.get(normalizeEntryAlertName("Sealing")) || 0;
-  }
-  if (normalizedTask === "bagging (10's)") {
-    const baggingThreshold = entryAlertThresholdsByKey.get(getEntryAlertThresholdKey(item, "Bagging (20's)")) || 0;
-    if (baggingThreshold) return baggingThreshold;
-    return entryAlertThresholdsByTaskKey.get(normalizeEntryAlertName("Bagging (20's)")) || 0;
-  }
-
-  return entryAlertThresholdsByTaskKey.get(normalizedTask) || 0;
-}
-
-function getEntrySecondsPerUnit(durationSeconds, quantity) {
-  const qty = Number(quantity) || 0;
-  if (qty <= 0) return 0;
-  return (Number(durationSeconds) || 0) / qty;
-}
-
-function getSuspiciousEntryReason(durationSeconds, quantity, item, task) {
-  const secondsPerUnit = getEntrySecondsPerUnit(durationSeconds, quantity);
-  if (secondsPerUnit === 0) return "0 sec/unit";
-
-  const threshold = getEntryAlertThreshold(item, task);
-  if (threshold > 0 && secondsPerUnit >= threshold) {
-    return `${formatEntrySecondsPerUnit(secondsPerUnit)} at or over ${formatEntrySecondsPerUnit(threshold)} alert level`;
-  }
-
-  return "";
-}
-
-function hideEntryQualityAlert() {
-  const alert = document.getElementById("entryQualityAlert");
-  if (!alert) return;
-  alert.hidden = true;
-  alert.innerHTML = "";
-}
-
 function resetCompletedEntryForm() {
   const qtyInput = document.getElementById("qty");
   const saveBtn = document.getElementById("saveBtn");
@@ -1567,70 +1491,7 @@ function resetCompletedEntryForm() {
   qtyInput.disabled = true;
   saveBtn.disabled = true;
   document.getElementById("timer").innerText = "00:00:00";
-  hideEntryQualityAlert();
   updateTimerWorkflowUI();
-}
-
-function keepSuspiciousEntryForEditing(reason) {
-  const qtyInput = document.getElementById("qty");
-  const saveBtn = document.getElementById("saveBtn");
-
-  qtyInput.disabled = false;
-  saveBtn.disabled = false;
-  qtyInput.focus();
-  setTimerMessage(`Entry flagged at ${reason}. Edit the fields, then save again.`, "error");
-}
-
-async function deleteSuspiciousEntry(logId) {
-  const shouldDelete = confirm("Delete this flagged entry? This cannot be undone.");
-  if (!shouldDelete) return;
-
-  const res = await fetch(`/entries/${logId}`, {
-    method: "DELETE"
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    setTimerMessage("Delete failed: " + text, "error");
-    return;
-  }
-
-  resetCompletedEntryForm();
-  setTimerMessage("Flagged entry deleted.");
-}
-
-function showEntryQualityAlert(logId, reason) {
-  const alert = document.getElementById("entryQualityAlert");
-  if (!alert) return;
-
-  alert.hidden = false;
-  alert.innerHTML = "";
-
-  const title = document.createElement("div");
-  title.className = "entry-quality-alert-title";
-  title.textContent = "Entry flagged";
-  alert.appendChild(title);
-
-  const message = document.createElement("div");
-  message.textContent = `This entry calculated at ${reason}. Edit it or delete it before moving on.`;
-  alert.appendChild(message);
-
-  const actions = document.createElement("div");
-  actions.className = "entry-quality-alert-actions";
-
-  const editButton = document.createElement("button");
-  editButton.type = "button";
-  editButton.textContent = "Edit Entry";
-  editButton.addEventListener("click", () => keepSuspiciousEntryForEditing(reason));
-  actions.appendChild(editButton);
-
-  const deleteButton = document.createElement("button");
-  deleteButton.type = "button";
-  deleteButton.textContent = "Delete Entry";
-  deleteButton.addEventListener("click", () => deleteSuspiciousEntry(logId));
-  actions.appendChild(deleteButton);
-
-  alert.appendChild(actions);
 }
 
 const bulkTypes = [
@@ -1654,16 +1515,14 @@ const bulkTypes = [
 async function load() {
   loadEmployeeOptions();
 
-  const [items, tasks, taskOptions, entryAlertThresholds] = await Promise.all([
+  const [items, tasks, taskOptions] = await Promise.all([
     fetch("/items").then(r => r.json()),
     fetch("/tasks").then(r => r.json()),
-    fetch("/item-task-options").then(r => r.json()),
-    fetch("/entry-alert-thresholds").then(r => r.json())
+    fetch("/item-task-options").then(r => r.json())
   ]);
   loadedItems = items;
   loadedTasks = tasks;
   itemTaskOptionsByItemId = taskOptions;
-  setEntryAlertThresholds(entryAlertThresholds);
 
   const itemSel = document.getElementById("item");
   const taskSel = document.getElementById("task");
@@ -2043,8 +1902,6 @@ async function saveQuantity() {
     return;
   }
 
-  hideEntryQualityAlert();
-
   const res = await fetch("/update-qty", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -2063,16 +1920,8 @@ async function saveQuantity() {
     return;
   }
 
-  const durationSeconds = pendingEntry ? Number(pendingEntry.durationSeconds) || 0 : 0;
   const selectedItemText = getSelectedOptionText(itemSel);
   const selectedTaskText = getSelectedOptionText(taskSel);
-  const suspiciousReason = getSuspiciousEntryReason(durationSeconds, quantity, selectedItemText, selectedTaskText);
-  if (suspiciousReason) {
-    showEntryQualityAlert(logId, suspiciousReason);
-    keepSuspiciousEntryForEditing(suspiciousReason);
-    updateTimerWorkflowUI();
-    return;
-  }
 
   savedEntries.unshift({
     ...pendingEntry,

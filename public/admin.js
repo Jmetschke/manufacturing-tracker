@@ -4,6 +4,7 @@ let flaggedReviewEntries = [];
 let allItems = [];
 let allTasks = [];
 let itemTaskOptionsByItemId = {};
+let itemTaskManagementAssignments = [];
 let allOrderedItems = [];
 let allOrderRequests = [];
 let adminScheduleRows = new Map();
@@ -237,6 +238,25 @@ function fillReviewTaskOptions(itemId, selectedTaskId = document.getElementById(
   }
 }
 
+function buildItemTaskOptionsByItemId(assignments) {
+  const optionsByItemId = {};
+
+  assignments.forEach(assignment => {
+    const itemId = String(assignment.item_id);
+    if (!optionsByItemId[itemId]) {
+      optionsByItemId[itemId] = [];
+    }
+    optionsByItemId[itemId].push(assignment.task_id);
+  });
+
+  return optionsByItemId;
+}
+
+function getTaskName(taskId) {
+  const task = allTasks.find(option => String(option.id) === String(taskId));
+  return task ? task.name : "";
+}
+
 function getSelectText(select) {
   if (!select || !select.value) return "";
   const option = select.options[select.selectedIndex];
@@ -276,6 +296,9 @@ async function loadLookups() {
   allItems = items;
   allTasks = tasks;
   itemTaskOptionsByItemId = taskOptions;
+  itemTaskManagementAssignments = Object.entries(taskOptions).flatMap(([itemId, taskIds]) =>
+    taskIds.map(taskId => ({ item_id: Number(itemId), task_id: Number(taskId) }))
+  );
 
   fillSelect(
     document.getElementById("item_filter"),
@@ -1767,6 +1790,7 @@ function appendTaskFocusDetails(block, projectedTasks, emptyText) {
 function showAdminTab(tabName) {
   document.getElementById("entriesPanel").classList.toggle("active", tabName === "entries");
   document.getElementById("reviewPanel").classList.toggle("active", tabName === "review");
+  document.getElementById("itemTaskManagementPanel").classList.toggle("active", tabName === "itemTasks");
   document.getElementById("dailyPanel").classList.toggle("active", tabName === "daily");
   document.getElementById("batchTrackerPanel").classList.toggle("active", tabName === "batches");
   document.getElementById("calendarPanel").classList.toggle("active", tabName === "calendar");
@@ -1776,6 +1800,7 @@ function showAdminTab(tabName) {
     const isActive =
       (tabName === "entries" && button.textContent === "Entries") ||
       (tabName === "review" && button.textContent === "Entries for Review") ||
+      (tabName === "itemTasks" && button.textContent === "Item & Task Management") ||
       (tabName === "daily" && button.textContent === "Daily Report") ||
       (tabName === "batches" && button.textContent === "Batch Tracker") ||
       (tabName === "calendar" && button.textContent === "Calendar") ||
@@ -1795,6 +1820,10 @@ function showAdminTab(tabName) {
 
   if (tabName === "review") {
     loadFlaggedEntryReview();
+  }
+
+  if (tabName === "itemTasks") {
+    loadItemTaskManagement();
   }
 
   if (tabName === "batches") {
@@ -2561,6 +2590,223 @@ async function deleteReviewEntry(logId) {
 
   showMessage("Entry deleted.", "success");
   await loadFlaggedEntryReview();
+}
+
+async function loadItemTaskManagement() {
+  const res = await adminFetch("/admin/item-task-management");
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Item and task management load failed: " + text, "error");
+    return;
+  }
+
+  const data = await res.json();
+  allItems = data.items || [];
+  allTasks = data.tasks || [];
+  itemTaskManagementAssignments = data.assignments || [];
+  itemTaskOptionsByItemId = buildItemTaskOptionsByItemId(itemTaskManagementAssignments);
+
+  renderItemTaskManagement();
+  renderMasterTaskList();
+}
+
+function renderItemTaskManagement() {
+  const container = document.getElementById("itemTaskManagementList");
+  if (!container) return;
+  container.innerHTML = "";
+
+  allItems.forEach(item => {
+    const card = document.createElement("div");
+    card.className = "item-task-card";
+
+    const header = document.createElement("div");
+    header.className = "item-task-card-header";
+
+    const title = document.createElement("b");
+    title.textContent = item.name;
+    header.appendChild(title);
+
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.textContent = "Edit";
+    editButton.addEventListener("click", () => editItemTaskAssignments(item.id));
+    header.appendChild(editButton);
+    card.appendChild(header);
+
+    const assignedTaskIds = itemTaskOptionsByItemId[String(item.id)] || [];
+    if (!assignedTaskIds.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty-entries";
+      empty.textContent = "No tasks assigned.";
+      card.appendChild(empty);
+    } else {
+      const list = document.createElement("ul");
+      list.className = "item-task-list";
+      assignedTaskIds
+        .map(getTaskName)
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b))
+        .forEach(taskName => {
+          const itemNode = document.createElement("li");
+          itemNode.textContent = taskName;
+          list.appendChild(itemNode);
+        });
+      card.appendChild(list);
+    }
+
+    container.appendChild(card);
+  });
+}
+
+function renderMasterTaskList() {
+  const container = document.getElementById("masterTaskList");
+  if (!container) return;
+  container.innerHTML = "";
+
+  allTasks.forEach(task => {
+    const row = document.createElement("div");
+    row.className = "master-task-row";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = task.name;
+    input.dataset.taskId = String(task.id);
+    row.appendChild(input);
+
+    const alertInput = document.createElement("input");
+    alertInput.type = "number";
+    alertInput.min = "0";
+    alertInput.step = "0.01";
+    alertInput.value = String(Number(task.seconds_per_unit_alert_level) || 0);
+    alertInput.setAttribute("aria-label", `${task.name} alert seconds per unit`);
+    row.appendChild(alertInput);
+
+    const saveButton = document.createElement("button");
+    saveButton.type = "button";
+    saveButton.textContent = "Save";
+    saveButton.addEventListener("click", () => updateMasterTask(task.id, input.value, alertInput.value));
+    row.appendChild(saveButton);
+
+    container.appendChild(row);
+  });
+}
+
+function editItemTaskAssignments(itemId) {
+  const item = allItems.find(option => String(option.id) === String(itemId));
+  if (!item) return;
+
+  document.getElementById("item_task_edit_item_id").value = String(item.id);
+  document.getElementById("itemTaskEditTitle").textContent = `Edit Tasks for ${item.name}`;
+
+  const assignedTaskIds = new Set((itemTaskOptionsByItemId[String(item.id)] || []).map(String));
+  const container = document.getElementById("itemTaskEditOptions");
+  container.innerHTML = "";
+
+  allTasks.forEach(task => {
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = String(task.id);
+    checkbox.checked = assignedTaskIds.has(String(task.id));
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(task.name));
+    container.appendChild(label);
+  });
+
+  document.getElementById("itemTaskEditPanel").classList.add("active");
+  showMessage("");
+}
+
+function cancelItemTaskEdit() {
+  document.getElementById("itemTaskEditPanel").classList.remove("active");
+  document.getElementById("item_task_edit_item_id").value = "";
+  showMessage("");
+}
+
+async function saveItemTaskAssignments() {
+  const itemId = document.getElementById("item_task_edit_item_id").value;
+  if (!itemId) return;
+
+  const taskIds = Array.from(document.querySelectorAll("#itemTaskEditOptions input:checked"))
+    .map(input => Number(input.value));
+
+  const res = await adminFetch(`/admin/items/${itemId}/tasks`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ task_ids: taskIds })
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Save failed: " + text, "error");
+    return;
+  }
+
+  cancelItemTaskEdit();
+  showMessage("Item tasks updated.", "success");
+  await loadItemTaskManagement();
+}
+
+async function addMasterTask() {
+  const input = document.getElementById("new_master_task_name");
+  const alertInput = document.getElementById("new_master_task_alert_level");
+  const name = input.value.trim();
+  const alertLevel = Number(alertInput.value) || 0;
+  if (!name) {
+    showMessage("Task name is required.", "error");
+    input.focus();
+    return;
+  }
+  if (alertLevel < 0) {
+    showMessage("Alert level must be zero or greater.", "error");
+    alertInput.focus();
+    return;
+  }
+
+  const res = await adminFetch("/admin/tasks", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, seconds_per_unit_alert_level: alertLevel })
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Task add failed: " + text, "error");
+    return;
+  }
+
+  input.value = "";
+  alertInput.value = "";
+  showMessage("Task added.", "success");
+  await loadItemTaskManagement();
+}
+
+async function updateMasterTask(taskId, nameValue, alertLevelValue) {
+  const name = String(nameValue || "").trim();
+  const alertLevel = Number(alertLevelValue) || 0;
+  if (!name) {
+    showMessage("Task name is required.", "error");
+    return;
+  }
+  if (alertLevel < 0) {
+    showMessage("Alert level must be zero or greater.", "error");
+    return;
+  }
+
+  const res = await adminFetch(`/admin/tasks/${taskId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, seconds_per_unit_alert_level: alertLevel })
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Task update failed: " + text, "error");
+    return;
+  }
+
+  showMessage("Task updated.", "success");
+  await loadItemTaskManagement();
 }
 
 function exportCSV() {

@@ -45,6 +45,59 @@
     .flagged-entry-row { background: #fff5df; }
     .flagged-entry-reason { color: #8a4f00; font-weight: bold; }
     .flagged-review-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .item-task-management {
+      display: grid;
+      grid-template-columns: minmax(280px, 1.2fr) minmax(280px, 0.8fr);
+      gap: 14px;
+      align-items: start;
+    }
+    .item-task-management h3 { margin: 0 0 10px; }
+    .item-task-section {
+      border: 1px solid #d8d8d2;
+      background: #fff;
+      padding: 12px;
+    }
+    .item-task-card {
+      border: 1px solid #d8d8d2;
+      background: #fbfcfa;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    .item-task-card-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .item-task-list {
+      margin: 0 0 0 18px;
+      padding: 0;
+    }
+    .task-option-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 8px;
+      margin: 10px 0;
+    }
+    .task-option-grid label {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .master-task-row {
+      display: grid;
+      grid-template-columns: minmax(160px, 1fr) minmax(120px, 0.35fr) auto;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .master-task-form {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .master-task-form input { flex: 1 1 180px; }
     .message { margin: 10px 0; }
     .message.error { color: #a00000; }
     .message.success { color: #176a2c; }
@@ -1247,6 +1300,7 @@
 <div class="admin-tabs">
   <button class="admin-tab-button active" type="button" onclick="showAdminTab('entries')">Entries</button>
   <button class="admin-tab-button" type="button" onclick="showAdminTab('review')">Entries for Review</button>
+  <button class="admin-tab-button" type="button" onclick="showAdminTab('itemTasks')">Item & Task Management</button>
   <button class="admin-tab-button" type="button" onclick="showAdminTab('daily')">Daily Report</button>
   <button class="admin-tab-button" type="button" onclick="showAdminTab('batches')">Batch Tracker</button>
   <button class="admin-tab-button" type="button" onclick="showAdminTab('calendar')">Calendar</button>
@@ -1296,6 +1350,35 @@
   <section id="entryFocusWindow" class="entry-focus-window" hidden></section>
   <div id="table"></div>
   <section id="itemTaskRateReport" class="printable-report" hidden></section>
+</section>
+
+<section id="itemTaskManagementPanel" class="admin-panel">
+  <div class="item-task-management">
+    <section class="item-task-section">
+      <h3>Items and Tasks</h3>
+      <div id="itemTaskManagementList"></div>
+    </section>
+
+    <section class="item-task-section">
+      <h3>Master Task List</h3>
+      <div class="master-task-form">
+        <input type="text" id="new_master_task_name" placeholder="New task name">
+        <input type="number" id="new_master_task_alert_level" min="0" step="0.01" placeholder="Alert sec/unit">
+        <button type="button" onclick="addMasterTask()">Add Task</button>
+      </div>
+      <div id="masterTaskList"></div>
+    </section>
+  </div>
+
+  <section id="itemTaskEditPanel" class="edit-panel">
+    <h3 id="itemTaskEditTitle">Edit Item Tasks</h3>
+    <input type="hidden" id="item_task_edit_item_id">
+    <div id="itemTaskEditOptions" class="task-option-grid"></div>
+    <div class="edit-actions">
+      <button type="button" onclick="saveItemTaskAssignments()">Save Tasks</button>
+      <button type="button" onclick="cancelItemTaskEdit()">Cancel</button>
+    </div>
+  </section>
 </section>
 
 <section id="reviewPanel" class="admin-panel">

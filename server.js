@@ -18,50 +18,9 @@ const ACCESS_COOKIE = "manufacturing_tracker_access";
 const ADMIN_ACCESS_COOKIE = "manufacturing_tracker_admin_access";
 const ACCESS_SECRET = process.env.ACCESS_SESSION_SECRET || `${ACCESS_CODE}:${ADMIN_ACCESS_CODE}`;
 const MAX_SCHEDULE_TASKS_LENGTH = 100000;
-const entryAlertThresholdsByKey = new Map(
-  entryAlertThresholds.map(rule => [
-    getEntryAlertThresholdKey(rule.item, rule.task),
-    Number(rule.secondsPerUnitAlertLevel) || 0
-  ])
-);
-const entryAlertThresholdsByTaskKey = new Map();
-
-entryAlertThresholds.forEach(rule => {
-  const threshold = Number(rule.secondsPerUnitAlertLevel) || 0;
-  if (threshold <= 0) return;
-
-  const taskKey = normalizeEntryAlertName(rule.task);
-  const currentThreshold = entryAlertThresholdsByTaskKey.get(taskKey);
-  if (!currentThreshold || threshold < currentThreshold) {
-    entryAlertThresholdsByTaskKey.set(taskKey, threshold);
-  }
-});
 
 function normalizeEntryAlertName(value) {
   return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
-}
-
-function getEntryAlertThresholdKey(item, task) {
-  return `${normalizeEntryAlertName(item)}\n${normalizeEntryAlertName(task)}`;
-}
-
-function getEntryAlertThreshold(item, task) {
-  const directThreshold = entryAlertThresholdsByKey.get(getEntryAlertThresholdKey(item, task)) || 0;
-  if (directThreshold) return directThreshold;
-
-  const normalizedTask = normalizeEntryAlertName(task);
-  if (normalizedTask === "sb sealing") {
-    const sealingThreshold = entryAlertThresholdsByKey.get(getEntryAlertThresholdKey(item, "Sealing")) || 0;
-    if (sealingThreshold) return sealingThreshold;
-    return entryAlertThresholdsByTaskKey.get(normalizeEntryAlertName("Sealing")) || 0;
-  }
-  if (normalizedTask === "bagging (10's)") {
-    const baggingThreshold = entryAlertThresholdsByKey.get(getEntryAlertThresholdKey(item, "Bagging (20's)")) || 0;
-    if (baggingThreshold) return baggingThreshold;
-    return entryAlertThresholdsByTaskKey.get(normalizeEntryAlertName("Bagging (20's)")) || 0;
-  }
-
-  return entryAlertThresholdsByTaskKey.get(normalizedTask) || 0;
 }
 
 function getEntrySecondsPerUnit(durationSeconds, quantity) {
@@ -80,7 +39,7 @@ function getEntryAlertReason(entry) {
   const secondsPerUnit = getEntrySecondsPerUnit(entry.duration_seconds, entry.quantity);
   if (secondsPerUnit === 0) return "0 sec/unit";
 
-  const threshold = getEntryAlertThreshold(entry.item, entry.task);
+  const threshold = Number(entry.seconds_per_unit_alert_level) || 0;
   if (threshold > 0 && secondsPerUnit >= threshold) {
     return `${formatSecondsPerUnit(secondsPerUnit)} at or over ${formatSecondsPerUnit(threshold)} alert level`;
   }
@@ -666,6 +625,69 @@ async function logLookupCount(table) {
   console.log(`${table} rows: ${rows[0].count}`);
 }
 
+async function seedItemTaskAssignments() {
+  const countRows = await allSql("SELECT COUNT(*) AS count FROM item_task_assignments");
+  const existingCount = Number(countRows[0] && countRows[0].count) || 0;
+  if (existingCount > 0) return;
+
+  const [items, tasks] = await Promise.all([
+    allSql("SELECT id, name FROM items"),
+    allSql("SELECT id, name FROM tasks")
+  ]);
+  const itemIdsByName = new Map(items.map(item => [item.name, item.id]));
+  const taskIdsByName = new Map(tasks.map(task => [task.name, task.id]));
+
+  for (const [itemName, taskNamesForItem] of Object.entries(itemTaskNames)) {
+    const itemId = itemIdsByName.get(itemName);
+    if (!itemId) continue;
+
+    const assignedTaskNames = [...new Set([...taskNamesForItem, ...globalItemTaskNames])];
+    for (const taskName of assignedTaskNames) {
+      const taskId = taskIdsByName.get(taskName);
+      if (!taskId) continue;
+
+      await runSql(`
+        INSERT INTO item_task_assignments (item_id, task_id)
+        SELECT ?, ?
+        WHERE NOT EXISTS (
+          SELECT 1 FROM item_task_assignments WHERE item_id = ? AND task_id = ?
+        )
+      `, [itemId, taskId, itemId, taskId]);
+    }
+  }
+
+  console.log("Seeded item task assignments from defaults.");
+}
+
+async function seedTaskAlertLevels() {
+  const thresholdsByTaskName = new Map();
+
+  entryAlertThresholds.forEach(rule => {
+    const threshold = Number(rule.secondsPerUnitAlertLevel) || 0;
+    if (threshold <= 0) return;
+
+    const taskKey = normalizeEntryAlertName(rule.task);
+    const currentThreshold = thresholdsByTaskName.get(taskKey);
+    if (!currentThreshold || threshold < currentThreshold) {
+      thresholdsByTaskName.set(taskKey, threshold);
+    }
+  });
+
+  const tasks = await allSql("SELECT id, name, seconds_per_unit_alert_level FROM tasks");
+  for (const task of tasks) {
+    const existingThreshold = Number(task.seconds_per_unit_alert_level) || 0;
+    if (existingThreshold > 0) continue;
+
+    const threshold = thresholdsByTaskName.get(normalizeEntryAlertName(task.name)) || 0;
+    if (threshold <= 0) continue;
+
+    await runSql(
+      "UPDATE tasks SET seconds_per_unit_alert_level = ? WHERE id = ?",
+      [threshold, task.id]
+    );
+  }
+}
+
 function isIsoDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
@@ -819,7 +841,16 @@ async function initializeDatabase() {
   await runSql(`
     CREATE TABLE IF NOT EXISTS tasks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL
+      name TEXT NOT NULL,
+      seconds_per_unit_alert_level REAL DEFAULT 0
+    )
+  `);
+
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS item_task_assignments (
+      item_id INTEGER NOT NULL,
+      task_id INTEGER NOT NULL,
+      PRIMARY KEY (item_id, task_id)
     )
   `);
 
@@ -897,6 +928,7 @@ async function initializeDatabase() {
   `);
 
   await addMissingColumn("time_logs", "item_id", "INTEGER");
+  await addMissingColumn("tasks", "seconds_per_unit_alert_level", "REAL DEFAULT 0");
   await addMissingColumn("time_logs", "task_id", "INTEGER");
   await addMissingColumn("time_logs", "employee", "TEXT");
   await addMissingColumn("time_logs", "work_date", "TEXT");
@@ -946,6 +978,8 @@ async function initializeDatabase() {
   await removeNames("items", ["Item A", "Item B"]);
   await seedNames("tasks", taskNames);
   await removeNames("tasks", ["Assembly", "Cutting"]);
+  await seedTaskAlertLevels();
+  await seedItemTaskAssignments();
   await logLookupCount("items");
   await logLookupCount("tasks");
 }
@@ -960,7 +994,7 @@ app.get("/items", (req, res) => {
 
 /* ---------- TASKS ---------- */
 app.get("/tasks", (req, res) => {
-  db.all("SELECT * FROM tasks", [], (err, rows) => {
+  db.all("SELECT id, name FROM tasks", [], (err, rows) => {
     if (err) return res.status(500).send(err.message);
     res.json(rows);
   });
@@ -968,24 +1002,133 @@ app.get("/tasks", (req, res) => {
 
 app.get("/item-task-options", async (req, res) => {
   try {
-    const [items, tasks] = await Promise.all([
-      allSql("SELECT id, name FROM items"),
-      allSql("SELECT id, name FROM tasks")
-    ]);
-    const itemIdsByName = new Map(items.map(item => [item.name, item.id]));
-    const taskIdsByName = new Map(tasks.map(task => [task.name, task.id]));
+    const assignments = await allSql(`
+      SELECT item_id, task_id
+      FROM item_task_assignments
+      ORDER BY item_id, task_id
+    `);
     const optionsByItemId = {};
 
-    Object.entries(itemTaskNames).forEach(([itemName, taskNamesForItem]) => {
-      const itemId = itemIdsByName.get(itemName);
-      if (!itemId) return;
-
-      optionsByItemId[itemId] = [...new Set([...taskNamesForItem, ...globalItemTaskNames])]
-        .map(taskName => taskIdsByName.get(taskName))
-        .filter(taskId => taskId !== undefined);
+    assignments.forEach(assignment => {
+      if (!optionsByItemId[assignment.item_id]) {
+        optionsByItemId[assignment.item_id] = [];
+      }
+      optionsByItemId[assignment.item_id].push(assignment.task_id);
     });
 
     res.json(optionsByItemId);
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.get("/admin/item-task-management", async (req, res) => {
+  try {
+    const [items, tasks, assignments] = await Promise.all([
+      allSql("SELECT id, name FROM items ORDER BY name"),
+      allSql("SELECT id, name, COALESCE(seconds_per_unit_alert_level, 0) AS seconds_per_unit_alert_level FROM tasks ORDER BY name"),
+      allSql(`
+        SELECT item_id, task_id
+        FROM item_task_assignments
+        ORDER BY item_id, task_id
+      `)
+    ]);
+
+    res.json({ items, tasks, assignments });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.post("/admin/tasks", async (req, res) => {
+  const name = normalizeRequiredText(req.body.name);
+  const alertLevel = Number(req.body.seconds_per_unit_alert_level) || 0;
+  if (!name) return res.status(400).send("Task name is required");
+  if (alertLevel < 0) return res.status(400).send("Alert level must be zero or greater");
+
+  try {
+    const existing = await allSql("SELECT id FROM tasks WHERE lower(name) = lower(?)", [name]);
+    if (existing.length) {
+      return res.status(409).send("Task already exists");
+    }
+
+    const result = await runSql(
+      "INSERT INTO tasks (name, seconds_per_unit_alert_level) VALUES (?, ?)",
+      [name, alertLevel]
+    );
+    res.status(201).json({ id: result.lastID, name, seconds_per_unit_alert_level: alertLevel });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.put("/admin/tasks/:id", async (req, res) => {
+  const name = normalizeRequiredText(req.body.name);
+  const alertLevel = Number(req.body.seconds_per_unit_alert_level) || 0;
+  const taskId = Number(req.params.id);
+
+  if (!Number.isInteger(taskId) || taskId <= 0) {
+    return res.status(400).send("Invalid task");
+  }
+
+  if (!name) return res.status(400).send("Task name is required");
+  if (alertLevel < 0) return res.status(400).send("Alert level must be zero or greater");
+
+  try {
+    const duplicate = await allSql(
+      "SELECT id FROM tasks WHERE lower(name) = lower(?) AND id <> ?",
+      [name, taskId]
+    );
+    if (duplicate.length) {
+      return res.status(409).send("Task already exists");
+    }
+
+    const result = await runSql(
+      "UPDATE tasks SET name = ?, seconds_per_unit_alert_level = ? WHERE id = ?",
+      [name, alertLevel, taskId]
+    );
+    if (result.changes === 0) {
+      return res.status(404).send("Task not found");
+    }
+
+    res.json({ id: taskId, name, seconds_per_unit_alert_level: alertLevel });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.put("/admin/items/:id/tasks", async (req, res) => {
+  const itemId = Number(req.params.id);
+  const taskIds = Array.isArray(req.body.task_ids)
+    ? [...new Set(req.body.task_ids.map(value => Number(value)).filter(value => Number.isInteger(value) && value > 0))]
+    : null;
+
+  if (!Number.isInteger(itemId) || itemId <= 0) {
+    return res.status(400).send("Invalid item");
+  }
+
+  if (!taskIds) {
+    return res.status(400).send("Task list is required");
+  }
+
+  try {
+    const itemRows = await allSql("SELECT id FROM items WHERE id = ?", [itemId]);
+    if (!itemRows.length) return res.status(404).send("Item not found");
+
+    if (taskIds.length) {
+      const placeholders = taskIds.map(() => "?").join(", ");
+      const taskRows = await allSql(`SELECT id FROM tasks WHERE id IN (${placeholders})`, taskIds);
+      if (taskRows.length !== taskIds.length) {
+        return res.status(400).send("One or more tasks were not found");
+      }
+    }
+
+    await runSql("DELETE FROM item_task_assignments WHERE item_id = ?", [itemId]);
+    for (const taskId of taskIds) {
+      await runSql("INSERT INTO item_task_assignments (item_id, task_id) VALUES (?, ?)", [itemId, taskId]);
+    }
+
+    res.json({ item_id: itemId, task_ids: taskIds });
   } catch (err) {
     res.status(500).send(err.message);
   }
@@ -2183,10 +2326,6 @@ app.delete("/entries/:id", (req, res) => {
   );
 });
 
-app.get("/entry-alert-thresholds", (req, res) => {
-  res.json(entryAlertThresholds);
-});
-
 app.get("/admin/flagged-entries", (req, res) => {
   db.all(`
     SELECT
@@ -2200,6 +2339,7 @@ app.get("/admin/flagged-entries", (req, res) => {
       l.work_date,
       COALESCE(l.quantity, 0) AS quantity,
       COALESCE(l.duration_seconds, 0) AS duration_seconds,
+      COALESCE(t.seconds_per_unit_alert_level, 0) AS seconds_per_unit_alert_level,
       CASE
         WHEN COALESCE(l.quantity, 0) = 0 THEN 0
         ELSE (COALESCE(l.duration_seconds, 0) * 1.0) / COALESCE(l.quantity, 0)
@@ -2213,10 +2353,8 @@ app.get("/admin/flagged-entries", (req, res) => {
     if (err) return res.status(500).send(err.message);
     res.json(rows
       .map(row => {
-        const threshold = getEntryAlertThreshold(row.item, row.task);
         return {
           ...row,
-          seconds_per_unit_alert_level: threshold,
           flag_reason: getEntryAlertReason(row)
         };
       })
