@@ -85,6 +85,48 @@
       gap: 6px;
       align-items: center;
     }
+    .item-task-focus-window {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.35);
+      padding: 16px;
+    }
+    .item-task-focus-window[hidden] {
+      display: none;
+    }
+    .item-task-focus-dialog {
+      width: min(900px, 100%);
+      max-height: 90vh;
+      overflow: auto;
+      border: 1px solid #bfc8b8;
+      background: #fff;
+      padding: 16px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+    }
+    .item-task-focus-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 10px;
+    }
+    .item-task-focus-header h3 {
+      margin: 0;
+    }
+    .item-task-focus-count {
+      color: #555;
+      margin-bottom: 10px;
+    }
+    .item-task-focus-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
     .master-task-row {
       display: grid;
       grid-template-columns: minmax(160px, 1fr) minmax(120px, 0.35fr) auto;
@@ -1370,13 +1412,19 @@
     </section>
   </div>
 
-  <section id="itemTaskEditPanel" class="edit-panel">
-    <h3 id="itemTaskEditTitle">Edit Item Tasks</h3>
-    <input type="hidden" id="item_task_edit_item_id">
-    <div id="itemTaskEditOptions" class="task-option-grid"></div>
-    <div class="edit-actions">
-      <button type="button" onclick="saveItemTaskAssignments()">Save Tasks</button>
-      <button type="button" onclick="cancelItemTaskEdit()">Cancel</button>
+  <section id="itemTaskEditPanel" class="item-task-focus-window" hidden>
+    <div class="item-task-focus-dialog" role="dialog" aria-modal="true" aria-labelledby="itemTaskEditTitle">
+      <div class="item-task-focus-header">
+        <h3 id="itemTaskEditTitle">Edit Item Tasks</h3>
+        <button type="button" onclick="cancelItemTaskEdit()">Close</button>
+      </div>
+      <input type="hidden" id="item_task_edit_item_id">
+      <div id="itemTaskEditCount" class="item-task-focus-count"></div>
+      <div id="itemTaskEditOptions" class="task-option-grid"></div>
+      <div class="item-task-focus-actions">
+        <button type="button" onclick="saveItemTaskAssignments()">Save Tasks</button>
+        <button type="button" onclick="cancelItemTaskEdit()">Cancel</button>
+      </div>
     </div>
   </section>
 </section>

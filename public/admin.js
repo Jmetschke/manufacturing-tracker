@@ -2708,18 +2708,31 @@ function editItemTaskAssignments(itemId) {
     checkbox.type = "checkbox";
     checkbox.value = String(task.id);
     checkbox.checked = assignedTaskIds.has(String(task.id));
+    checkbox.addEventListener("change", updateItemTaskEditCount);
     label.appendChild(checkbox);
     label.appendChild(document.createTextNode(task.name));
     container.appendChild(label);
   });
 
-  document.getElementById("itemTaskEditPanel").classList.add("active");
+  document.getElementById("itemTaskEditPanel").hidden = false;
+  updateItemTaskEditCount();
   showMessage("");
+  const firstCheckbox = container.querySelector("input");
+  if (firstCheckbox) firstCheckbox.focus();
+}
+
+function updateItemTaskEditCount() {
+  const checkedCount = document.querySelectorAll("#itemTaskEditOptions input:checked").length;
+  const totalCount = document.querySelectorAll("#itemTaskEditOptions input").length;
+  const count = document.getElementById("itemTaskEditCount");
+  if (!count) return;
+  count.textContent = `${checkedCount} of ${totalCount} task${totalCount === 1 ? "" : "s"} assigned to this item.`;
 }
 
 function cancelItemTaskEdit() {
-  document.getElementById("itemTaskEditPanel").classList.remove("active");
+  document.getElementById("itemTaskEditPanel").hidden = true;
   document.getElementById("item_task_edit_item_id").value = "";
+  document.getElementById("itemTaskEditOptions").innerHTML = "";
   showMessage("");
 }
 
@@ -4810,6 +4823,9 @@ async function importOrderedPdf() {
 
 document.addEventListener("keydown", event => {
   if (event.key === "Escape") {
+    if (!document.getElementById("itemTaskEditPanel").hidden) {
+      cancelItemTaskEdit();
+    }
     closeAdminManualReceivedWindow();
   }
 });
