@@ -255,13 +255,6 @@
 
     .calendar-day-focus {
       margin-top: 12px;
-      padding: 12px;
-      background: #fff;
-      border: 1px solid #d8ded3;
-    }
-
-    .calendar-day-focus h3 {
-      margin-top: 0;
     }
 
     .calendar-day-focus-body {
@@ -333,15 +326,6 @@
     .daily-report-card.processing { border-left: 5px solid #5d9b45; background: #e7f6df; }
     .daily-report-card.events { border-left: 5px solid #7c5cc4; background: #f5f1ff; }
     .daily-report-card.pickups { border-left: 5px solid #be5b2a; background: #fff0e8; }
-    .daily-report-focus {
-      margin-top: 14px;
-      border: 1px solid #d8ded3;
-      background: #fff;
-      padding: 12px;
-    }
-    .daily-report-focus h3 {
-      margin-top: 0;
-    }
     .daily-working-section {
       margin-top: 14px;
     }
@@ -636,6 +620,42 @@
       color: #fff;
     }
 
+    .focus-window {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.35);
+      padding: 16px;
+    }
+
+    .focus-window[hidden] {
+      display: none;
+    }
+
+    .focus-dialog {
+      width: min(980px, 100%);
+      max-height: 90vh;
+      overflow: auto;
+      border: 1px solid #bfc8b8;
+      background: #fff;
+      padding: 16px;
+    }
+
+    .focus-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .focus-header h3 {
+      margin: 0;
+    }
+
     .saved-entries summary {
       cursor: pointer;
       font-weight: bold;
@@ -895,7 +915,6 @@
         padding: 12px;
       }
 
-      .tabs,
       .entry-fields,
       .timer-actions,
       .finish-entry-fields,
@@ -918,6 +937,19 @@
         margin-right: 0;
       }
 
+      .tabs {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        overflow-x: auto;
+        gap: 6px;
+        margin: 0 -16px 14px;
+        padding: 0 16px 8px;
+        background: #f7f7f4;
+        border-bottom: 1px solid #d4d4ce;
+        -webkit-overflow-scrolling: touch;
+      }
+
       .entry-fields input,
       .entry-fields select,
       .timer-actions button,
@@ -928,8 +960,13 @@
       }
 
       .tab-button {
+        flex: 0 0 auto;
+        width: auto;
+        min-width: 112px;
+        min-height: 48px;
         padding: 14px 12px;
-        text-align: left;
+        text-align: center;
+        white-space: nowrap;
       }
 
       .request-form,
@@ -1160,7 +1197,41 @@
       }
 
       .schedule-grid {
-        grid-template-columns: repeat(7, 160px);
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+        overflow-x: visible;
+        border: 0;
+        background: transparent;
+      }
+
+      .schedule-day-name {
+        display: none;
+      }
+
+      .schedule-cell {
+        min-height: auto;
+        border: 1px solid #d8d8d2;
+        cursor: pointer;
+      }
+
+      .calendar-day-focus-body {
+        grid-template-columns: 1fr;
+      }
+
+      .daily-report-grid,
+      .daily-working-batches {
+        grid-template-columns: 1fr;
+      }
+
+      .focus-window {
+        align-items: stretch;
+        padding: 10px;
+      }
+
+      .focus-dialog {
+        max-height: calc(100vh - 20px);
+        padding: 12px;
       }
 
       .receive-row {
@@ -1420,9 +1491,14 @@
     <div id="scheduleRange" class="schedule-range"></div>
   </div>
   <div id="scheduleCalendar" class="schedule-grid"></div>
-  <section id="scheduleDayFocus" class="calendar-day-focus" hidden>
-    <h3 id="scheduleDayFocusTitle"></h3>
-    <div id="scheduleDayFocusBody" class="calendar-day-focus-body"></div>
+  <section id="scheduleDayFocus" class="focus-window calendar-day-focus" hidden>
+    <div class="focus-dialog" role="dialog" aria-modal="true" aria-labelledby="scheduleDayFocusTitle">
+      <div class="focus-header">
+        <h3 id="scheduleDayFocusTitle"></h3>
+        <button type="button" onclick="closeScheduleDayFocus()">Close</button>
+      </div>
+      <div id="scheduleDayFocusBody" class="calendar-day-focus-body"></div>
+    </div>
   </section>
 
   <div class="weekly-tasks">
@@ -1441,9 +1517,14 @@
     <h3>Working Batches</h3>
     <div id="dailyWorkingBatches" class="daily-working-batches"></div>
   </section>
-  <section id="dailyReportFocus" class="daily-report-focus" hidden>
-    <h3 id="dailyReportFocusTitle"></h3>
-    <div id="dailyReportFocusBody" class="calendar-day-focus-body"></div>
+  <section id="dailyReportFocus" class="focus-window daily-report-focus" hidden>
+    <div class="focus-dialog" role="dialog" aria-modal="true" aria-labelledby="dailyReportFocusTitle">
+      <div class="focus-header">
+        <h3 id="dailyReportFocusTitle"></h3>
+        <button type="button" onclick="closeDailyReportFocus()">Close</button>
+      </div>
+      <div id="dailyReportFocusBody" class="calendar-day-focus-body"></div>
+    </div>
   </section>
 </section>
 

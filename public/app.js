@@ -886,6 +886,17 @@ function showDailyReportFocus(titleText, fill) {
   body.innerHTML = "";
   fill(body);
   panel.hidden = false;
+  const closeButton = panel.querySelector("button");
+  if (closeButton) closeButton.focus();
+}
+
+function closeDailyReportFocus() {
+  const panel = document.getElementById("dailyReportFocus");
+  const body = document.getElementById("dailyReportFocusBody");
+  if (!panel) return;
+
+  panel.hidden = true;
+  if (body) body.innerHTML = "";
 }
 
 function getBatchesFromScheduleRows(rows) {
@@ -977,7 +988,7 @@ async function loadDailyReport() {
   const workingBatches = getBatchesFromScheduleRows(rows);
 
   document.getElementById("dailyReportTitle").textContent = `Daily Report - ${formatDisplayDate(today)}`;
-  document.getElementById("dailyReportFocus").hidden = true;
+  closeDailyReportFocus();
 
   const grid = document.getElementById("dailyReportGrid");
   grid.innerHTML = "";
@@ -1125,7 +1136,17 @@ function renderFocusedScheduleDay(isoDate, scheduleDay, deliveries) {
   section("Processing Tasks", block => appendTaskFocusDetails(block, scheduleDay.processingTasks || [], "No processing tasks."));
 
   panel.hidden = false;
-  panel.scrollIntoView({ block: "start", behavior: "smooth" });
+  const closeButton = panel.querySelector("button");
+  if (closeButton) closeButton.focus();
+}
+
+function closeScheduleDayFocus() {
+  const panel = document.getElementById("scheduleDayFocus");
+  const body = document.getElementById("scheduleDayFocusBody");
+  if (!panel) return;
+
+  panel.hidden = true;
+  if (body) body.innerHTML = "";
 }
 
 function appendTestPickupList(container, testPickups) {
@@ -1590,6 +1611,9 @@ function showTab(tabName) {
   const dailyTab = document.getElementById("dailyTab");
   const orderedTab = document.getElementById("orderedTab");
   const buttons = document.querySelectorAll(".tab-button");
+
+  closeDailyReportFocus();
+  closeScheduleDayFocus();
 
   trackerTab.classList.toggle("active", tabName === "tracker");
   calculatorTab.classList.toggle("active", tabName === "calculator");
@@ -2073,7 +2097,7 @@ function renderScheduleCalendar(weekStart, scheduleByDate, deliveriesByDate) {
 
     const dateLabel = document.createElement("div");
     dateLabel.className = "schedule-date";
-    dateLabel.textContent = formatDisplayDate(isoDate);
+    dateLabel.textContent = `${dayNames[date.getDay()]} ${formatDisplayDate(isoDate)}`;
     cell.appendChild(dateLabel);
 
     const scheduleDay = scheduleByDate.get(isoDate) || { batchHijnx: [], batchSb: [], events: [], tasks: [], testPickups: [], processingTasks: [] };
@@ -2663,7 +2687,21 @@ function renderDeliveries() {
 
 document.addEventListener("keydown", event => {
   if (event.key === "Escape") {
+    closeDailyReportFocus();
+    closeScheduleDayFocus();
     closeManualReceivedWindow();
+  }
+});
+
+document.getElementById("dailyReportFocus").addEventListener("click", event => {
+  if (event.target.id === "dailyReportFocus") {
+    closeDailyReportFocus();
+  }
+});
+
+document.getElementById("scheduleDayFocus").addEventListener("click", event => {
+  if (event.target.id === "scheduleDayFocus") {
+    closeScheduleDayFocus();
   }
 });
 

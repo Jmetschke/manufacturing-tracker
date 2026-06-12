@@ -2406,12 +2406,25 @@ app.get("/admin/concern-entries", (req, res) => {
       l.concern_dismissed_at,
       COALESCE(l.concern_notes, '') AS concern_notes,
       CASE
+        WHEN COALESCE(task_rates.total_quantity, 0) = 0 THEN NULL
+        ELSE task_rates.total_duration_seconds * 1.0 / task_rates.total_quantity
+      END AS task_average_seconds_per_unit,
+      CASE
         WHEN COALESCE(l.quantity, 0) = 0 THEN 0
         ELSE (COALESCE(l.duration_seconds, 0) * 1.0) / COALESCE(l.quantity, 0)
       END AS sec_per_unit
     FROM time_logs l
     LEFT JOIN items i ON i.id = l.item_id
     LEFT JOIN tasks t ON t.id = l.task_id
+    LEFT JOIN (
+      SELECT
+        task_id,
+        SUM(COALESCE(duration_seconds, 0)) AS total_duration_seconds,
+        SUM(COALESCE(quantity, 0)) AS total_quantity
+      FROM time_logs
+      WHERE end_time IS NOT NULL
+      GROUP BY task_id
+    ) task_rates ON task_rates.task_id = l.task_id
     WHERE l.end_time IS NOT NULL
     AND l.concern_dismissed_at IS NOT NULL
     ORDER BY l.concern_dismissed_at DESC, l.work_date DESC, l.id DESC

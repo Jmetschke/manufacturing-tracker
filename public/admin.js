@@ -2530,8 +2530,9 @@ function renderFlaggedEntryReview() {
 function renderConcernEntries() {
   const container = document.getElementById("entryConcernsTable");
   container.innerHTML = "";
+  const activeConcernEntries = getActiveConcernEntries();
 
-  if (!concernEntries.length) {
+  if (!activeConcernEntries.length) {
     const empty = document.createElement("p");
     empty.className = "printable-report-empty";
     empty.textContent = "No entries of concern.";
@@ -2552,7 +2553,7 @@ function renderConcernEntries() {
   });
   table.appendChild(headerRow);
 
-  concernEntries.forEach(entry => {
+  activeConcernEntries.forEach(entry => {
     const row = document.createElement("tr");
     row.className = "flagged-entry-row";
 
@@ -2619,6 +2620,44 @@ function renderConcernEntries() {
   container.appendChild(table);
 }
 
+function getActiveConcernEntries() {
+  return concernEntries.filter(entry => !String(entry.concern_notes || "").trim());
+}
+
+function getLoggedConcernEntries() {
+  return concernEntries.filter(entry => String(entry.concern_notes || "").trim());
+}
+
+function renderLoggedConcernEmployees() {
+  const container = document.getElementById("loggedConcernEmployees");
+  const focus = document.getElementById("loggedConcernFocus");
+  container.innerHTML = "";
+  if (focus) {
+    focus.hidden = true;
+    focus.innerHTML = "";
+  }
+
+  const loggedEntries = getLoggedConcernEntries();
+  if (!loggedEntries.length) {
+    const empty = document.createElement("p");
+    empty.className = "printable-report-empty";
+    empty.textContent = "No logged entries of concern.";
+    container.appendChild(empty);
+    return;
+  }
+
+  const employees = [...new Set(loggedEntries.map(entry => entry.employee || "Unknown Employee"))]
+    .sort((a, b) => a.localeCompare(b));
+
+  employees.forEach(employee => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = `${employee} (${loggedEntries.filter(entry => (entry.employee || "Unknown Employee") === employee).length})`;
+    button.addEventListener("click", () => showLoggedConcernFocus(employee));
+    container.appendChild(button);
+  });
+}
+
 async function loadFlaggedEntryReview() {
   const [reviewRes, concernsRes] = await Promise.all([
     adminFetch("/admin/flagged-entries"),
@@ -2641,6 +2680,7 @@ async function loadFlaggedEntryReview() {
   concernEntries = await concernsRes.json();
   renderFlaggedEntryReview();
   renderConcernEntries();
+  renderLoggedConcernEmployees();
 }
 
 function editReviewEntry(logId) {
@@ -2774,6 +2814,8 @@ async function saveConcernNotes(logId, notes) {
   showMessage("Concern notes saved.", "success");
   const entry = concernEntries.find(item => item.log_id === logId);
   if (entry) entry.concern_notes = notes;
+  renderConcernEntries();
+  renderLoggedConcernEmployees();
 }
 
 async function undoConcernDismissal(logId) {
@@ -2796,6 +2838,119 @@ async function undoConcernDismissal(logId) {
 
   showMessage("Dismissal undone.", "success");
   await loadFlaggedEntryReview();
+}
+
+function getConcernEntryRateText(entry) {
+  const quantity = Number(entry.quantity) || 0;
+  const seconds = Number(entry.duration_seconds) || 0;
+  if (quantity <= 0 || seconds <= 0) return "No rate";
+  return formatSecondsPerUnit(seconds / quantity);
+}
+
+function getConcernEntryAverageText(entry) {
+  const average = Number(entry.task_average_seconds_per_unit) || 0;
+  return average > 0 ? formatSecondsPerUnit(average) : "No average";
+}
+
+function getConcernEntryRateDeltaText(entry) {
+  const quantity = Number(entry.quantity) || 0;
+  const seconds = Number(entry.duration_seconds) || 0;
+  const average = Number(entry.task_average_seconds_per_unit) || 0;
+  if (quantity <= 0 || seconds <= 0 || average <= 0) return "";
+
+  const entryRate = seconds / quantity;
+  const difference = entryRate - average;
+  if (!difference) return "Matches average";
+  return `${formatSecondsPerUnit(Math.abs(difference))} ${difference > 0 ? "slower" : "faster"} than average`;
+}
+
+function showLoggedConcernFocus(employee) {
+  const focus = document.getElementById("loggedConcernFocus");
+  const entries = getLoggedConcernEntries()
+    .filter(entry => (entry.employee || "Unknown Employee") === employee)
+    .sort((a, b) => b.work_date.localeCompare(a.work_date) || b.log_id - a.log_id);
+
+  focus.hidden = false;
+  focus.innerHTML = "";
+
+  const header = document.createElement("div");
+  header.className = "printable-report-header";
+
+  const titleBlock = document.createElement("div");
+  const title = document.createElement("h3");
+  title.textContent = `Logged Entries of Concern - ${employee}`;
+  titleBlock.appendChild(title);
+
+  const meta = document.createElement("div");
+  meta.className = "printable-report-meta";
+  meta.textContent = `${entries.length} entr${entries.length === 1 ? "y" : "ies"} | Generated ${new Date().toLocaleString()}`;
+  titleBlock.appendChild(meta);
+  header.appendChild(titleBlock);
+
+  const actions = document.createElement("div");
+  actions.className = "printable-report-actions";
+
+  const printButton = document.createElement("button");
+  printButton.type = "button";
+  printButton.textContent = "Print Report";
+  printButton.addEventListener("click", printLoggedConcernReport);
+  actions.appendChild(printButton);
+
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.textContent = "Close";
+  closeButton.addEventListener("click", () => {
+    focus.hidden = true;
+    focus.innerHTML = "";
+  });
+  actions.appendChild(closeButton);
+
+  header.appendChild(actions);
+  focus.appendChild(header);
+
+  if (!entries.length) {
+    const empty = document.createElement("p");
+    empty.className = "printable-report-empty";
+    empty.textContent = "No logged entries of concern for this employee.";
+    focus.appendChild(empty);
+    return;
+  }
+
+  const table = document.createElement("table");
+  table.className = "mobile-stack";
+  const headerRow = document.createElement("tr");
+  ["Date", "Item", "Dispensary", "Task", "Qty", "Employee Time", "Employee Rate", "Task Avg Rate", "Comparison", "Notes"].forEach(label => {
+    const th = document.createElement("th");
+    th.textContent = label;
+    headerRow.appendChild(th);
+  });
+  table.appendChild(headerRow);
+
+  entries.forEach(entry => {
+    const row = document.createElement("tr");
+    appendCell(row, entry.work_date, "Date");
+    appendCell(row, entry.item, "Item");
+    appendCell(row, entry.dispensary_name || "", "Dispensary");
+    appendCell(row, entry.task, "Task");
+    appendCell(row, entry.quantity || 0, "Qty");
+    appendCell(row, secondsToHMS(entry.duration_seconds), "Employee Time");
+    appendCell(row, getConcernEntryRateText(entry), "Employee Rate");
+    appendCell(row, getConcernEntryAverageText(entry), "Task Avg Rate");
+    appendCell(row, getConcernEntryRateDeltaText(entry), "Comparison");
+    appendCell(row, entry.concern_notes || "", "Notes");
+    table.appendChild(row);
+  });
+
+  focus.appendChild(table);
+  focus.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function printLoggedConcernReport() {
+  const focus = document.getElementById("loggedConcernFocus");
+  if (focus.hidden) return;
+
+  document.body.classList.add("printing-concern-report");
+  window.print();
 }
 
 async function loadItemTaskManagement() {
@@ -3149,6 +3304,17 @@ function showDailyReportFocus(titleText, fill) {
   body.innerHTML = "";
   fill(body);
   panel.hidden = false;
+  const closeButton = panel.querySelector("button");
+  if (closeButton) closeButton.focus();
+}
+
+function closeDailyReportFocus() {
+  const panel = document.getElementById("dailyReportFocus");
+  const body = document.getElementById("dailyReportFocusBody");
+  if (!panel) return;
+
+  panel.hidden = true;
+  if (body) body.innerHTML = "";
 }
 
 function renderDailyWorkingBatches(batches) {
@@ -3443,7 +3609,7 @@ async function loadDailyReport() {
   const workingBatches = getWorkingBatchesFromRows(rows);
 
   document.getElementById("dailyReportTitle").textContent = `Daily Report - ${formatDisplayDate(today)}`;
-  document.getElementById("dailyReportFocus").hidden = true;
+  closeDailyReportFocus();
 
   const grid = document.getElementById("dailyReportGrid");
   grid.innerHTML = "";
@@ -5036,6 +5202,9 @@ async function importOrderedPdf() {
 
 document.addEventListener("keydown", event => {
   if (event.key === "Escape") {
+    if (!document.getElementById("dailyReportFocus").hidden) {
+      closeDailyReportFocus();
+    }
     if (!document.getElementById("itemTaskEditPanel").hidden) {
       cancelItemTaskEdit();
     }
@@ -5043,8 +5212,15 @@ document.addEventListener("keydown", event => {
   }
 });
 
+document.getElementById("dailyReportFocus").addEventListener("click", event => {
+  if (event.target.id === "dailyReportFocus") {
+    closeDailyReportFocus();
+  }
+});
+
 window.addEventListener("afterprint", () => {
   document.body.classList.remove("printing-item-task-report");
+  document.body.classList.remove("printing-concern-report");
 });
 
 async function initAdmin() {

@@ -68,6 +68,21 @@
       flex-wrap: wrap;
       gap: 6px;
     }
+    .logged-concern-employees {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .logged-concern-focus {
+      border: 1px solid #d8d8d2;
+      background: #fff;
+      padding: 12px;
+      margin-top: 10px;
+    }
+    .logged-concern-focus .printable-report-header {
+      margin-bottom: 12px;
+    }
     .item-task-management {
       display: grid;
       grid-template-columns: minmax(280px, 1.2fr) minmax(280px, 0.8fr);
@@ -502,14 +517,8 @@
     .daily-report-card.processing { border-left: 5px solid #5d9b45; background: #e7f6df; }
     .daily-report-card.events { border-left: 5px solid #7c5cc4; background: #f5f1ff; }
     .daily-report-card.pickups { border-left: 5px solid #be5b2a; background: #fff0e8; }
-    .daily-report-focus {
-      margin-top: 14px;
-      border: 1px solid #d8ded3;
-      background: #fff;
-      padding: 12px;
-    }
-    .daily-report-focus h3 {
-      margin-top: 0;
+    .daily-report-focus .item-task-focus-dialog {
+      width: min(980px, 100%);
     }
     .daily-working-section {
       margin-top: 14px;
@@ -1353,6 +1362,37 @@
       body.printing-item-task-report th {
         background: #eee !important;
       }
+      body.printing-concern-report {
+        padding: 0;
+      }
+      body.printing-concern-report .page-header,
+      body.printing-concern-report .admin-tabs,
+      body.printing-concern-report #message,
+      body.printing-concern-report #reviewPanel > :not(#loggedConcernFocus) {
+        display: none !important;
+      }
+      body.printing-concern-report #reviewPanel,
+      body.printing-concern-report #loggedConcernFocus {
+        display: block !important;
+      }
+      body.printing-concern-report #loggedConcernFocus {
+        border: 0;
+        margin: 0;
+        padding: 0;
+      }
+      body.printing-concern-report .printable-report-actions {
+        display: none !important;
+      }
+      body.printing-concern-report table {
+        page-break-inside: auto;
+      }
+      body.printing-concern-report tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+      }
+      body.printing-concern-report th {
+        background: #eee !important;
+      }
     }
   </style>
 </head>
@@ -1485,6 +1525,11 @@
     <h3>Entries of Concern</h3>
     <div id="entryConcernsTable"></div>
   </section>
+  <section class="entry-concerns">
+    <h3>Logged Entries of Concern</h3>
+    <div id="loggedConcernEmployees" class="logged-concern-employees"></div>
+    <section id="loggedConcernFocus" class="logged-concern-focus" hidden></section>
+  </section>
 </section>
 
 <section id="dailyPanel" class="admin-panel">
@@ -1497,9 +1542,14 @@
     <h3>Working Batches</h3>
     <div id="dailyWorkingBatches" class="daily-working-batches"></div>
   </section>
-  <section id="dailyReportFocus" class="daily-report-focus" hidden>
-    <h3 id="dailyReportFocusTitle"></h3>
-    <div id="dailyReportFocusBody" class="calendar-day-focus-body"></div>
+  <section id="dailyReportFocus" class="item-task-focus-window daily-report-focus" hidden>
+    <div class="item-task-focus-dialog" role="dialog" aria-modal="true" aria-labelledby="dailyReportFocusTitle">
+      <div class="item-task-focus-header">
+        <h3 id="dailyReportFocusTitle"></h3>
+        <button type="button" onclick="closeDailyReportFocus()">Close</button>
+      </div>
+      <div id="dailyReportFocusBody" class="calendar-day-focus-body"></div>
+    </div>
   </section>
 </section>
 
