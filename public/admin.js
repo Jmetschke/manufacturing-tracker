@@ -2543,11 +2543,11 @@ function renderConcernEntries() {
   table.className = "mobile-stack";
   const headerRow = document.createElement("tr");
   headerRow.className = "table-heading-row";
-  const labels = ["Date", "Employee", "Item", "Dispensary", "Task", "Qty", "Time", "Reason", "Notes"];
+  const labels = ["Date", "Employee", "Item", "Dispensary", "Task", "Qty", "Time", "Reason", "Notes", "Action"];
 
   labels.forEach(label => {
     const th = document.createElement("th");
-    th.textContent = label;
+    th.textContent = label === "Action" ? "" : label;
     headerRow.appendChild(th);
   });
   table.appendChild(headerRow);
@@ -2595,6 +2595,24 @@ function renderConcernEntries() {
 
     notesCell.appendChild(notesWrapper);
     row.appendChild(notesCell);
+
+    const actionCell = document.createElement("td");
+    actionCell.dataset.label = labels[9];
+    actionCell.className = "flagged-entry-actions";
+
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.textContent = "Edit";
+    editButton.addEventListener("click", () => editReviewEntry(entry.log_id));
+    actionCell.appendChild(editButton);
+
+    const undoButton = document.createElement("button");
+    undoButton.type = "button";
+    undoButton.textContent = "Undo Dismissal";
+    undoButton.addEventListener("click", () => undoConcernDismissal(entry.log_id));
+    actionCell.appendChild(undoButton);
+
+    row.appendChild(actionCell);
     table.appendChild(row);
   });
 
@@ -2626,7 +2644,7 @@ async function loadFlaggedEntryReview() {
 }
 
 function editReviewEntry(logId) {
-  const entry = flaggedReviewEntries.find(item => item.log_id === logId);
+  const entry = findReviewEntry(logId);
   if (!entry) return;
 
   document.getElementById("review_edit_log_id").value = entry.log_id;
@@ -2641,6 +2659,11 @@ function editReviewEntry(logId) {
   document.getElementById("reviewEditPanel").classList.add("active");
   showMessage("");
   document.getElementById("review_edit_quantity").focus();
+}
+
+function findReviewEntry(logId) {
+  return flaggedReviewEntries.find(item => item.log_id === logId) ||
+    concernEntries.find(item => item.log_id === logId);
 }
 
 function cancelReviewEntryEdit() {
@@ -2751,6 +2774,28 @@ async function saveConcernNotes(logId, notes) {
   showMessage("Concern notes saved.", "success");
   const entry = concernEntries.find(item => item.log_id === logId);
   if (entry) entry.concern_notes = notes;
+}
+
+async function undoConcernDismissal(logId) {
+  const entry = concernEntries.find(item => item.log_id === logId);
+  if (!entry) return;
+
+  const res = await adminFetch(`/admin/entries/${logId}/concern`, {
+    method: "DELETE"
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Undo dismissal failed: " + text, "error");
+    return;
+  }
+
+  if (document.getElementById("review_edit_log_id").value === String(logId)) {
+    cancelReviewEntryEdit();
+  }
+
+  showMessage("Dismissal undone.", "success");
+  await loadFlaggedEntryReview();
 }
 
 async function loadItemTaskManagement() {

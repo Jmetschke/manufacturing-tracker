@@ -2444,6 +2444,26 @@ app.post("/admin/entries/:id/concern", (req, res) => {
   );
 });
 
+app.delete("/admin/entries/:id/concern", (req, res) => {
+  db.run(
+    `UPDATE time_logs
+     SET concern_dismissed_at = NULL
+     WHERE id = ?
+     AND end_time IS NOT NULL
+     AND concern_dismissed_at IS NOT NULL`,
+    [req.params.id],
+    function (err) {
+      if (err) return res.status(500).send(err.message);
+
+      if (this.changes === 0) {
+        return res.status(404).send("Entry of concern not found");
+      }
+
+      res.json({ message: "Concern dismissal undone" });
+    }
+  );
+});
+
 app.put("/admin/entries/:id/concern-notes", (req, res) => {
   const notes = String(req.body.notes || "").trim();
 
