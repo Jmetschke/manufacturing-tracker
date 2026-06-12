@@ -129,7 +129,9 @@ async function ensurePrimarySchema(target) {
       paused_seconds INTEGER DEFAULT 0,
       pause_started_at TEXT,
       quantity INTEGER,
-      dispensary_name TEXT
+      dispensary_name TEXT,
+      concern_dismissed_at TEXT,
+      concern_notes TEXT
     )
   `);
 
@@ -198,6 +200,8 @@ async function ensurePrimarySchema(target) {
   await ensureColumn(target, "time_logs", "pause_started_at", "TEXT");
   await ensureColumn(target, "time_logs", "quantity", "INTEGER");
   await ensureColumn(target, "time_logs", "dispensary_name", "TEXT");
+  await ensureColumn(target, "time_logs", "concern_dismissed_at", "TEXT");
+  await ensureColumn(target, "time_logs", "concern_notes", "TEXT");
   await ensureColumn(target, "schedule_days", "tasks", "TEXT DEFAULT ''");
   await ensureColumn(target, "schedule_days", "updated_at", "TEXT");
   await ensureColumn(target, "ordered_items", "date_ordered", "TEXT");

@@ -631,9 +631,22 @@ function getBatchColorIndex(sourceBatchKey) {
   return total;
 }
 
+function getBatchColorKey(task) {
+  if (!task) return "";
+  const label = String(task.sourceBatchLabel || "").trim();
+  if (label) return label;
+
+  const key = String(task.sourceBatchKey || "").trim();
+  const parts = key.split(":");
+  if (parts.length >= 5) {
+    return parts.slice(0, 3).join(":");
+  }
+  return key;
+}
+
 function applyBatchTaskColor(element, task) {
   if (!task || !task.sourceBatchKey) return;
-  const color = batchTaskColors[getBatchColorIndex(task.sourceBatchKey)];
+  const color = batchTaskColors[getBatchColorIndex(getBatchColorKey(task))];
   element.classList.add("batch-colored-task");
   element.style.setProperty("--batch-task-bg", color.background);
   element.style.setProperty("--batch-task-border", color.border);

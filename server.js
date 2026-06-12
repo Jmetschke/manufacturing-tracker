@@ -867,7 +867,9 @@ async function initializeDatabase() {
       paused_seconds INTEGER DEFAULT 0,
       pause_started_at TEXT,
       quantity INTEGER,
-      dispensary_name TEXT
+      dispensary_name TEXT,
+      concern_dismissed_at TEXT,
+      concern_notes TEXT
     )
   `);
 
@@ -939,6 +941,8 @@ async function initializeDatabase() {
   await addMissingColumn("time_logs", "pause_started_at", "TEXT");
   await addMissingColumn("time_logs", "quantity", "INTEGER");
   await addMissingColumn("time_logs", "dispensary_name", "TEXT");
+  await addMissingColumn("time_logs", "concern_dismissed_at", "TEXT");
+  await addMissingColumn("time_logs", "concern_notes", "TEXT");
   await addMissingColumn("schedule_days", "tasks", "TEXT DEFAULT ''");
   await addMissingColumn("schedule_days", "updated_at", "TEXT");
   if (hasSeparateCalendarDb) {
@@ -1026,7 +1030,27 @@ app.get("/admin/item-task-management", async (req, res) => {
   try {
     const [items, tasks, assignments] = await Promise.all([
       allSql("SELECT id, name FROM items ORDER BY name"),
-      allSql("SELECT id, name, COALESCE(seconds_per_unit_alert_level, 0) AS seconds_per_unit_alert_level FROM tasks ORDER BY name"),
+      allSql(`
+        SELECT
+          t.id,
+          t.name,
+          COALESCE(t.seconds_per_unit_alert_level, 0) AS seconds_per_unit_alert_level,
+          CASE
+            WHEN COALESCE(task_rates.total_quantity, 0) = 0 THEN NULL
+            ELSE task_rates.total_duration_seconds * 1.0 / task_rates.total_quantity
+          END AS average_seconds_per_unit
+        FROM tasks t
+        LEFT JOIN (
+          SELECT
+            task_id,
+            SUM(COALESCE(duration_seconds, 0)) AS total_duration_seconds,
+            SUM(COALESCE(quantity, 0)) AS total_quantity
+          FROM time_logs
+          WHERE end_time IS NOT NULL
+          GROUP BY task_id
+        ) task_rates ON task_rates.task_id = t.id
+        ORDER BY t.name
+      `),
       allSql(`
         SELECT item_id, task_id
         FROM item_task_assignments
@@ -2340,6 +2364,8 @@ app.get("/admin/flagged-entries", (req, res) => {
       COALESCE(l.quantity, 0) AS quantity,
       COALESCE(l.duration_seconds, 0) AS duration_seconds,
       COALESCE(t.seconds_per_unit_alert_level, 0) AS seconds_per_unit_alert_level,
+      l.concern_dismissed_at,
+      COALESCE(l.concern_notes, '') AS concern_notes,
       CASE
         WHEN COALESCE(l.quantity, 0) = 0 THEN 0
         ELSE (COALESCE(l.duration_seconds, 0) * 1.0) / COALESCE(l.quantity, 0)
@@ -2348,6 +2374,7 @@ app.get("/admin/flagged-entries", (req, res) => {
     LEFT JOIN items i ON i.id = l.item_id
     LEFT JOIN tasks t ON t.id = l.task_id
     WHERE l.end_time IS NOT NULL
+    AND l.concern_dismissed_at IS NULL
     ORDER BY l.work_date DESC, l.id DESC
   `, [], (err, rows) => {
     if (err) return res.status(500).send(err.message);
@@ -2360,6 +2387,83 @@ app.get("/admin/flagged-entries", (req, res) => {
       })
       .filter(row => row.flag_reason));
   });
+});
+
+app.get("/admin/concern-entries", (req, res) => {
+  db.all(`
+    SELECT
+      l.id AS log_id,
+      l.item_id,
+      l.task_id,
+      COALESCE(l.dispensary_name, '') AS dispensary_name,
+      COALESCE(i.name, 'Unknown Item') AS item,
+      COALESCE(t.name, 'Unknown Task') AS task,
+      l.employee,
+      l.work_date,
+      COALESCE(l.quantity, 0) AS quantity,
+      COALESCE(l.duration_seconds, 0) AS duration_seconds,
+      COALESCE(t.seconds_per_unit_alert_level, 0) AS seconds_per_unit_alert_level,
+      l.concern_dismissed_at,
+      COALESCE(l.concern_notes, '') AS concern_notes,
+      CASE
+        WHEN COALESCE(l.quantity, 0) = 0 THEN 0
+        ELSE (COALESCE(l.duration_seconds, 0) * 1.0) / COALESCE(l.quantity, 0)
+      END AS sec_per_unit
+    FROM time_logs l
+    LEFT JOIN items i ON i.id = l.item_id
+    LEFT JOIN tasks t ON t.id = l.task_id
+    WHERE l.end_time IS NOT NULL
+    AND l.concern_dismissed_at IS NOT NULL
+    ORDER BY l.concern_dismissed_at DESC, l.work_date DESC, l.id DESC
+  `, [], (err, rows) => {
+    if (err) return res.status(500).send(err.message);
+    res.json(rows.map(row => ({
+      ...row,
+      flag_reason: getEntryAlertReason(row)
+    })));
+  });
+});
+
+app.post("/admin/entries/:id/concern", (req, res) => {
+  db.run(
+    `UPDATE time_logs
+     SET concern_dismissed_at = COALESCE(concern_dismissed_at, datetime('now')),
+         concern_notes = COALESCE(concern_notes, '')
+     WHERE id = ?
+     AND end_time IS NOT NULL`,
+    [req.params.id],
+    function (err) {
+      if (err) return res.status(500).send(err.message);
+
+      if (this.changes === 0) {
+        return res.status(404).send("Completed entry not found");
+      }
+
+      res.json({ message: "Entry moved to concerns" });
+    }
+  );
+});
+
+app.put("/admin/entries/:id/concern-notes", (req, res) => {
+  const notes = String(req.body.notes || "").trim();
+
+  db.run(
+    `UPDATE time_logs
+     SET concern_notes = ?
+     WHERE id = ?
+     AND end_time IS NOT NULL
+     AND concern_dismissed_at IS NOT NULL`,
+    [notes, req.params.id],
+    function (err) {
+      if (err) return res.status(500).send(err.message);
+
+      if (this.changes === 0) {
+        return res.status(404).send("Entry of concern not found");
+      }
+
+      res.json({ message: "Concern notes updated" });
+    }
+  );
 });
 
 /* ---------- ADMIN ENTRIES ---------- */

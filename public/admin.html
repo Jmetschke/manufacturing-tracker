@@ -45,6 +45,29 @@
     .flagged-entry-row { background: #fff5df; }
     .flagged-entry-reason { color: #8a4f00; font-weight: bold; }
     .flagged-review-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .entry-concerns {
+      border-top: 1px solid #d8d8d2;
+      margin-top: 18px;
+      padding-top: 14px;
+    }
+    .entry-concerns h3 { margin: 0 0 10px; }
+    .concern-notes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    .concern-notes textarea {
+      flex: 1 1 260px;
+      min-height: 72px;
+      min-width: 0;
+      resize: vertical;
+    }
+    .flagged-entry-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
     .item-task-management {
       display: grid;
       grid-template-columns: minmax(280px, 1.2fr) minmax(280px, 0.8fr);
@@ -129,10 +152,15 @@
     }
     .master-task-row {
       display: grid;
-      grid-template-columns: minmax(160px, 1fr) minmax(120px, 0.35fr) auto;
+      grid-template-columns: minmax(160px, 1fr) minmax(120px, 0.35fr) minmax(120px, 0.35fr) auto;
       gap: 8px;
       align-items: center;
       margin-bottom: 8px;
+    }
+    .master-task-average {
+      color: #555;
+      font-size: 0.9rem;
+      white-space: nowrap;
     }
     .master-task-form {
       display: flex;
@@ -1453,6 +1481,10 @@
   </section>
 
   <div id="flaggedEntryReviewTable"></div>
+  <section class="entry-concerns">
+    <h3>Entries of Concern</h3>
+    <div id="entryConcernsTable"></div>
+  </section>
 </section>
 
 <section id="dailyPanel" class="admin-panel">
