@@ -279,6 +279,32 @@
       margin: 4px 0 0 18px;
       padding: 0;
     }
+
+    .task-completion-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: bold;
+      margin: 0 0 6px;
+    }
+
+    .task-completion-control input {
+      margin: 0;
+      width: auto;
+    }
+
+    .calendar-focus-item.task-completed {
+      background: #ecefec !important;
+      border-left-color: #90988d !important;
+      color: #6b7168 !important;
+      opacity: 0.72;
+    }
+
+    .calendar-focus-item.task-completed b,
+    .calendar-focus-item.task-completed li,
+    .calendar-focus-item.task-completed div:not(.calendar-focus-empty) {
+      text-decoration: line-through;
+    }
     .daily-report-header {
       display: flex;
       flex-wrap: wrap;
@@ -1500,11 +1526,6 @@
       <div id="scheduleDayFocusBody" class="calendar-day-focus-body"></div>
     </div>
   </section>
-
-  <div class="weekly-tasks">
-    <h3>This Week's Kitchen Tasks</h3>
-    <div id="weeklyTasks" class="weekly-task-list"></div>
-  </div>
 </section>
 
 <section id="dailyTab" class="tab-panel">

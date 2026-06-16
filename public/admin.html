@@ -423,13 +423,35 @@
       color: var(--batch-task-text) !important;
     }
     .calendar-day-focus {
-      margin-top: 12px;
-      padding: 12px;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.35);
+      display: flex;
+      inset: 0;
+      justify-content: center;
+      padding: 16px;
+      position: fixed;
+      z-index: 1200;
+    }
+    .calendar-day-focus[hidden] {
+      display: none;
+    }
+    .calendar-focus-dialog {
       background: #fff;
       border: 1px solid #d8ded3;
+      max-height: 90vh;
+      overflow: auto;
+      padding: 14px;
+      width: min(980px, 100%);
     }
-    .calendar-day-focus h3 {
-      margin-top: 0;
+    .calendar-focus-header {
+      align-items: center;
+      display: flex;
+      gap: 10px;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .calendar-focus-header h3 {
+      margin: 0;
     }
     .calendar-day-focus-body {
       display: grid;
@@ -469,6 +491,28 @@
     .calendar-focus-item ul {
       margin: 4px 0 0 18px;
       padding: 0;
+    }
+    .task-completion-control {
+      align-items: center;
+      display: inline-flex;
+      font-weight: bold;
+      gap: 6px;
+      margin: 0 0 6px;
+    }
+    .task-completion-control input {
+      margin: 0;
+      width: auto;
+    }
+    .calendar-focus-item.task-completed {
+      background: #ecefec !important;
+      border-left-color: #90988d !important;
+      color: #6b7168 !important;
+      opacity: 0.72;
+    }
+    .calendar-focus-item.task-completed b,
+    .calendar-focus-item.task-completed li,
+    .calendar-focus-item.task-completed div:not(.calendar-focus-empty) {
+      text-decoration: line-through;
     }
     .daily-report-header {
       display: flex;
@@ -1578,8 +1622,13 @@
   <div id="adminCalendar" class="admin-calendar-grid"></div>
 
   <section id="adminCalendarDayFocus" class="calendar-day-focus" hidden>
-    <h3 id="adminCalendarDayFocusTitle"></h3>
-    <div id="adminCalendarDayFocusBody" class="calendar-day-focus-body"></div>
+    <div class="calendar-focus-dialog" role="dialog" aria-modal="true" aria-labelledby="adminCalendarDayFocusTitle">
+      <div class="calendar-focus-header">
+        <h3 id="adminCalendarDayFocusTitle"></h3>
+        <button type="button" onclick="closeAdminCalendarDayFocus()">Close</button>
+      </div>
+      <div id="adminCalendarDayFocusBody" class="calendar-day-focus-body"></div>
+    </div>
   </section>
 
   <section id="scheduleEditor" class="edit-panel schedule-editor">

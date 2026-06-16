@@ -751,6 +751,28 @@ function removeScheduleTasks(rawValue) {
   return JSON.stringify(payload);
 }
 
+function setScheduleTaskCompletion(rawValue, taskType, taskIndex, activeDate, completed) {
+  const payload = parseSchedulePayloadForCleanup(rawValue);
+  const taskList = taskType === "processingTasks" ? payload.processingTasks : payload.tasks;
+  const task = taskList[taskIndex];
+  if (!task || typeof task !== "object") return null;
+
+  const completedDates = new Set(
+    Array.isArray(task.completedDates)
+      ? task.completedDates.filter(isIsoDate)
+      : []
+  );
+
+  if (completed) {
+    completedDates.add(activeDate);
+  } else {
+    completedDates.delete(activeDate);
+  }
+
+  task.completedDates = Array.from(completedDates).sort();
+  return JSON.stringify(payload);
+}
+
 async function clearWeekendScheduleTasks() {
   const rows = await allSql("SELECT schedule_date, tasks FROM schedule_days");
 
@@ -1198,6 +1220,39 @@ app.put("/admin/schedule/:date", (req, res) => {
       res.json({ message: "Schedule updated", schedule_date: scheduleDate, tasks: savedTasks });
     })
     .catch(err => res.status(500).send(err.message));
+});
+
+app.put("/schedule/task-completion", async (req, res) => {
+  const sourceDate = String(req.body.sourceDate || "");
+  const activeDate = String(req.body.activeDate || "");
+  const taskType = String(req.body.taskType || "");
+  const taskIndex = Number.parseInt(req.body.taskIndex, 10);
+  const completed = Boolean(req.body.completed);
+
+  if (!isIsoDate(sourceDate) || !isIsoDate(activeDate)) {
+    return res.status(400).send("Valid sourceDate and activeDate are required");
+  }
+
+  if (!["tasks", "processingTasks"].includes(taskType) || !Number.isInteger(taskIndex) || taskIndex < 0) {
+    return res.status(400).send("Valid taskType and taskIndex are required");
+  }
+
+  try {
+    const rows = await allSql(
+      "SELECT tasks FROM schedule_days WHERE schedule_date = ?",
+      [sourceDate]
+    );
+    const row = rows[0];
+    if (!row) return res.status(404).send("Schedule day not found");
+
+    const updatedTasks = setScheduleTaskCompletion(row.tasks || "", taskType, taskIndex, activeDate, completed);
+    if (!updatedTasks) return res.status(404).send("Task not found");
+
+    await writeScheduleDayToDatabases(sourceDate, updatedTasks);
+    res.json({ message: "Task completion updated", sourceDate, activeDate, taskType, taskIndex, completed });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
 });
 
 function orderedItemsSelect(whereClause = "") {
