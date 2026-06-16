@@ -1632,6 +1632,137 @@ function isAmazonItemNoiseLine(line) {
   return false;
 }
 
+function isAmazonInvoiceSectionEnd(line) {
+  const text = String(line || "").trim();
+  return /^(Shipping Address|Shipping Speed|Item\(s\) Subtotal|Payment information|Payment Method|Billing address|Credit Card transactions|To view the status|Order Summary|Conditions of Use|Privacy Notice|Grand Total|Total before tax|Sales Tax|Estimated Tax|Total for This Shipment)\b/i.test(text);
+}
+
+function parseAmazonSupplierLine(line) {
+  const match = String(line || "").trim().match(/^Sold by(?: and invoiced on behalf of)?:\s*(.+)$/i);
+  return match ? normalizeRequiredText(match[1]) : "";
+}
+
+function cleanAmazonInvoiceItemName(value) {
+  return String(value || "")
+    .replace(/\s+([,.;:])/g, "$1")
+    .replace(/\b([A-Za-z]{1,2})\s+([a-z]{2,})\b/g, "$1$2")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findAmazonOrderDate(lines) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (/^Order Placed:?$/i.test(line)) {
+      return parseAmazonDate(lines[index + 1]) || "";
+    }
+    if (/^Order Placed:/i.test(line)) {
+      return parseAmazonDate(line) || parseAmazonDate(lines[index + 1]) || "";
+    }
+  }
+
+  return "";
+}
+
+function findAmazonOrderNumber(lines) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const detailsMatch = line.match(/\bOrder\s+#\s*([0-9-]+)/i);
+    if (detailsMatch) return detailsMatch[1];
+
+    const inlineMatch = line.match(/^Amazon\.com order number:\s*(.+)$/i) || line.match(/^Order\s*#\s*(.+)$/i);
+    if (inlineMatch) return normalizeRequiredText(inlineMatch[1]);
+
+    if (/^(Amazon\.com order number|Order #):?$/i.test(line)) {
+      return normalizeRequiredText(lines[index + 1]);
+    }
+  }
+
+  return "";
+}
+
+function parseAmazonItemsOrderedSections(lines, dateOrdered, orderNumber) {
+  const items = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!/^Items Ordered$/i.test(lines[index])) continue;
+
+    let cursor = index + 1;
+    if (/^Price$/i.test(lines[cursor] || "")) cursor += 1;
+
+    while (cursor < lines.length) {
+      const line = lines[cursor];
+      if (/^Items Ordered$/i.test(line)) {
+        cursor -= 1;
+        break;
+      }
+      if (isAmazonInvoiceSectionEnd(line)) break;
+
+      const qtyMatch = line.match(/^(\d+)\s+of:$/i);
+      if (!qtyMatch) {
+        cursor += 1;
+        continue;
+      }
+
+      const packageQty = Number(qtyMatch[1]);
+      const itemLines = [];
+      let supplier = "Amazon";
+      cursor += 1;
+
+      while (cursor < lines.length) {
+        const itemLine = lines[cursor];
+        if (/^Items Ordered$/i.test(itemLine) || isAmazonInvoiceSectionEnd(itemLine) || /^\d+\s+of:$/i.test(itemLine)) {
+          cursor -= 1;
+          break;
+        }
+
+        const parsedSupplier = parseAmazonSupplierLine(itemLine);
+        if (parsedSupplier) {
+          supplier = parsedSupplier;
+          break;
+        }
+
+        if (
+          /^Price$/i.test(itemLine) ||
+          /^(Condition|Business Price|Seller Credentials):?/i.test(itemLine) ||
+          /^\(seller profile$/i.test(itemLine) ||
+          /^\)$/i.test(itemLine) ||
+          /^,$/.test(itemLine) ||
+          /^\$/.test(itemLine)
+        ) {
+          cursor += 1;
+          continue;
+        }
+
+        itemLines.push(itemLine);
+        cursor += 1;
+      }
+
+      const itemName = cleanAmazonInvoiceItemName(itemLines.join(" "));
+      if (itemName) {
+        items.push({
+          item_name: itemName,
+          package_qty: Number.isInteger(packageQty) && packageQty > 0 ? packageQty : 1,
+          item_supplier: supplier,
+          expected_delivery_date: "",
+          received_date: "",
+          received_location: "",
+          import_needs_delivery_date: 1
+        });
+      }
+
+      cursor += 1;
+    }
+  }
+
+  return {
+    date_ordered: dateOrdered || todayIsoDate(),
+    order_number: orderNumber,
+    item_company: orderNumber ? `Amazon Order ${orderNumber}` : "Amazon Order",
+    items
+  };
+}
+
 function findInlineValue(line, labelPattern) {
   const match = String(line || "").match(labelPattern);
   return match ? normalizeRequiredText(match[1]) : "";
@@ -1775,13 +1906,16 @@ function parseAmazonOrderPdf(buffer) {
   const orderPlacedIndex = lines.findIndex(line => /^Order placed$/i.test(line));
   const orderNumberIndex = lines.findIndex(line => /^Order #$/i.test(line));
   const inlineOrderDateLine = lines.find(line => /^Order placed\b/i.test(line));
-  const dateOrdered = orderPlacedIndex >= 0
+  const dateOrdered = findAmazonOrderDate(lines) || (orderPlacedIndex >= 0
     ? parseAmazonDate(lines[orderPlacedIndex + 1])
-    : parseAmazonDate(inlineOrderDateLine);
+    : parseAmazonDate(inlineOrderDateLine));
   const inlineOrderNumberLine = lines.find(line => /^Order\s*#/i.test(line));
-  const orderNumber = orderNumberIndex >= 0
+  const orderNumber = findAmazonOrderNumber(lines) || (orderNumberIndex >= 0
     ? normalizeRequiredText(lines[orderNumberIndex + 1])
-    : findInlineValue(inlineOrderNumberLine, /^Order\s*#\s*(.+)$/i);
+    : findInlineValue(inlineOrderNumberLine, /^Order\s*#\s*(.+)$/i));
+  const invoiceItems = parseAmazonItemsOrderedSections(lines, dateOrdered, orderNumber);
+  if (invoiceItems.items.length) return invoiceItems;
+
   const items = [];
 
   function pushAmazonItem(itemLines, supplier, expectedDeliveryDate, deliveredDate) {
@@ -2338,6 +2472,41 @@ app.put("/ordered-items/:id/undo-receive", (req, res) => {
       res.json({ message: "Ordered item moved back to expected deliveries" });
     }
   );
+});
+
+app.delete("/ordered-items/:id", async (req, res) => {
+  const itemId = Number(req.params.id);
+  if (!Number.isInteger(itemId) || itemId <= 0) {
+    return res.status(400).send("Valid ordered item id is required");
+  }
+
+  try {
+    await withTransaction(async transaction => {
+      const rows = await allSql("SELECT request_id FROM ordered_items WHERE id = ?", [itemId], transaction);
+      if (!rows.length) {
+        const err = new Error("Ordered item not found");
+        err.statusCode = 404;
+        throw err;
+      }
+
+      await runSql("DELETE FROM ordered_items WHERE id = ?", [itemId], transaction);
+
+      const requestId = Number(rows[0].request_id);
+      if (Number.isInteger(requestId) && requestId > 0) {
+        await runSql(`
+          UPDATE order_requests
+          SET ordered_item_id = NULL,
+              ordered_at = NULL,
+              updated_at = datetime('now')
+          WHERE id = ? AND ordered_item_id = ?
+        `, [requestId, itemId], transaction);
+      }
+    });
+
+    res.json({ message: "Ordered item deleted" });
+  } catch (err) {
+    res.status(err.statusCode || 500).send(err.message);
+  }
 });
 
 /* ---------- START TIMER ---------- */

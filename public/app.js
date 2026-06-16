@@ -2494,6 +2494,14 @@ function createDeliveryDetails(item) {
   return details;
 }
 
+function appendDeleteDeliveryButton(card, itemId) {
+  const deleteButton = document.createElement("button");
+  deleteButton.type = "button";
+  deleteButton.textContent = "Delete";
+  deleteButton.addEventListener("click", () => deleteOrderedItem(itemId));
+  card.appendChild(deleteButton);
+}
+
 function createDeliveryCard(item, isReceived) {
   const card = document.createElement("div");
   card.className = isReceived ? "delivery-card received" : "delivery-card";
@@ -2520,6 +2528,7 @@ function createDeliveryCard(item, isReceived) {
     undoButton.textContent = "Undo";
     undoButton.addEventListener("click", () => undoReceivedItem(item.id));
     card.appendChild(undoButton);
+    appendDeleteDeliveryButton(card, item.id);
     return card;
   }
 
@@ -2537,6 +2546,7 @@ function createDeliveryCard(item, isReceived) {
   toggleLabel.appendChild(checkbox);
   toggleLabel.appendChild(document.createTextNode("Received"));
   card.appendChild(toggleLabel);
+  appendDeleteDeliveryButton(card, item.id);
 
   return card;
 }
@@ -2667,6 +2677,22 @@ async function undoReceivedItem(itemId) {
   }
 
   await loadOrderedItems();
+}
+
+async function deleteOrderedItem(itemId) {
+  if (!window.confirm("Delete this ordered item?")) return;
+
+  const res = await fetch(`/ordered-items/${itemId}`, {
+    method: "DELETE"
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    alert("Delete failed: " + text);
+    return;
+  }
+
+  await loadOrderedTab();
 }
 
 function renderDeliveryList(container, items, isReceived, emptyText = "") {

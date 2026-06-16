@@ -5119,6 +5119,19 @@ function appendDeliveryHeader(table, extraLabels = []) {
   return labels;
 }
 
+function appendAdminDeleteOrderedItemCell(row, item, labelText = "Delete") {
+  const cell = document.createElement("td");
+  cell.dataset.label = labelText;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = "Delete";
+  button.addEventListener("click", () => deleteAdminOrderedItem(item.id));
+
+  cell.appendChild(button);
+  row.appendChild(cell);
+}
+
 function appendMobileSummaryRow(table, labels, title, detailRow) {
   const summaryRow = document.createElement("tr");
   summaryRow.className = "mobile-summary-row";
@@ -5154,6 +5167,24 @@ function appendMobileSummaryRow(table, labels, title, detailRow) {
   table.appendChild(summaryRow);
 }
 
+async function deleteAdminOrderedItem(itemId) {
+  if (!window.confirm("Delete this ordered item?")) return;
+
+  const res = await adminFetch(`/ordered-items/${itemId}`, {
+    method: "DELETE"
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Could not delete ordered item: " + text, "error");
+    return;
+  }
+
+  showMessage("Ordered item deleted.", "success");
+  await loadOrderedAdminData();
+  await loadAdminCalendar();
+}
+
 function renderExpectedDeliveriesTable() {
   const container = document.getElementById("adminExpectedDeliveries");
   const count = document.getElementById("adminExpectedDeliveriesCount");
@@ -5177,7 +5208,7 @@ function renderExpectedDeliveriesTable() {
 
   const table = document.createElement("table");
   table.className = "mobile-stack";
-  const labels = appendDeliveryHeader(table, ["Received"]);
+  const labels = appendDeliveryHeader(table, ["Received", "Delete"]);
 
   expectedDeliveries.forEach(item => {
     const row = document.createElement("tr");
@@ -5194,6 +5225,7 @@ function renderExpectedDeliveriesTable() {
     });
     actionCell.appendChild(checkbox);
     row.appendChild(actionCell);
+    appendAdminDeleteOrderedItemCell(row, item, labels[labels.length - 1]);
 
     appendMobileSummaryRow(table, labels, item.item_name, row);
     table.appendChild(row);
@@ -5227,7 +5259,7 @@ function renderNeedsDeliveryDateTable() {
 
   const table = document.createElement("table");
   table.className = "mobile-stack";
-  const labels = appendDeliveryHeader(table, ["Delivery Date"]);
+  const labels = appendDeliveryHeader(table, ["Delivery Date", "Delete"]);
 
   deliveries.forEach(item => {
     const row = document.createElement("tr");
@@ -5243,6 +5275,7 @@ function renderNeedsDeliveryDateTable() {
     });
     actionCell.appendChild(button);
     row.appendChild(actionCell);
+    appendAdminDeleteOrderedItemCell(row, item, labels[labels.length - 1]);
 
     appendMobileSummaryRow(table, labels, item.item_name, row);
     table.appendChild(row);
@@ -5356,7 +5389,7 @@ function renderReceivedDeliveriesTable() {
 
   const table = document.createElement("table");
   table.className = "mobile-stack";
-  const labels = appendDeliveryHeader(table, ["Received Date", "Time", "Location", "Action"]);
+  const labels = appendDeliveryHeader(table, ["Received Date", "Time", "Location", "Action", "Delete"]);
 
   receivedDeliveries.forEach(item => {
     const row = document.createElement("tr");
@@ -5370,6 +5403,7 @@ function renderReceivedDeliveriesTable() {
     undoButton.addEventListener("click", () => undoAdminReceivedItem(item.id));
     actionCell.appendChild(undoButton);
     row.appendChild(actionCell);
+    appendAdminDeleteOrderedItemCell(row, item, labels[labels.length - 1]);
 
     appendMobileSummaryRow(table, labels, item.item_name, row);
     table.appendChild(row);
