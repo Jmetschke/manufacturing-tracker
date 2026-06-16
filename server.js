@@ -928,6 +928,16 @@ async function initializeDatabase() {
     )
   `);
 
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS production_needs_reports (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      file_name TEXT,
+      generated_at TEXT,
+      payload TEXT NOT NULL,
+      uploaded_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
   if (hasSeparateCalendarDb) {
     await runSql(`
       CREATE TABLE IF NOT EXISTS schedule_days (
@@ -993,6 +1003,10 @@ async function initializeDatabase() {
   await addMissingColumn("time_logs", "concern_notes", "TEXT");
   await addMissingColumn("schedule_days", "tasks", "TEXT DEFAULT ''");
   await addMissingColumn("schedule_days", "updated_at", "TEXT");
+  await addMissingColumn("production_needs_reports", "file_name", "TEXT");
+  await addMissingColumn("production_needs_reports", "generated_at", "TEXT");
+  await addMissingColumn("production_needs_reports", "payload", "TEXT");
+  await addMissingColumn("production_needs_reports", "uploaded_at", "TEXT");
   if (hasSeparateCalendarDb) {
     await addMissingColumn("schedule_days", "tasks", "TEXT DEFAULT ''", calendarDb);
     await addMissingColumn("schedule_days", "updated_at", "TEXT", calendarDb);
@@ -2138,7 +2152,38 @@ async function importOrderedItemsPdf(req, res) {
 app.post("/ordered-items/import-pdf", express.raw({ type: "application/pdf", limit: "10mb" }), importOrderedItemsPdf);
 app.post("/admin/ordered-items/import-pdf", express.raw({ type: "application/pdf", limit: "10mb" }), importOrderedItemsPdf);
 
-app.post("/admin/production-needs/import-pdf", express.raw({ type: "application/pdf", limit: "10mb" }), (req, res) => {
+app.get("/admin/production-needs/latest", async (req, res) => {
+  try {
+    const rows = await allSql(`
+      SELECT file_name, generated_at, payload, uploaded_at
+      FROM production_needs_reports
+      WHERE id = 1
+    `);
+    const report = rows[0];
+    if (!report) {
+      return res.json({ items: [], file_name: "", generated_at: "", uploaded_at: "" });
+    }
+
+    let parsedPayload;
+    try {
+      parsedPayload = JSON.parse(report.payload || "{}");
+    } catch (err) {
+      parsedPayload = {};
+    }
+
+    res.json({
+      ...parsedPayload,
+      items: Array.isArray(parsedPayload.items) ? parsedPayload.items : [],
+      file_name: report.file_name || "",
+      generated_at: report.generated_at || parsedPayload.generated_at || "",
+      uploaded_at: report.uploaded_at || ""
+    });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.post("/admin/production-needs/import-pdf", express.raw({ type: "application/pdf", limit: "10mb" }), async (req, res) => {
   if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
     return res.status(400).send("Upload a production needs PDF");
   }
@@ -2148,7 +2193,28 @@ app.post("/admin/production-needs/import-pdf", express.raw({ type: "application/
     return res.status(400).send("Could not find production needs rows in this PDF");
   }
 
-  res.json(parsed);
+  const fileName = normalizeRequiredText(req.headers["x-production-needs-file-name"]);
+  const payload = JSON.stringify(parsed);
+
+  try {
+    await runSql(`
+      INSERT INTO production_needs_reports (id, file_name, generated_at, payload, uploaded_at)
+      VALUES (1, ?, ?, ?, datetime('now'))
+      ON CONFLICT(id) DO UPDATE SET
+        file_name = excluded.file_name,
+        generated_at = excluded.generated_at,
+        payload = excluded.payload,
+        uploaded_at = excluded.uploaded_at
+    `, [fileName, parsed.generated_at || "", payload]);
+
+    res.json({
+      ...parsed,
+      file_name: fileName,
+      uploaded_at: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
 });
 
 app.post("/ordered-items/received", (req, res) => {

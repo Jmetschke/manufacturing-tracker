@@ -251,6 +251,29 @@ function renderProductionNeeds(rows = productionNeedsRows, metaText = "") {
   });
 }
 
+function getProductionNeedsMetaText(report) {
+  const items = Array.isArray(report && report.items) ? report.items : [];
+  if (!items.length) return "";
+
+  const parts = [`${items.length} SKU${items.length === 1 ? "" : "s"} loaded`];
+  if (report.file_name) parts.push(report.file_name);
+  if (report.generated_at) parts.push(report.generated_at);
+  if (report.uploaded_at) parts.push(`uploaded ${report.uploaded_at}`);
+  return parts.join(" - ");
+}
+
+async function loadProductionNeedsReport() {
+  const res = await adminFetch("/admin/production-needs/latest");
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Production needs load failed: " + text, "error");
+    return;
+  }
+
+  const report = await res.json();
+  renderProductionNeeds(report.items || [], getProductionNeedsMetaText(report));
+}
+
 function redirectToAdminAccess() {
   window.location.href = `/access?next=${encodeURIComponent("/admin.html")}`;
 }
@@ -5459,7 +5482,10 @@ async function importProductionNeedsPdf() {
 
   const res = await adminFetch("/admin/production-needs/import-pdf", {
     method: "POST",
-    headers: { "Content-Type": "application/pdf" },
+    headers: {
+      "Content-Type": "application/pdf",
+      "X-Production-Needs-File-Name": file.name
+    },
     body: file
   });
 
@@ -5470,10 +5496,8 @@ async function importProductionNeedsPdf() {
   }
 
   const parsed = await res.json();
-  renderProductionNeeds(
-    parsed.items || [],
-    `${(parsed.items || []).length} SKU${(parsed.items || []).length === 1 ? "" : "s"} loaded${parsed.generated_at ? ` - ${parsed.generated_at}` : ""}`
-  );
+  renderProductionNeeds(parsed.items || [], getProductionNeedsMetaText(parsed));
+  fileInput.value = "";
   showMessage("Production needs report loaded.", "success");
 }
 
@@ -5517,6 +5541,7 @@ async function initAdmin() {
   resetAdminOrderRequestForm();
   resetAdminManualReceivedForm();
   setupAdminTimeInput("admin_manual_received_time");
+  await loadProductionNeedsReport();
   await loadReport();
 }
 
