@@ -14,6 +14,7 @@ let adminEventsByDate = new Map();
 let adminProjectedTasksByDate = new Map();
 let adminProjectedProcessingTasksByDate = new Map();
 let adminCalendarStartDate = null;
+let productionNeedsRows = [];
 const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const eventCompanyOptions = ["Snackbar", "Hijnx", "Snackbar & Hijnx"];
 const hijnxBatchOptions = [
@@ -154,6 +155,75 @@ function showMessage(text, type = "") {
   const message = document.getElementById("message");
   message.textContent = text;
   message.className = type ? `message ${type}` : "message";
+}
+
+function formatProductionNeedValue(value, fallback = "-") {
+  if (value === null || value === undefined || value === "") return fallback;
+  const number = Number(value);
+  if (!Number.isFinite(number)) return String(value);
+  return number.toLocaleString(undefined, { maximumFractionDigits: 1 });
+}
+
+function getProductionNeedClassName(status) {
+  const key = String(status || "").toLowerCase();
+  if (key.includes("critical")) return "critical";
+  if (key.includes("below")) return "below-par";
+  return "";
+}
+
+function renderProductionNeeds(rows = productionNeedsRows, metaText = "") {
+  productionNeedsRows = Array.isArray(rows) ? rows : [];
+  const list = document.getElementById("productionNeedsList");
+  const meta = document.getElementById("productionNeedsMeta");
+  if (!list || !meta) return;
+
+  list.innerHTML = "";
+  meta.textContent = metaText || (productionNeedsRows.length
+    ? `${productionNeedsRows.length} SKU${productionNeedsRows.length === 1 ? "" : "s"} loaded`
+    : "Upload a report to review needs beside the calendar.");
+
+  if (!productionNeedsRows.length) {
+    const empty = document.createElement("div");
+    empty.className = "calendar-focus-empty";
+    empty.textContent = "No production needs loaded.";
+    list.appendChild(empty);
+    return;
+  }
+
+  productionNeedsRows.forEach(row => {
+    const card = document.createElement("article");
+    card.className = `production-need-card ${getProductionNeedClassName(row.status)}`.trim();
+
+    const sku = document.createElement("div");
+    sku.className = "production-need-sku";
+    sku.textContent = row.sku || "Unnamed SKU";
+    card.appendChild(sku);
+
+    const metrics = document.createElement("div");
+    metrics.className = "production-need-metrics";
+    [
+      ["Projected", formatProductionNeedValue(row.projected)],
+      ["Stockout", row.days_to_stockout === null || row.days_to_stockout === undefined ? "-" : `${formatProductionNeedValue(row.days_to_stockout)}d`],
+      ["Batches", formatProductionNeedValue(row.batches_needed)]
+    ].forEach(([labelText, valueText]) => {
+      const metric = document.createElement("div");
+      metric.className = "production-need-metric";
+
+      const label = document.createElement("div");
+      label.className = "production-need-label";
+      label.textContent = labelText;
+      metric.appendChild(label);
+
+      const value = document.createElement("div");
+      value.className = "production-need-value";
+      value.textContent = valueText;
+      metric.appendChild(value);
+
+      metrics.appendChild(metric);
+    });
+    card.appendChild(metrics);
+    list.appendChild(card);
+  });
 }
 
 function redirectToAdminAccess() {
@@ -3782,6 +3852,9 @@ function renderAdminCalendar(gridStart) {
     const isoDate = toIsoDate(date);
     const cell = document.createElement("div");
     cell.className = "admin-calendar-day";
+    if (date.getDay() === 0 || date.getDay() === 6) {
+      cell.classList.add("weekend");
+    }
     cell.tabIndex = 0;
     cell.setAttribute("role", "button");
     cell.setAttribute("aria-label", `View details for ${formatDisplayDate(isoDate)}`);
@@ -5292,6 +5365,35 @@ async function importOrderedPdf() {
 
   await loadOrderedItems();
   await loadAdminCalendar();
+}
+
+async function importProductionNeedsPdf() {
+  const fileInput = document.getElementById("productionNeedsPdf");
+  const file = fileInput && fileInput.files && fileInput.files[0];
+
+  if (!file) {
+    showMessage("Choose a production needs PDF to review.", "error");
+    return;
+  }
+
+  const res = await adminFetch("/admin/production-needs/import-pdf", {
+    method: "POST",
+    headers: { "Content-Type": "application/pdf" },
+    body: file
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Production needs import failed: " + text, "error");
+    return;
+  }
+
+  const parsed = await res.json();
+  renderProductionNeeds(
+    parsed.items || [],
+    `${(parsed.items || []).length} SKU${(parsed.items || []).length === 1 ? "" : "s"} loaded${parsed.generated_at ? ` - ${parsed.generated_at}` : ""}`
+  );
+  showMessage("Production needs report loaded.", "success");
 }
 
 document.addEventListener("keydown", event => {

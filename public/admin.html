@@ -187,9 +187,18 @@
     .message.error { color: #a00000; }
     .message.success { color: #176a2c; }
     .calendar-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+    .admin-calendar-workspace {
+      align-items: start;
+      display: grid;
+      gap: 14px;
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+    }
+    .admin-calendar-main {
+      min-width: 0;
+    }
     .admin-calendar-grid {
       display: grid;
-      grid-template-columns: repeat(7, minmax(120px, 1fr));
+      grid-template-columns: minmax(48px, 0.38fr) repeat(5, minmax(118px, 1fr)) minmax(48px, 0.38fr);
       gap: 1px;
       border: 1px solid #ccc;
       background: #ccc;
@@ -210,6 +219,15 @@
       cursor: pointer;
       display: flex;
       flex-direction: column;
+    }
+    .admin-calendar-day.weekend {
+      min-height: 84px;
+      padding: 6px 4px;
+    }
+    .admin-calendar-day.weekend .admin-event-item,
+    .admin-calendar-day.weekend .admin-batch-item,
+    .admin-calendar-day.weekend .admin-test-pickup {
+      display: none;
     }
     .admin-calendar-day:focus {
       outline: 2px solid #4f5f47;
@@ -232,6 +250,85 @@
     .admin-calendar-date {
       font-weight: bold;
       margin-bottom: 6px;
+    }
+    .admin-calendar-day.weekend .admin-calendar-date {
+      font-size: 12px;
+      text-align: center;
+    }
+    .production-needs-panel {
+      background: #fff;
+      border: 1px solid #d8ded3;
+      border-left: 5px solid #2364aa;
+      padding: 12px;
+      position: sticky;
+      top: 12px;
+    }
+    .production-needs-header {
+      display: flex;
+      gap: 8px;
+      justify-content: space-between;
+      align-items: start;
+      margin-bottom: 10px;
+    }
+    .production-needs-header h3 {
+      margin: 0;
+    }
+    .production-needs-meta {
+      color: #555;
+      font-size: 12px;
+      margin-top: 3px;
+    }
+    .production-needs-upload {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .production-needs-upload input {
+      max-width: 100%;
+    }
+    .production-needs-list {
+      display: grid;
+      gap: 8px;
+      max-height: 68vh;
+      overflow: auto;
+      padding-right: 2px;
+    }
+    .production-need-card {
+      border: 1px solid #e0e4dc;
+      border-left: 4px solid #258579;
+      background: #fbfcfa;
+      padding: 8px;
+    }
+    .production-need-card.critical {
+      border-left-color: #dc2626;
+      background: #fff5f5;
+    }
+    .production-need-card.below-par {
+      border-left-color: #b36b00;
+      background: #fff8e8;
+    }
+    .production-need-sku {
+      font-weight: bold;
+      line-height: 1.25;
+      margin-bottom: 7px;
+    }
+    .production-need-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+    }
+    .production-need-metric {
+      background: #fff;
+      border: 1px solid #e7ebe2;
+      padding: 6px;
+    }
+    .production-need-label {
+      color: #555;
+      font-size: 11px;
+      margin-bottom: 2px;
+    }
+    .production-need-value {
+      font-weight: bold;
     }
     .admin-calendar-tasks {
       line-height: 1.35;
@@ -1250,7 +1347,10 @@
         min-height: 0;
       }
       th, td { padding: 10px; }
-      .admin-calendar-grid { grid-template-columns: repeat(7, 160px); }
+      .admin-calendar-workspace { grid-template-columns: 1fr; }
+      .production-needs-panel { position: static; }
+      .production-needs-list { max-height: none; }
+      .admin-calendar-grid { grid-template-columns: minmax(48px, 0.38fr) repeat(5, minmax(132px, 1fr)) minmax(48px, 0.38fr); }
       .admin-day-name,
       .admin-calendar-day,
       .admin-batch-item { font-size: 16px; }
@@ -1636,7 +1736,28 @@
     <button type="button" onclick="changeAdminCalendarWeeks(1)">Next 2 Weeks</button>
   </div>
 
-  <div id="adminCalendar" class="admin-calendar-grid"></div>
+  <div class="admin-calendar-workspace">
+    <div class="admin-calendar-main">
+      <div id="adminCalendar" class="admin-calendar-grid"></div>
+    </div>
+
+    <aside class="production-needs-panel" aria-labelledby="productionNeedsTitle">
+      <div class="production-needs-header">
+        <div>
+          <h3 id="productionNeedsTitle">Production Needs</h3>
+          <div id="productionNeedsMeta" class="production-needs-meta">Upload a report to review needs beside the calendar.</div>
+        </div>
+      </div>
+      <div class="production-needs-upload">
+        <label for="productionNeedsPdf"><b>Production Needs PDF</b></label>
+        <input type="file" id="productionNeedsPdf" accept="application/pdf">
+        <button type="button" onclick="importProductionNeedsPdf()">Review Report</button>
+      </div>
+      <div id="productionNeedsList" class="production-needs-list">
+        <div class="calendar-focus-empty">No production needs loaded.</div>
+      </div>
+    </aside>
+  </div>
 
   <section id="adminCalendarDayFocus" class="calendar-day-focus" hidden>
     <div class="calendar-focus-dialog" role="dialog" aria-modal="true" aria-labelledby="adminCalendarDayFocusTitle">

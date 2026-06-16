@@ -144,7 +144,7 @@
 
     .schedule-grid {
       display: grid;
-      grid-template-columns: repeat(7, minmax(120px, 1fr));
+      grid-template-columns: minmax(48px, 0.38fr) repeat(5, minmax(118px, 1fr)) minmax(48px, 0.38fr);
       gap: 1px;
       overflow-x: auto;
       border: 1px solid #d8d8d2;
@@ -164,6 +164,17 @@
     .schedule-cell:focus {
       outline: 2px solid #4f5f47;
       outline-offset: -2px;
+    }
+
+    .schedule-cell.weekend {
+      min-height: 84px;
+      padding: 6px 4px;
+    }
+
+    .schedule-cell.weekend .event-item,
+    .schedule-cell.weekend .schedule-batch,
+    .schedule-cell.weekend .test-pickup {
+      display: none;
     }
 
     .event-list {
@@ -188,6 +199,11 @@
     .schedule-date {
       font-weight: bold;
       margin-bottom: 6px;
+    }
+
+    .schedule-cell.weekend .schedule-date {
+      font-size: 12px;
+      text-align: center;
     }
 
     .schedule-tasks {

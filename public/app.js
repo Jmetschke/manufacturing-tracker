@@ -2171,6 +2171,9 @@ function renderScheduleCalendar(weekStart, scheduleByDate, deliveriesByDate) {
     const isoDate = toIsoDate(date);
     const cell = document.createElement("div");
     cell.className = "schedule-cell";
+    if (date.getDay() === 0 || date.getDay() === 6) {
+      cell.classList.add("weekend");
+    }
     cell.tabIndex = 0;
     cell.setAttribute("role", "button");
     cell.setAttribute("aria-label", `View details for ${formatDisplayDate(isoDate)}`);

@@ -1325,20 +1325,21 @@ function decodePdfString(value) {
 function extractPdfTextLines(buffer) {
   const zlib = require("zlib");
   const binary = buffer.toString("binary");
-  const streamPattern = /<<(.*?)>>\s*stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  const streamPattern = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
   const lines = [];
   let match;
 
   while ((match = streamPattern.exec(binary))) {
+    const dictionary = binary.slice(Math.max(0, match.index - 500), match.index);
     let content;
-    if (/FlateDecode/.test(match[1])) {
+    if (/FlateDecode/.test(dictionary)) {
       try {
-        content = zlib.inflateSync(Buffer.from(match[2], "binary")).toString("latin1");
+        content = zlib.inflateSync(Buffer.from(match[1], "binary")).toString("latin1");
       } catch (err) {
         continue;
       }
     } else {
-      content = match[2];
+      content = match[1];
     }
 
     if (!/\bT[Jj]\b/.test(content)) continue;
@@ -1358,6 +1359,113 @@ function extractPdfTextLines(buffer) {
   }
 
   return lines;
+}
+
+function extractPdfPositionedText(buffer) {
+  const zlib = require("zlib");
+  const binary = buffer.toString("binary");
+  const streamPattern = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  const items = [];
+  let match;
+  let page = 0;
+
+  while ((match = streamPattern.exec(binary))) {
+    const dictionary = binary.slice(Math.max(0, match.index - 500), match.index);
+    let content;
+    if (/FlateDecode/.test(dictionary)) {
+      try {
+        content = zlib.inflateSync(Buffer.from(match[1], "binary")).toString("latin1");
+      } catch (err) {
+        continue;
+      }
+    } else {
+      content = match[1];
+    }
+
+    if (!/\bT[Jj]\b/.test(content)) continue;
+    page += 1;
+
+    let currentX = 0;
+    let currentY = 0;
+    content.split(/\r?\n/).forEach(line => {
+      const tdMatch = line.match(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+Td\b/);
+      if (tdMatch) {
+        currentX = Number.parseFloat(tdMatch[1]);
+        currentY = Number.parseFloat(tdMatch[2]);
+      }
+
+      const tjMatch = line.match(/\(([^()\\]*(?:\\.[^()\\]*)*)\)\s*Tj\b/);
+      if (!tjMatch) return;
+
+      const text = decodePdfString(tjMatch[1]).replace(/\s+/g, " ").trim();
+      if (!text) return;
+      items.push({ page, x: currentX, y: currentY, text });
+    });
+  }
+
+  return items;
+}
+
+function parseProductionNeedNumber(value) {
+  const cleaned = String(value || "").replace(/,/g, "").replace(/[^\d.-]/g, "");
+  if (!cleaned) return null;
+
+  const number = Number.parseFloat(cleaned);
+  return Number.isFinite(number) ? number : null;
+}
+
+function collectProductionNeedCell(rowItems, minX, maxX) {
+  return rowItems
+    .filter(item => item.x >= minX && item.x < maxX)
+    .sort((a, b) => a.x - b.x)
+    .map(item => item.text)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseProductionNeedsPdf(buffer) {
+  const positionedText = extractPdfPositionedText(buffer);
+  const generated = positionedText.find(item => /^Generated\b/i.test(item.text));
+  const statusItems = positionedText
+    .filter(item =>
+      item.x >= 35 &&
+      item.x < 75 &&
+      /^(Critical|Below Par|OK)$/i.test(item.text)
+    )
+    .sort((a, b) => a.page - b.page || b.y - a.y);
+
+  const items = statusItems
+    .map(statusItem => {
+      const rowItems = positionedText.filter(item =>
+        item.page === statusItem.page &&
+        Math.abs(item.y - statusItem.y) < 1.5
+      );
+      const sku = collectProductionNeedCell(rowItems, 87, 213);
+      const projectedText = collectProductionNeedCell(rowItems, 325, 383);
+      const daysText = collectProductionNeedCell(rowItems, 484, 556);
+      const batchesText = collectProductionNeedCell(rowItems, 612, 675);
+      const projected = parseProductionNeedNumber(projectedText);
+      const daysToStockout = parseProductionNeedNumber(daysText);
+      const batchesNeeded = parseProductionNeedNumber(batchesText);
+
+      return {
+        status: statusItem.text,
+        sku,
+        projected,
+        projected_text: projectedText,
+        days_to_stockout: daysToStockout,
+        days_to_stockout_text: daysText,
+        batches_needed: batchesNeeded,
+        batches_needed_text: batchesText
+      };
+    })
+    .filter(item => item.sku && (item.projected !== null || item.days_to_stockout !== null || item.batches_needed !== null));
+
+  return {
+    generated_at: generated ? generated.text.replace(/^Generated\s*/i, "").trim() : "",
+    items
+  };
 }
 
 function parseAmazonDate(value, fallbackYear = new Date().getFullYear()) {
@@ -1979,6 +2087,19 @@ async function importOrderedItemsPdf(req, res) {
 
 app.post("/ordered-items/import-pdf", express.raw({ type: "application/pdf", limit: "10mb" }), importOrderedItemsPdf);
 app.post("/admin/ordered-items/import-pdf", express.raw({ type: "application/pdf", limit: "10mb" }), importOrderedItemsPdf);
+
+app.post("/admin/production-needs/import-pdf", express.raw({ type: "application/pdf", limit: "10mb" }), (req, res) => {
+  if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+    return res.status(400).send("Upload a production needs PDF");
+  }
+
+  const parsed = parseProductionNeedsPdf(req.body);
+  if (!parsed.items.length) {
+    return res.status(400).send("Could not find production needs rows in this PDF");
+  }
+
+  res.json(parsed);
+});
 
 app.post("/ordered-items/received", (req, res) => {
   const dateOrdered = normalizeRequiredText(req.body.date_ordered);
