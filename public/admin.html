@@ -108,6 +108,21 @@
       align-items: center;
       margin-bottom: 8px;
     }
+    .item-task-card-title {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .item-task-company {
+      border: 1px solid #bfc8b8;
+      background: #eef4ec;
+      color: #31513a;
+      padding: 2px 7px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      line-height: 1.3;
+    }
     .item-task-list {
       margin: 0 0 0 18px;
       padding: 0;
@@ -182,7 +197,16 @@
       gap: 8px;
       margin-bottom: 12px;
     }
+    .new-item-form {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) minmax(130px, 0.35fr) auto;
+      gap: 8px;
+      align-items: center;
+    }
     .master-task-form input { flex: 1 1 180px; }
+    .item-task-new-item-section {
+      grid-column: 1 / -1;
+    }
     .message { margin: 10px 0; }
     .message.error { color: #a00000; }
     .message.success { color: #176a2c; }
@@ -1365,6 +1389,9 @@
       .schedule-assignment-header,
       .schedule-assignment-row { grid-template-columns: 1fr; }
       .test-pickup-item-picker { grid-template-columns: 1fr; }
+      .item-task-management,
+      .new-item-form,
+      .master-task-row { grid-template-columns: 1fr; }
       .ordered-item-row { grid-template-columns: 1fr; }
       .event-row-grid,
       .event-day-time-row { grid-template-columns: 1fr; }
@@ -1625,6 +1652,18 @@
 
 <section id="itemTaskManagementPanel" class="admin-panel">
   <div class="item-task-management">
+    <section class="item-task-section item-task-new-item-section">
+      <h3>New Item</h3>
+      <div class="new-item-form">
+        <input type="text" id="new_item_name" placeholder="New product name">
+        <select id="new_item_company" aria-label="Company">
+          <option value="Hijnx">Hijnx</option>
+          <option value="Snackbar">Snackbar</option>
+        </select>
+        <button type="button" onclick="addNewItem()">Add Item</button>
+      </div>
+    </section>
+
     <section class="item-task-section">
       <h3>Items and Tasks</h3>
       <div id="itemTaskManagementList"></div>

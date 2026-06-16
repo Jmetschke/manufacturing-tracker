@@ -28,6 +28,8 @@ const hijnxBatchOptions = [
   "Hijnx Shooter - Watermelon",
   "MiNi's Chunks - 10pk",
   "Micro Dots",
+  "Pheotera 2oz Stick",
+  "Hijnx 1oz Stick",
   "Rex Chunk - 2pk",
   "Sleep Chunk - 1pk",
   "Sleep Chunk - 2pk",
@@ -44,7 +46,6 @@ const sbBatchOptions = [
   "Snackbar Vape - Strawberry Dragonfruit 2g",
   "Snackbar Vape - Watermelon Lychee 1g"
 ];
-const productionBatchOptions = [...hijnxBatchOptions, ...sbBatchOptions];
 const batchChecklistItems = [
   { key: "cooking", label: "Cooking" },
   { key: "postCookingProcessing", label: "Post cooking processing" },
@@ -53,6 +54,30 @@ const batchChecklistItems = [
   { key: "counted", label: "Counted" },
   { key: "finalCountEnteredMetrc", label: "Final count entered in Metrc" }
 ];
+
+function getItemProductionCompany(item) {
+  return String(item && item.production_company ? item.production_company : "").trim().toLowerCase();
+}
+
+function getProductionBatchOptions(type) {
+  const company = type === "hijnx" ? "hijnx" : "snackbar";
+  const baseOptions = type === "hijnx" ? hijnxBatchOptions : sbBatchOptions;
+  const itemOptions = allItems
+    .filter(item => getItemProductionCompany(item) === company)
+    .map(item => item.name)
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+
+  return [...new Set([...baseOptions, ...itemOptions])];
+}
+
+function getAllProductionBatchOptions() {
+  return [...new Set([
+    ...getProductionBatchOptions("hijnx"),
+    ...getProductionBatchOptions("sb")
+  ])];
+}
+
 const chunkBatchTaskTemplate = [
   { order: 1, task: "Depositing (truffly)" },
   { order: 2, task: "Nerding" },
@@ -1141,8 +1166,21 @@ function getBatchTaskItemName(batchItem) {
   return productionBatchItemAliases[batchItem] || batchItem;
 }
 
+function getAssignedBatchTaskTemplate(itemName) {
+  const itemId = getItemIdByName(itemName);
+  if (!itemId) return [];
+
+  return (itemTaskOptionsByItemId[itemId] || [])
+    .map((taskId, index) => ({
+      order: index + 1,
+      task: getTaskNameById(taskId)
+    }))
+    .filter(templateTask => templateTask.task);
+}
+
 function getBatchTaskTemplate(batchItem) {
-  return batchTaskTemplatesByItem[getBatchTaskItemName(batchItem)] || [];
+  const itemName = getBatchTaskItemName(batchItem);
+  return batchTaskTemplatesByItem[itemName] || getAssignedBatchTaskTemplate(itemName);
 }
 
 function getGeneratedBatchKey(batchType, batchIndex, batchItem) {
@@ -1327,7 +1365,7 @@ function addBatchEntry(type, value = "", unitsValue = "") {
   const input = document.createElement("select");
   input.className = "batch-input";
 
-  const options = type === "hijnx" ? hijnxBatchOptions : sbBatchOptions;
+  const options = getProductionBatchOptions(type);
   const blankOption = document.createElement("option");
   blankOption.value = "";
   blankOption.text = type === "hijnx" ? "Select Hijnx batch" : "Select SB batch";
@@ -3152,9 +3190,21 @@ function renderItemTaskManagement() {
     const header = document.createElement("div");
     header.className = "item-task-card-header";
 
+    const titleWrap = document.createElement("div");
+    titleWrap.className = "item-task-card-title";
+
     const title = document.createElement("b");
     title.textContent = item.name;
-    header.appendChild(title);
+    titleWrap.appendChild(title);
+
+    if (item.production_company) {
+      const company = document.createElement("span");
+      company.className = "item-task-company";
+      company.textContent = item.production_company;
+      titleWrap.appendChild(company);
+    }
+
+    header.appendChild(titleWrap);
 
     const editButton = document.createElement("button");
     editButton.type = "button";
@@ -3328,6 +3378,37 @@ async function addMasterTask() {
   input.value = "";
   alertInput.value = "";
   showMessage("Task added.", "success");
+  await loadItemTaskManagement();
+}
+
+async function addNewItem() {
+  const input = document.getElementById("new_item_name");
+  const companySelect = document.getElementById("new_item_company");
+  const name = input.value.trim();
+  const productionCompany = companySelect.value;
+
+  if (!name) {
+    showMessage("Item name is required.", "error");
+    input.focus();
+    return;
+  }
+
+  const res = await adminFetch("/admin/items", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, production_company: productionCompany })
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Item add failed: " + text, "error");
+    return;
+  }
+
+  input.value = "";
+  companySelect.value = "Hijnx";
+  showMessage("Item added.", "success");
+  await loadLookups();
   await loadItemTaskManagement();
 }
 
@@ -4368,7 +4449,7 @@ function addTestPickup(value = { time: "", items: [] }) {
   placeholder.text = "Select item";
   itemSelect.appendChild(placeholder);
 
-  productionBatchOptions.forEach(itemName => {
+  getAllProductionBatchOptions().forEach(itemName => {
     const option = document.createElement("option");
     option.value = itemName;
     option.text = itemName;

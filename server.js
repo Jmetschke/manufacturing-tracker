@@ -211,6 +211,8 @@ const itemNames = [
   "Cherry 2g",
   "Strawberry 2g",
   "Peach 2g",
+  "Pheotera 2oz Stick",
+  "Hijnx 1oz Stick",
   "Big Stick",
   "Small Stick",
   "Tiny Stick",
@@ -614,6 +616,29 @@ async function seedNames(table, names) {
   }
 }
 
+async function seedItemProductionCompanies() {
+  const companyByItemName = new Map([
+    ["Pheotera 2oz Stick", "Hijnx"],
+    ["Hijnx 1oz Stick", "Hijnx"]
+  ]);
+
+  for (const [name, company] of companyByItemName.entries()) {
+    await runSql(`
+      UPDATE items
+      SET production_company = ?
+      WHERE name = ?
+        AND (production_company IS NULL OR production_company = '')
+    `, [company, name]);
+  }
+}
+
+function normalizeProductionCompany(value) {
+  const company = normalizeRequiredText(value);
+  if (/^hijnx$/i.test(company)) return "Hijnx";
+  if (/^snackbar$/i.test(company)) return "Snackbar";
+  return "";
+}
+
 async function removeNames(table, names) {
   for (const name of names) {
     await runSql(`DELETE FROM ${table} WHERE name = ?`, [name]);
@@ -953,6 +978,7 @@ async function initializeDatabase() {
 
   await addMissingColumn("time_logs", "item_id", "INTEGER");
   await addMissingColumn("tasks", "seconds_per_unit_alert_level", "REAL DEFAULT 0");
+  await addMissingColumn("items", "production_company", "TEXT");
   await addMissingColumn("time_logs", "task_id", "INTEGER");
   await addMissingColumn("time_logs", "employee", "TEXT");
   await addMissingColumn("time_logs", "work_date", "TEXT");
@@ -1001,6 +1027,7 @@ async function initializeDatabase() {
   await clearWeekendScheduleTasks();
 
   await seedNames("items", itemNames);
+  await seedItemProductionCompanies();
   await removeNames("items", ["Item A", "Item B"]);
   await seedNames("tasks", taskNames);
   await removeNames("tasks", ["Assembly", "Cutting"]);
@@ -1012,7 +1039,7 @@ async function initializeDatabase() {
 
 /* ---------- ITEMS ---------- */
 app.get("/items", (req, res) => {
-  db.all("SELECT * FROM items", [], (err, rows) => {
+  db.all("SELECT * FROM items ORDER BY name", [], (err, rows) => {
     if (err) return res.status(500).send(err.message);
     res.json(rows);
   });
@@ -1051,7 +1078,7 @@ app.get("/item-task-options", async (req, res) => {
 app.get("/admin/item-task-management", async (req, res) => {
   try {
     const [items, tasks, assignments] = await Promise.all([
-      allSql("SELECT id, name FROM items ORDER BY name"),
+      allSql("SELECT id, name, COALESCE(production_company, '') AS production_company FROM items ORDER BY name"),
       allSql(`
         SELECT
           t.id,
@@ -1103,6 +1130,29 @@ app.post("/admin/tasks", async (req, res) => {
       [name, alertLevel]
     );
     res.status(201).json({ id: result.lastID, name, seconds_per_unit_alert_level: alertLevel });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.post("/admin/items", async (req, res) => {
+  const name = normalizeRequiredText(req.body.name);
+  const productionCompany = normalizeProductionCompany(req.body.production_company);
+
+  if (!name) return res.status(400).send("Item name is required");
+  if (!productionCompany) return res.status(400).send("Company must be Hijnx or Snackbar");
+
+  try {
+    const existing = await allSql("SELECT id FROM items WHERE lower(name) = lower(?)", [name]);
+    if (existing.length) {
+      return res.status(409).send("Item already exists");
+    }
+
+    const result = await runSql(
+      "INSERT INTO items (name, production_company) VALUES (?, ?)",
+      [name, productionCompany]
+    );
+    res.status(201).json({ id: result.lastID, name, production_company: productionCompany });
   } catch (err) {
     res.status(500).send(err.message);
   }
