@@ -701,6 +701,7 @@ function groupDailyTaskAssignments(tasks) {
         sourceBatchKey: task.sourceBatchKey || "",
         sourceBatchLabel: task.sourceBatchLabel || "",
         assignedHours: 0,
+        neededHours: 0,
         remainingHours: task.remainingHours,
         people: new Map(),
         legacyDays: task.days || 1,
@@ -716,6 +717,9 @@ function groupDailyTaskAssignments(tasks) {
     group.completed = group.completedCount === group.taskCount;
     if (task.hours) {
       group.assignedHours += task.hours;
+    }
+    if (task.neededHours) {
+      group.neededHours += task.neededHours;
     }
     if (Number.isFinite(task.remainingHours)) {
       group.remainingHours = task.remainingHours;
@@ -734,6 +738,7 @@ function createProjectedTask(task, row, taskType, taskIndex, activeDate, dayInde
     text: task.text,
     days: task.days,
     totalHours: task.totalHours,
+    neededHours: task.totalHours,
     sourceBatchKey: task.sourceBatchKey,
     sourceBatchLabel: task.sourceBatchLabel,
     sourceScheduleDate: row.schedule_date,
@@ -832,10 +837,16 @@ function appendTaskFocusDetails(block, projectedTasks, emptyText) {
     const item = document.createElement("div");
     item.className = "calendar-focus-item";
     applyBatchTaskColor(item, task);
-    appendTaskCompletionControl(item, task);
     const titleLine = document.createElement("b");
-    titleLine.textContent = `${getTaskDisplayText(task)} - ${formatTaskHours(task.assignedHours)} assigned`;
+    titleLine.className = "calendar-task-title";
+    const hoursText = task.assignedHours > 0
+      ? `${formatTaskHours(task.assignedHours)} assigned`
+      : task.neededHours > 0
+        ? `${formatTaskHours(task.neededHours)} needed`
+        : "No hours assigned";
+    titleLine.textContent = `${getTaskDisplayText(task)} - ${hoursText}`;
     item.appendChild(titleLine);
+    appendTaskCompletionControl(item, task);
 
     if (task.people.size) {
       const people = document.createElement("div");
@@ -849,7 +860,7 @@ function appendTaskFocusDetails(block, projectedTasks, emptyText) {
         list.appendChild(person);
       });
       item.appendChild(list);
-    } else {
+    } else if (!task.neededHours) {
       item.appendChild(createFocusEmpty("No person hours assigned for this day."));
     }
 
@@ -899,6 +910,36 @@ function getBatchStatusText(batch) {
   if (progress.completed === 0) return "Not started";
   if (progress.completed === progress.total) return "Completed";
   return `${progress.percent}% complete`;
+}
+
+function getGeneratedBatchKey(batchType, batchIndex, batchItem) {
+  return `${batchType}:${batchIndex}:${batchItem}`;
+}
+
+function isBatchInProgress(batch) {
+  const progress = getBatchProgress(batch);
+  return progress.completed < progress.total;
+}
+
+function getPayloadBatchesByKey(payload) {
+  const batchesByKey = new Map();
+
+  [
+    ...payload.batchHijnx.map((batch, index) => ({ type: "hijnx", index, batch })),
+    ...payload.batchSb.map((batch, index) => ({ type: "sb", index, batch }))
+  ].forEach(({ type, index, batch }) => {
+    batchesByKey.set(getGeneratedBatchKey(type, index, batch.item), batch);
+  });
+
+  return batchesByKey;
+}
+
+function taskWasCompletedOn(task, isoDate) {
+  return (task.completedDates || []).includes(isoDate);
+}
+
+function taskWasCompleted(task) {
+  return (task.completedDates || []).length > 0;
 }
 
 function appendBatchDetail(container, batch) {
@@ -1047,7 +1088,7 @@ function renderDailyWorkingBatches(batches) {
 async function loadDailyReport() {
   const today = toIsoDate(new Date());
   const todayDate = dateOnly(new Date());
-  const from = toIsoDate(addDays(todayDate, -180));
+  const from = toIsoDate(addDays(todayDate, -3650));
   const scheduleRes = await fetch(`/schedule?from=${from}&to=${today}`);
 
   if (!scheduleRes.ok) {
@@ -1138,9 +1179,9 @@ function renderFocusedScheduleDay(isoDate, scheduleDay, deliveries) {
   title.textContent = formatDisplayDate(isoDate);
   body.innerHTML = "";
 
-  const section = (headingText, fill) => {
+  const section = (headingText, fill, className = "") => {
     const block = document.createElement("div");
-    block.className = "calendar-focus-section";
+    block.className = `calendar-focus-section ${className}`.trim();
     const heading = document.createElement("h4");
     heading.textContent = headingText;
     block.appendChild(heading);
@@ -1151,7 +1192,7 @@ function renderFocusedScheduleDay(isoDate, scheduleDay, deliveries) {
   section("Events", block => appendFocusLines(block, scheduleDay.events || [], event => {
     const timeText = event.start && event.end ? ` ${event.start}-${event.end}` : "";
     return `${event.title}${timeText} - ${event.location} - ${event.company}`;
-  }, "No events scheduled."));
+  }, "No events scheduled."), "focus-events");
 
   section("Production Batches", block => {
     const batches = [
@@ -1165,19 +1206,19 @@ function renderFocusedScheduleDay(isoDate, scheduleDay, deliveries) {
     }
 
     batches.forEach(batch => appendBatchDetail(block, batch));
-  });
+  }, "focus-batches");
 
-  section("Kitchen Tasks", block => appendTaskFocusDetails(block, scheduleDay.tasks || [], "No kitchen tasks scheduled."));
+  section("Kitchen Tasks", block => appendTaskFocusDetails(block, scheduleDay.tasks || [], "No kitchen tasks scheduled."), "focus-kitchen");
 
   section("Deliveries", block => appendFocusLines(block, deliveries, delivery =>
     `${delivery.calendar_delivery_status}: ${delivery.item_name} - QTY ${delivery.package_qty || ""}`.trim(),
-  "No deliveries."));
+  "No deliveries."), "focus-deliveries");
 
   section("Test Pick Ups", block => appendFocusLines(block, scheduleDay.testPickups || [], pickup =>
     `Test Pick Up ${pickup.time}: ${pickup.items.join(", ")}`,
-  "No test pick ups."));
+  "No test pick ups."), "focus-pickups");
 
-  section("Processing Tasks", block => appendTaskFocusDetails(block, scheduleDay.processingTasks || [], "No processing tasks."));
+  section("Processing Tasks", block => appendTaskFocusDetails(block, scheduleDay.processingTasks || [], "No processing tasks."), "focus-processing");
 
   panel.hidden = false;
   const closeButton = panel.querySelector("button");
@@ -1337,6 +1378,7 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
   const activeSchedule = new Map();
   const rangeStart = dateOnly(visibleStart);
   const rangeEnd = dateOnly(visibleEnd);
+  const todayIso = getTodayIsoDate();
 
   for (let index = 0; index <= 13; index += 1) {
     activeSchedule.set(toIsoDate(addDays(rangeStart, index)), {
@@ -1353,6 +1395,7 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
     const [year, month, day] = row.schedule_date.split("-").map(Number);
     const rowStartDate = new Date(year, month - 1, day);
     const payload = parseSchedulePayload(row.tasks);
+    const batchesByKey = getPayloadBatchesByKey(payload);
 
     if (activeSchedule.has(row.schedule_date)) {
       const scheduleDay = activeSchedule.get(row.schedule_date);
@@ -1427,6 +1470,34 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
     });
 
     payload.processingTasks.forEach((task, taskIndex) => {
+      if (task.autoGenerated && task.sourceBatchKey) {
+        const batch = batchesByKey.get(getBatchColorKey(task));
+        for (
+          let activeDate = rangeStart;
+          activeDate <= rangeEnd;
+          activeDate = addDays(activeDate, 1)
+        ) {
+          const activeDateIso = toIsoDate(activeDate);
+          if (activeDateIso < row.schedule_date) continue;
+
+          const completedOnDate = taskWasCompletedOn(task, activeDateIso);
+          const isPastDay = activeDateIso < todayIso;
+          const shouldShow = isPastDay
+            ? completedOnDate
+            : completedOnDate || (batch && isBatchInProgress(batch) && !taskWasCompleted(task));
+
+          if (!shouldShow) continue;
+          if (!activeSchedule.has(activeDateIso)) {
+            activeSchedule.set(activeDateIso, { batchHijnx: [], batchSb: [], events: [], tasks: [], testPickups: [], processingTasks: [] });
+          }
+          activeSchedule.get(activeDateIso).processingTasks.push(createProjectedTask(task, row, "processingTasks", taskIndex, activeDateIso, 0, {
+            neededHours: task.totalHours,
+            remainingHours: taskWasCompleted(task) ? 0 : task.totalHours
+          }));
+        }
+        return;
+      }
+
       let remainingHours = task.totalHours;
       const startDate = isIsoDate(task.scheduleDate)
         ? dateOnly(new Date(`${task.scheduleDate}T00:00:00`))
@@ -2065,7 +2136,7 @@ async function restorePendingTimer() {
 async function loadSchedule() {
   const weekStart = startOfWeek(new Date());
   const weekEnd = addDays(weekStart, 13);
-  const from = toIsoDate(addDays(weekStart, -180));
+  const from = toIsoDate(addDays(weekStart, -3650));
   const to = toIsoDate(weekEnd);
   const [scheduleRes, orderedRes] = await Promise.all([
     fetch(`/schedule?from=${from}&to=${to}`),

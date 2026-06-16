@@ -455,8 +455,12 @@
     }
     .calendar-day-focus-body {
       display: grid;
-      gap: 12px;
-      grid-template-columns: 1fr;
+      gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+    .calendar-focus-section.focus-kitchen,
+    .calendar-focus-section.focus-processing {
+      grid-column: 1 / -1;
     }
     .calendar-focus-section {
       background: #fff;
@@ -479,8 +483,17 @@
     .calendar-focus-empty {
       background: #f7f8f4;
       border-left: 3px solid #4f5f47;
-      padding: 8px;
+      padding: 10px;
       margin-bottom: 8px;
+    }
+    .calendar-focus-section.focus-kitchen .calendar-focus-item,
+    .calendar-focus-section.focus-processing .calendar-focus-item {
+      display: grid;
+      gap: 7px;
+    }
+    .calendar-task-title {
+      display: block;
+      line-height: 1.3;
     }
     .calendar-focus-section.focus-events .calendar-focus-item { border-left-color: #7c5cc4; }
     .calendar-focus-section.focus-batches .calendar-focus-item { border-left-color: #2364aa; }
@@ -494,10 +507,11 @@
     }
     .task-completion-control {
       align-items: center;
-      display: inline-flex;
+      display: flex;
       font-weight: bold;
       gap: 6px;
       margin: 0 0 6px;
+      width: fit-content;
     }
     .task-completion-control input {
       margin: 0;
@@ -1174,6 +1188,9 @@
       .screen-link { display: block; text-align: center; font-size: 18px; padding: 14px 12px; }
       h3 { font-size: 1.25rem; }
       input, select, button { min-height: 52px; font-size: 18px; padding: 12px; }
+      .calendar-day-focus { align-items: stretch; padding: 10px; }
+      .calendar-focus-dialog { max-height: calc(100vh - 20px); width: 100%; }
+      .calendar-day-focus-body { grid-template-columns: 1fr; }
       .admin-tabs, .controls, .edit-grid, .calendar-tools { flex-direction: column; gap: 10px; }
       .admin-tab-button { width: 100%; margin-left: 0; margin-right: 0; padding: 14px 12px; text-align: left; font-size: 18px; }
       .summary-line { display: block; }

@@ -259,20 +259,43 @@
 
     .calendar-day-focus-body {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 10px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 14px;
     }
 
     .calendar-focus-section h4 {
       margin: 0 0 6px;
     }
 
+    .calendar-focus-section.focus-events .calendar-focus-item { border-left-color: #7c5cc4; }
+    .calendar-focus-section.focus-batches .calendar-focus-item { border-left-color: #2364aa; }
+    .calendar-focus-section.focus-kitchen .calendar-focus-item { border-left-color: #d08a1f; }
+    .calendar-focus-section.focus-deliveries .calendar-focus-item { border-left-color: #176a2c; }
+    .calendar-focus-section.focus-pickups .calendar-focus-item { border-left-color: #be5b2a; }
+    .calendar-focus-section.focus-processing .calendar-focus-item { border-left-color: #5d9b45; }
+
+    .calendar-focus-section.focus-kitchen,
+    .calendar-focus-section.focus-processing {
+      grid-column: 1 / -1;
+    }
+
     .calendar-focus-item,
     .calendar-focus-empty {
       background: #f7f8f4;
       border-left: 3px solid #4f5f47;
-      padding: 6px 8px;
-      margin-bottom: 6px;
+      padding: 10px;
+      margin-bottom: 8px;
+    }
+
+    .calendar-focus-section.focus-kitchen .calendar-focus-item,
+    .calendar-focus-section.focus-processing .calendar-focus-item {
+      display: grid;
+      gap: 7px;
+    }
+
+    .calendar-task-title {
+      display: block;
+      line-height: 1.3;
     }
 
     .calendar-focus-item ul {
@@ -281,11 +304,12 @@
     }
 
     .task-completion-control {
-      display: inline-flex;
+      display: flex;
       align-items: center;
       gap: 6px;
       font-weight: bold;
       margin: 0 0 6px;
+      width: fit-content;
     }
 
     .task-completion-control input {
@@ -939,6 +963,20 @@
         min-height: 52px;
         font-size: 18px;
         padding: 12px;
+      }
+
+      .focus-window {
+        align-items: stretch;
+        padding: 10px;
+      }
+
+      .focus-dialog {
+        max-height: calc(100vh - 20px);
+        width: 100%;
+      }
+
+      .calendar-day-focus-body {
+        grid-template-columns: 1fr;
       }
 
       .entry-fields,

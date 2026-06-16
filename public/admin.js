@@ -1877,8 +1877,8 @@ function appendTaskFocusDetails(block, projectedTasks, emptyText) {
     const item = document.createElement("div");
     item.className = "calendar-focus-item";
     applyBatchTaskColor(item, task);
-    appendTaskCompletionControl(item, task);
     const titleLine = document.createElement("b");
+    titleLine.className = "calendar-task-title";
     const hoursText = task.assignedHours > 0
       ? `${formatTaskHours(task.assignedHours)} assigned`
       : task.neededHours > 0
@@ -1886,6 +1886,7 @@ function appendTaskFocusDetails(block, projectedTasks, emptyText) {
         : "No hours assigned";
     titleLine.textContent = `${getTaskDisplayText(task)} - ${hoursText}`;
     item.appendChild(titleLine);
+    appendTaskCompletionControl(item, task);
 
     if (task.people.size) {
       const people = document.createElement("div");
@@ -1899,7 +1900,7 @@ function appendTaskFocusDetails(block, projectedTasks, emptyText) {
         list.appendChild(person);
       });
       item.appendChild(list);
-    } else {
+    } else if (!task.neededHours) {
       item.appendChild(createFocusEmpty("No person hours assigned for this day."));
     }
 
