@@ -2779,4 +2779,17 @@ document.getElementById("scheduleDayFocus").addEventListener("click", event => {
   }
 });
 
+function registerProductionTrackerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+
+  // Register the PWA shell worker. It only handles static files/icons, so live
+  // Render/Turso API calls continue through the normal network request flow.
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/service-worker.js")
+      .catch(err => console.warn("PWA service worker registration failed:", err));
+  });
+}
+
+registerProductionTrackerServiceWorker();
 load();

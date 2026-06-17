@@ -133,6 +133,22 @@ app.get("/access.html", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "access.html"));
 });
 
+// PWA install assets must be reachable before the access gate so Safari/Chrome
+// can read the manifest, service worker, and icons during home-screen install.
+// This exposes only static shell metadata/artwork, not database-backed routes.
+app.get("/manifest.json", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "manifest.json"));
+});
+
+app.get("/service-worker.js", (req, res) => {
+  res.type("application/javascript");
+  res.sendFile(path.join(__dirname, "public", "service-worker.js"));
+});
+
+app.get(/^\/icons\/.+\.png$/, (req, res) => {
+  res.sendFile(path.join(__dirname, "public", req.path));
+});
+
 app.post("/access", (req, res) => {
   const submittedCode = String(req.body.code || "");
   const nextPath = getSafeNextPath(req.body.next);
