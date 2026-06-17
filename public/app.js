@@ -841,7 +841,7 @@ function appendTaskFocusDetails(block, projectedTasks, emptyText) {
     titleLine.className = "calendar-task-title";
     const hoursText = task.assignedHours > 0
       ? `${formatTaskHours(task.assignedHours)} assigned`
-      : task.neededHours > 0
+      : Number.isFinite(task.neededHours)
         ? `${formatTaskHours(task.neededHours)} needed`
         : "No hours assigned";
     titleLine.textContent = `${getTaskDisplayText(task)} - ${hoursText}`;
