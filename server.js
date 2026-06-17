@@ -542,6 +542,52 @@ const globalItemTaskNames = Object.freeze([
   "Sealing"
 ]);
 
+const itemTaskRateGroups = Object.freeze([
+  {
+    name: "vapes 1g",
+    taskNames: ["Filling (SB Vapes)", "Capping (SB Vapes)", "SB Sealing", "Counting (SB 5's)", "Bagging (SB 25's)"],
+    itemNames: ["Grape 1g", "Mango 1g", "Lemon 1g", "Watermelon 1g"]
+  },
+  {
+    name: "Vapes 2g",
+    taskNames: ["Filling (SB Vapes)", "Capping (SB Vapes)", "SB Sealing", "Counting (SB 5's)", "Bagging (SB 25's)"],
+    itemNames: ["Cherry 2g", "Peach 2g", "Strawberry 2g"]
+  },
+  {
+    name: "Space Chunks 1pc",
+    taskNames: ["Depositing (truffly)", "Nerding", "Popping", "Sugaring", "Packaging", "Sealing", "Counting (5's)", "Bagging (20's)"],
+    itemNames: [
+      "Space Chunk OG 1 chunk (pcs)",
+      "Space Chunk REX OG 1 chunk (units)",
+      "Space Chunk ZUUL OG 1 chunk (units)",
+      "Space Chunk 1 chunk CBD 50mg 1-1 (pcs)",
+      "Space Chunk CBN 1 chunk (pcs)"
+    ]
+  },
+  {
+    name: "Space Chunks 2pc",
+    taskNames: ["Depositing (truffly)", "Nerding", "Popping", "Sugaring", "Packaging", "Sealing", "Counting (5's)", "Bagging (20's)"],
+    itemNames: [
+      "Space Chunk ALPHA OG 2 chunk (units)",
+      "Space Chunk REX OG 2 chunk (units)",
+      "Space Chunk ZUUL OG 2 chunk (units)",
+      "Space Chunks CBD 2 chunks 1-1 (units)",
+      "Space Chunk CBN 2 chunk (units)",
+      "Space Chunk SUGAR FREE 2pk (units)"
+    ]
+  },
+  {
+    name: "Space Chunks 10pc",
+    taskNames: ["Depositing (truffly)", "Nerding", "Popping", "Sugaring", "Packaging", "Sealing", "Counting (5's)", "Bagging (20's)"],
+    itemNames: ["Space Chunk Mini 10 chunk (units)", "Space Chunk SUGAR FREE 10pk (units)"]
+  },
+  {
+    name: "Shooters",
+    taskNames: ["Filling (Filling Machine)", "Capping (shooters)", "Seal-Stickering (shooters)", "Bagging (10's)"],
+    itemNames: ["Shooters Triple Citrus", "Shooters Sour Watermelon", "Shooters Sour Blu Raz"]
+  }
+]);
+
 function runSql(sql, params = [], database = db) {
   return new Promise((resolve, reject) => {
     database.run(sql, params, function (err) {
@@ -2993,7 +3039,25 @@ app.get("/admin/entries", (req, res) => {
   });
 });
 
-app.get("/admin/item-task-rate", (req, res) => {
+function normalizeRateLookupName(value) {
+  return normalizeRequiredText(value).replace(/\s+/g, " ").toLowerCase();
+}
+
+function findItemTaskRateGroup(itemName, taskName) {
+  const itemKey = normalizeRateLookupName(itemName);
+  const taskKey = normalizeRateLookupName(taskName);
+
+  return itemTaskRateGroups.find(group =>
+    group.itemNames.some(name => normalizeRateLookupName(name) === itemKey) &&
+    group.taskNames.some(name => normalizeRateLookupName(name) === taskKey)
+  ) || null;
+}
+
+function makeSqlPlaceholders(values) {
+  return values.map(() => "?").join(", ");
+}
+
+app.get("/admin/item-task-rate", async (req, res) => {
   const itemName = normalizeRequiredText(req.query.item);
   const taskName = normalizeRequiredText(req.query.task);
 
@@ -3001,20 +3065,25 @@ app.get("/admin/item-task-rate", (req, res) => {
     return res.status(400).send("Item and task are required");
   }
 
-  db.get(`
-    SELECT
-      SUM(COALESCE(l.quantity, 0)) AS total_qty,
-      SUM(COALESCE(l.duration_seconds, 0)) AS total_time
-    FROM time_logs l
-    LEFT JOIN items i ON i.id = l.item_id
-    LEFT JOIN tasks t ON t.id = l.task_id
-    WHERE l.end_time IS NOT NULL
-      AND COALESCE(l.quantity, 0) > 0
-      AND COALESCE(l.duration_seconds, 0) > 0
-      AND i.name = ?
-      AND t.name = ?
-  `, [itemName, taskName], (err, row) => {
-    if (err) return res.status(500).send(err.message);
+  const rateGroup = findItemTaskRateGroup(itemName, taskName);
+  const rateItemNames = rateGroup ? rateGroup.itemNames : [itemName];
+  const rateTaskNames = [taskName];
+
+  try {
+    const rows = await allSql(`
+      SELECT
+        SUM(COALESCE(l.quantity, 0)) AS total_qty,
+        SUM(COALESCE(l.duration_seconds, 0)) AS total_time
+      FROM time_logs l
+      LEFT JOIN items i ON i.id = l.item_id
+      LEFT JOIN tasks t ON t.id = l.task_id
+      WHERE l.end_time IS NOT NULL
+        AND COALESCE(l.quantity, 0) > 0
+        AND COALESCE(l.duration_seconds, 0) > 0
+        AND i.name IN (${makeSqlPlaceholders(rateItemNames)})
+        AND t.name IN (${makeSqlPlaceholders(rateTaskNames)})
+    `, [...rateItemNames, ...rateTaskNames]);
+    const row = rows[0];
 
     const totalQty = Number(row && row.total_qty) || 0;
     const totalTime = Number(row && row.total_time) || 0;
@@ -3025,9 +3094,17 @@ app.get("/admin/item-task-rate", (req, res) => {
       task: taskName,
       total_qty: totalQty,
       total_time: totalTime,
-      units_per_hour: unitsPerHour
+      units_per_hour: unitsPerHour,
+      rate_group: rateGroup ? {
+        name: rateGroup.name,
+        items: rateItemNames,
+        task: taskName,
+        eligible_tasks: rateGroup.taskNames
+      } : null
     });
-  });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
 });
 
 app.put("/admin/entries/:id", (req, res) => {

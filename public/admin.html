@@ -559,10 +559,11 @@
     .calendar-focus-dialog {
       background: #fff;
       border: 1px solid #d8ded3;
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
       max-height: 90vh;
       overflow: auto;
-      padding: 14px;
-      width: min(980px, 100%);
+      padding: 16px;
+      width: min(1040px, 100%);
     }
     .calendar-focus-header {
       align-items: center;
@@ -573,6 +574,7 @@
     }
     .calendar-focus-header h3 {
       margin: 0;
+      font-size: 1.25rem;
     }
     .calendar-day-focus-body {
       display: grid;
@@ -587,7 +589,8 @@
       background: #fff;
       border: 1px solid #d8ded3;
       border-left: 5px solid #4f5f47;
-      padding: 10px;
+      border-radius: 6px;
+      padding: 12px;
     }
     .calendar-focus-section.focus-events { border-left-color: #7c5cc4; }
     .calendar-focus-section.focus-batches { border-left-color: #2364aa; }
@@ -599,13 +602,30 @@
       border-bottom: 1px solid #edf0e8;
       margin: 0 0 8px;
       padding-bottom: 6px;
+      font-size: 0.98rem;
     }
     .calendar-focus-item,
     .calendar-focus-empty {
       background: #f7f8f4;
       border-left: 3px solid #4f5f47;
-      padding: 10px;
+      border-radius: 4px;
       margin-bottom: 8px;
+      padding: 10px;
+    }
+    .calendar-focus-section.focus-batches .calendar-focus-item {
+      align-items: center;
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+    }
+    .calendar-focus-batch-name {
+      line-height: 1.25;
+    }
+    .calendar-focus-batch-units {
+      color: #44505a;
+      flex: 0 0 auto;
+      font-weight: 700;
+      white-space: nowrap;
     }
     .calendar-focus-section.focus-kitchen .calendar-focus-item,
     .calendar-focus-section.focus-processing .calendar-focus-item {
@@ -1075,15 +1095,16 @@
     }
     .ordered-entry-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 14px;
+      grid-template-columns: minmax(320px, 1.1fr) minmax(260px, 0.8fr) minmax(360px, 1.3fr);
+      gap: 12px;
       align-items: start;
+      order: 2;
     }
     .ordered-card,
     .ordered-section {
       border: 1px solid #d8d8d8;
       background: #fff;
-      padding: 14px;
+      padding: 12px;
     }
     .ordered-card h3,
     .ordered-section h3 {
@@ -1098,12 +1119,20 @@
     }
     .ordered-status-grid {
       display: grid;
-      grid-template-columns: minmax(280px, 1.3fr) minmax(280px, 1fr);
-      gap: 14px;
+      grid-template-columns: minmax(360px, 1.15fr) minmax(320px, 0.85fr);
+      gap: 12px;
       align-items: start;
+      order: 1;
     }
     .ordered-section-full {
       grid-column: 1 / -1;
+    }
+    #orderedPanel .ordered-expected-list { order: 1; }
+    #orderedPanel .ordered-needs-date-list { order: 2; }
+    #orderedPanel .ordered-received-list { order: 3; }
+    #orderedPanel .ordered-requests-list { order: 4; }
+    .ordered-manual-action {
+      display: none;
     }
     .ordered-section-header {
       display: flex;
@@ -1125,6 +1154,69 @@
       align-items: center;
       justify-content: flex-end;
       gap: 8px;
+    }
+    .ordered-review-list {
+      display: grid;
+      gap: 8px;
+    }
+    .ordered-review-card {
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) minmax(210px, auto);
+      gap: 12px;
+      align-items: start;
+      border: 1px solid #d8d8d2;
+      background: #fff;
+      padding: 10px;
+    }
+    .ordered-review-card.received {
+      background: #f4faf5;
+      border-color: #c7dec8;
+    }
+    .ordered-review-card.needs-date {
+      background: #fff9ed;
+      border-color: #ead3a8;
+    }
+    .ordered-review-title {
+      font-weight: 700;
+      line-height: 1.3;
+      margin-bottom: 8px;
+    }
+    .ordered-review-meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 6px 10px;
+      color: #343a40;
+      font-size: 0.92rem;
+    }
+    .ordered-review-meta b {
+      display: block;
+      color: #5b6065;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+    }
+    .ordered-review-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+    .ordered-review-actions .receive-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 34px;
+      border: 1px solid #cfd7ca;
+      background: #f7faf6;
+      padding: 6px 8px;
+      margin: 4px;
+      font-weight: 700;
+    }
+    .ordered-review-actions .receive-toggle input {
+      margin: 0;
+    }
+    .ordered-review-actions .request-order-form {
+      flex: 1 1 100%;
+      min-width: 220px;
     }
     .ordered-import-result {
       margin: 0 0 16px;
@@ -1310,8 +1402,16 @@
       h3 { font-size: 1.25rem; }
       input, select, button { min-height: 52px; font-size: 18px; padding: 12px; }
       .calendar-day-focus { align-items: stretch; padding: 10px; }
-      .calendar-focus-dialog { max-height: calc(100vh - 20px); width: 100%; }
+      .calendar-focus-dialog { max-height: calc(100vh - 20px); padding: 12px; width: 100%; }
       .calendar-day-focus-body { grid-template-columns: 1fr; }
+      .calendar-focus-header { align-items: flex-start; }
+      .calendar-focus-section { padding: 10px; }
+      .calendar-focus-section.focus-batches .calendar-focus-item {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .calendar-focus-batch-units { white-space: normal; }
       .admin-tabs, .controls, .edit-grid, .calendar-tools { flex-direction: column; gap: 10px; }
       .admin-tab-button { width: 100%; margin-left: 0; margin-right: 0; padding: 14px 12px; text-align: left; font-size: 18px; }
       .summary-line { display: block; }
@@ -1433,6 +1533,9 @@
         padding: 0;
         overflow: hidden;
       }
+      #orderedPanel .ordered-manual-action {
+        display: block;
+      }
       #orderedPanel .ordered-card > h3,
       #orderedPanel .ordered-section > h3,
       #orderedPanel .ordered-section-header {
@@ -1515,6 +1618,15 @@
       }
       #orderedPanel .mobile-stack tr.mobile-focused td {
         display: flex;
+      }
+      #orderedPanel .ordered-review-card {
+        grid-template-columns: 1fr;
+      }
+      #orderedPanel .ordered-review-actions {
+        justify-content: stretch;
+      }
+      #orderedPanel .ordered-review-actions button {
+        width: 100%;
       }
     }
 

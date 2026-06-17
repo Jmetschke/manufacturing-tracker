@@ -912,28 +912,14 @@ function appendBatchDetail(container, batch) {
   item.className = "calendar-focus-item";
 
   const title = document.createElement("b");
-  title.textContent = batch.units
-    ? `${batch.label}: ${batch.item} - ${batch.units} units`
-    : `${batch.label}: ${batch.item}`;
+  title.className = "calendar-focus-batch-name";
+  title.textContent = batch.item || "Production batch";
   item.appendChild(title);
 
-  if (batch.scheduleDate) {
-    const date = document.createElement("div");
-    date.textContent = `Scheduled: ${formatDisplayDate(batch.scheduleDate)}`;
-    item.appendChild(date);
-  }
-
-  const status = document.createElement("div");
-  status.textContent = getBatchStatusText(batch);
-  item.appendChild(status);
-
-  const list = document.createElement("ul");
-  batchChecklistItems.forEach(check => {
-    const line = document.createElement("li");
-    line.textContent = `${batch.checklist && batch.checklist[check.key] ? "Done" : "Open"} - ${check.label}`;
-    list.appendChild(line);
-  });
-  item.appendChild(list);
+  const units = document.createElement("span");
+  units.className = "calendar-focus-batch-units";
+  units.textContent = batch.units ? `${batch.units} units` : "Units not set";
+  item.appendChild(units);
 
   container.appendChild(item);
 }
@@ -5072,64 +5058,59 @@ function renderOrderedItemsTable() {
   renderReceivedDeliveriesTable();
 }
 
-function appendDeliveryRowCells(row, item, labels, includeReceivedDetails = false) {
-  const values = [
-    item.date_ordered,
-    item.expected_delivery_date,
-    item.item_name,
-    item.item_company,
-    item.package_qty,
-    item.units_per_package || "",
-    item.item_supplier,
-    item.department,
-    item.requested_by || ""
-  ];
+function appendOrderedReviewMeta(container, labelText, value) {
+  if (value === undefined || value === null || value === "") return;
 
-  values.forEach((value, index) => appendCell(row, value, labels[index]));
+  const meta = document.createElement("div");
+  const label = document.createElement("b");
+  label.textContent = labelText;
+  meta.appendChild(label);
+  meta.appendChild(document.createTextNode(value));
+  container.appendChild(meta);
+}
 
-  if (includeReceivedDetails) {
-    appendCell(row, item.received_date || "", labels[values.length]);
-    appendCell(row, item.received_time || "", labels[values.length + 1]);
-    appendCell(row, item.received_location || "", labels[values.length + 2]);
+function createAdminOrderedReviewCard(item, state) {
+  const card = document.createElement("article");
+  card.className = `ordered-review-card ${state || ""}`.trim();
+
+  const body = document.createElement("div");
+
+  const title = document.createElement("div");
+  title.className = "ordered-review-title";
+  title.textContent = item.item_name;
+  body.appendChild(title);
+
+  const meta = document.createElement("div");
+  meta.className = "ordered-review-meta";
+  appendOrderedReviewMeta(meta, "Ordered", item.date_ordered);
+  appendOrderedReviewMeta(meta, "Expected", item.expected_delivery_date);
+  appendOrderedReviewMeta(meta, "QTY", item.package_qty);
+  appendOrderedReviewMeta(meta, "Units/Package", item.units_per_package);
+  appendOrderedReviewMeta(meta, "Company", item.item_company);
+  appendOrderedReviewMeta(meta, "Supplier", item.item_supplier);
+  appendOrderedReviewMeta(meta, "Department", item.department);
+  appendOrderedReviewMeta(meta, "Requested By", item.requested_by);
+  if (item.received_date) {
+    appendOrderedReviewMeta(meta, "Received", item.received_date);
+    appendOrderedReviewMeta(meta, "Time", item.received_time);
+    appendOrderedReviewMeta(meta, "Location", item.received_location);
   }
+  body.appendChild(meta);
+  card.appendChild(body);
+
+  const actions = document.createElement("div");
+  actions.className = "ordered-review-actions";
+  card.appendChild(actions);
+
+  return { card, actions };
 }
 
-function appendDeliveryHeader(table, extraLabels = []) {
-  const headerRow = document.createElement("tr");
-  headerRow.className = "table-heading-row";
-  const labels = [
-    "Date Ordered",
-    "Expected Delivery",
-    "Item Name",
-    "Item Company",
-    "Package QTY",
-    "Units/Package",
-    "Supplier",
-    "Department",
-    "Requested By",
-    ...extraLabels
-  ];
-
-  labels.forEach(label => {
-    const th = document.createElement("th");
-    th.textContent = label;
-    headerRow.appendChild(th);
-  });
-  table.appendChild(headerRow);
-  return labels;
-}
-
-function appendAdminDeleteOrderedItemCell(row, item, labelText = "Delete") {
-  const cell = document.createElement("td");
-  cell.dataset.label = labelText;
-
+function appendAdminDeleteOrderedItemButton(container, item) {
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = "Delete";
   button.addEventListener("click", () => deleteAdminOrderedItem(item.id));
-
-  cell.appendChild(button);
-  row.appendChild(cell);
+  container.appendChild(button);
 }
 
 function appendMobileSummaryRow(table, labels, title, detailRow) {
@@ -5206,32 +5187,29 @@ function renderExpectedDeliveriesTable() {
     return;
   }
 
-  const table = document.createElement("table");
-  table.className = "mobile-stack";
-  const labels = appendDeliveryHeader(table, ["Received", "Delete"]);
+  const list = document.createElement("div");
+  list.className = "ordered-review-list";
 
   expectedDeliveries.forEach(item => {
-    const row = document.createElement("tr");
-    appendDeliveryRowCells(row, item, labels);
-
-    const actionCell = document.createElement("td");
-    actionCell.dataset.label = labels[labels.length - 1];
+    const { card, actions } = createAdminOrderedReviewCard(item, "");
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
+    const label = document.createElement("label");
+    label.className = "receive-toggle";
     checkbox.addEventListener("change", () => {
       if (checkbox.checked) {
-        showAdminReceiveForm(item.id, actionCell, checkbox);
+        showAdminReceiveForm(item.id, actions, checkbox);
       }
     });
-    actionCell.appendChild(checkbox);
-    row.appendChild(actionCell);
-    appendAdminDeleteOrderedItemCell(row, item, labels[labels.length - 1]);
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode("Received"));
+    actions.appendChild(label);
+    appendAdminDeleteOrderedItemButton(actions, item);
 
-    appendMobileSummaryRow(table, labels, item.item_name, row);
-    table.appendChild(row);
+    list.appendChild(card);
   });
 
-  container.appendChild(table);
+  container.appendChild(list);
 }
 
 function renderNeedsDeliveryDateTable() {
@@ -5257,31 +5235,24 @@ function renderNeedsDeliveryDateTable() {
     return;
   }
 
-  const table = document.createElement("table");
-  table.className = "mobile-stack";
-  const labels = appendDeliveryHeader(table, ["Delivery Date", "Delete"]);
+  const list = document.createElement("div");
+  list.className = "ordered-review-list";
 
   deliveries.forEach(item => {
-    const row = document.createElement("tr");
-    appendDeliveryRowCells(row, item, labels);
-
-    const actionCell = document.createElement("td");
-    actionCell.dataset.label = labels[labels.length - 1];
+    const { card, actions } = createAdminOrderedReviewCard(item, "needs-date");
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = "Set Date";
     button.addEventListener("click", () => {
-      showAdminReceiveForm(item.id, actionCell, { checked: true });
+      showAdminReceiveForm(item.id, actions, { checked: true });
     });
-    actionCell.appendChild(button);
-    row.appendChild(actionCell);
-    appendAdminDeleteOrderedItemCell(row, item, labels[labels.length - 1]);
+    actions.appendChild(button);
+    appendAdminDeleteOrderedItemButton(actions, item);
 
-    appendMobileSummaryRow(table, labels, item.item_name, row);
-    table.appendChild(row);
+    list.appendChild(card);
   });
 
-  container.appendChild(table);
+  container.appendChild(list);
 }
 
 function showAdminReceiveForm(itemId, cell, checkbox) {
@@ -5387,29 +5358,22 @@ function renderReceivedDeliveriesTable() {
     return;
   }
 
-  const table = document.createElement("table");
-  table.className = "mobile-stack";
-  const labels = appendDeliveryHeader(table, ["Received Date", "Time", "Location", "Action", "Delete"]);
+  const list = document.createElement("div");
+  list.className = "ordered-review-list";
 
   receivedDeliveries.forEach(item => {
-    const row = document.createElement("tr");
-    appendDeliveryRowCells(row, item, labels, true);
-
-    const actionCell = document.createElement("td");
-    actionCell.dataset.label = labels[labels.length - 1];
+    const { card, actions } = createAdminOrderedReviewCard(item, "received");
     const undoButton = document.createElement("button");
     undoButton.type = "button";
     undoButton.textContent = "Undo";
     undoButton.addEventListener("click", () => undoAdminReceivedItem(item.id));
-    actionCell.appendChild(undoButton);
-    row.appendChild(actionCell);
-    appendAdminDeleteOrderedItemCell(row, item, labels[labels.length - 1]);
+    actions.appendChild(undoButton);
+    appendAdminDeleteOrderedItemButton(actions, item);
 
-    appendMobileSummaryRow(table, labels, item.item_name, row);
-    table.appendChild(row);
+    list.appendChild(card);
   });
 
-  container.appendChild(table);
+  container.appendChild(list);
 }
 
 async function undoAdminReceivedItem(itemId) {

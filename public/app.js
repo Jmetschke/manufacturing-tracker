@@ -947,28 +947,14 @@ function appendBatchDetail(container, batch) {
   item.className = "calendar-focus-item";
 
   const title = document.createElement("b");
-  title.textContent = batch.units
-    ? `${batch.label}: ${batch.item} - ${batch.units} units`
-    : `${batch.label}: ${batch.item}`;
+  title.className = "calendar-focus-batch-name";
+  title.textContent = batch.item || "Production batch";
   item.appendChild(title);
 
-  if (batch.scheduleDate) {
-    const date = document.createElement("div");
-    date.textContent = `Scheduled: ${formatDisplayDate(batch.scheduleDate)}`;
-    item.appendChild(date);
-  }
-
-  const status = document.createElement("div");
-  status.textContent = getBatchStatusText(batch);
-  item.appendChild(status);
-
-  const list = document.createElement("ul");
-  batchChecklistItems.forEach(check => {
-    const line = document.createElement("li");
-    line.textContent = `${batch.checklist && batch.checklist[check.key] ? "Done" : "Open"} - ${check.label}`;
-    list.appendChild(line);
-  });
-  item.appendChild(list);
+  const units = document.createElement("span");
+  units.className = "calendar-focus-batch-units";
+  units.textContent = batch.units ? `${batch.units} units` : "Units not set";
+  item.appendChild(units);
 
   container.appendChild(item);
 }
