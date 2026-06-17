@@ -225,6 +225,7 @@ const taskNames = [
   "Filling (Filling Machine)",
   "Filling (SB Vapes)",
   "FIlling (Hijnx Vapes)",
+  "Tiny Stick Filling (tray)",
   "Depositing (truffly)",
   "Depositing (muffly)",
   "Depositing (Beldos)",
@@ -240,6 +241,7 @@ const taskNames = [
   "Nerding",
   "Sealing",
   "SB Sealing",
+  "Bagging (5's)",
   "Bagging (10's)",
   "Bagging (20's)",
   "Bagging (SB 25's)",
@@ -282,7 +284,7 @@ const itemTaskNames = Object.freeze({
     "Packaging",
     "Sealing",
     "Counting (5's)",
-    "Bagging (10's)"
+    "Bagging (20's)"
   ],
   "RSO Whoopie Hi": [
     "Depositing (Beldos)",
@@ -509,19 +511,21 @@ const itemTaskNames = Object.freeze({
     "Filling (Filling Machine)",
     "Capping (Topicals)",
     "Packaging",
-    "Bagging (10's)"
+    "Sealing",
+    "Bagging (5's)"
   ],
   "Small Stick": [
-    "Filling (Filling Machine)",
     "Capping (Topicals)",
     "Packaging",
+    "Sealing",
     "Counting (5's)",
     "Bagging (20's)"
   ],
   "Tiny Stick": [
-    "Filling (Filling Machine)",
+    "Tiny Stick Filling (tray)",
     "Capping (Topicals)",
     "Packaging",
+    "Sealing",
     "Counting (5's)",
     "Bagging (20's)"
   ],
@@ -771,6 +775,256 @@ function isWeekendIsoDate(value) {
   return date.getDay() === 0 || date.getDay() === 6;
 }
 
+const batchChecklistStepKeys = {
+  "Cooking": "cooking",
+  "Post Cooking Processing": "postCookingProcessing",
+  "Packaging": "packaging",
+  "Sealed": "sealed",
+  "Counted": "counted"
+};
+
+const productionBatchItemAliases = {
+  "Alpha Chunk - 1pk": "Space Chunk OG 1 chunk (pcs)",
+  "Alpha Chunk - 2pk": "Space Chunk ALPHA OG 2 chunk (units)",
+  "Chill Chunk - 1pk": "Space Chunk CBN 1 chunk (pcs)",
+  "Chill Chunk - 2pk": "Space Chunk CBN 2 chunk (units)",
+  "Hijnx Shooter - Sour Blue Razz 2oz": "Shooters Sour Blu Raz",
+  "Hijnx Shooter - Triple Citrus": "Shooters Triple Citrus",
+  "Hijnx Shooter - Watermelon": "Shooters Sour Watermelon",
+  "MiNi's Chunks - 10pk": "Space Chunk Mini 10 chunk (units)",
+  "Micro Dots": "Micro Dots (50-piece packs)",
+  "Pheotera 2oz Stick": "Big Stick",
+  "Hijnx 1oz Stick": "Small Stick",
+  "Rex Chunk - 2pk": "Space Chunk REX OG 2 chunk (units)",
+  "Sleep Chunk - 1pk": "Space Chunk CBN 1 chunk (pcs)",
+  "Sleep Chunk - 2pk": "Space Chunk CBN 2 chunk (units)",
+  "Sugar Free MiNi's - 10pk": "Space Chunk SUGAR FREE 10pk (units)",
+  "Whoopie Hi": "RSO Whoopie Hi",
+  "Zuul Chunk - 2pk": "Space Chunk ZUUL OG 2 chunk (units)",
+  "Snackbar Vape - Cherry Pomegranate Lemon 2g": "Cherry 2g",
+  "Snackbar Vape - Grape Crush": "Grape 1g",
+  "Snackbar Vape - Lemon Yuzu": "Lemon 1g",
+  "Snackbar Vape - Mango Magic": "Mango 1g",
+  "Snackbar Vape - Peach Passion Fruit 2g": "Peach 2g",
+  "Snackbar Vape - Strawberry Dragonfruit 2g": "Strawberry 2g",
+  "Snackbar Vape - Watermelon Lychee 1g": "Watermelon 1g"
+};
+
+const chunkOnePackItems = [
+  "Space Chunk OG 1 chunk (pcs)",
+  "Space Chunk REX OG 1 chunk (units)",
+  "Space Chunk ZUUL OG 1 chunk (units)",
+  "Space Chunk 1 chunk CBD 50mg 1-1 (pcs)",
+  "Space Chunk CBN 1 chunk (pcs)"
+];
+const chunkTwoPackItems = [
+  "Space Chunk ALPHA OG 2 chunk (units)",
+  "Space Chunk REX OG 2 chunk (units)",
+  "Space Chunk ZUUL OG 2 chunk (units)",
+  "Space Chunks CBD 2 chunks 1-1 (units)",
+  "Space Chunk CBN 2 chunk (units)",
+  "Space Chunk SUGAR FREE 2pk (units)"
+];
+const chunkTenPackItems = [
+  "Space Chunk Mini 10 chunk (units)",
+  "Space Chunk SUGAR FREE 10pk (units)"
+];
+const shooterItems = [
+  "Shooters Triple Citrus",
+  "Shooters Sour Watermelon",
+  "Shooters Sour Blu Raz"
+];
+const sbVapeItems = [
+  "Grape 1g",
+  "Mango 1g",
+  "Lemon 1g",
+  "Watermelon 1g",
+  "Cherry 2g",
+  "Strawberry 2g",
+  "Peach 2g"
+];
+
+function makeCompletionRequirement(entries) {
+  return entries.reduce((requirements, [stepLabel, taskNames]) => {
+    const stepKey = batchChecklistStepKeys[stepLabel];
+    if (stepKey && taskNames.length) {
+      requirements[stepKey] = taskNames;
+    }
+    return requirements;
+  }, {});
+}
+
+function buildBatchCompletionRequirements() {
+  const requirements = new Map();
+  const add = (itemName, entries) => {
+    requirements.set(normalizeCompletionText(itemName), makeCompletionRequirement(entries));
+  };
+  const addMany = (items, entries) => items.forEach(itemName => add(itemName, entries));
+
+  addMany(["Daytime Focus Micro Pump", "Good Night Sleep Micro Pump"], [
+    ["Post Cooking Processing", ["FIlling (Slot Machine)", "Capping (Tinctures)"]],
+    ["Packaging", ["Packaging Product (Into CR Bag)"]],
+    ["Sealed", ["Sealing"]],
+    ["Counted", ["Counting (5's)", "Bagging (20's)"]]
+  ]);
+  addMany(["Main Squeeze Party Pouch", "RSO Whoopie Hi"], [
+    ["Cooking", ["Depositing (Beldos)"]],
+    ["Packaging", ["Packaging Product (Into CR Bag)"]],
+    ["Sealed", ["Sealing"]],
+    ["Counted", ["Counting (5's)", "Bagging (10's)"]]
+  ]);
+  add("Micro Dots (50-piece packs)", [
+    ["Post Cooking Processing", ["popping"]],
+    ["Packaging", ["Dots Popper Packing (50's)", "Packaging Product (Into CR Bag)"]],
+    ["Sealed", ["Sealing"]],
+    ["Counted", ["Counting (5's)", "Bagging (20's)"]]
+  ]);
+  addMany(chunkOnePackItems, [
+    ["Cooking", ["Depositing (truffly)", "Nerding"]],
+    ["Post Cooking Processing", ["Popping", "Sugaring"]],
+    ["Packaging", ["Packaging Gummies 1pk"]],
+    ["Sealed", ["Sealing"]],
+    ["Counted", ["Counting (5's)", "Bagging (20's)"]]
+  ]);
+  addMany(chunkTwoPackItems, [
+    ["Cooking", ["Depositing (truffly)", "Nerding"]],
+    ["Post Cooking Processing", ["Popping", "Sugaring"]],
+    ["Packaging", ["Packaging Gummies 2pk"]],
+    ["Sealed", ["Sealing"]],
+    ["Counted", ["Counting (5's)", "Bagging (20's)"]]
+  ]);
+  addMany(chunkTenPackItems, [
+    ["Cooking", ["Depositing (truffly)", "Nerding"]],
+    ["Post Cooking Processing", ["Popping", "Sugaring"]],
+    ["Packaging", ["Packaging Gummies 10pk"]],
+    ["Sealed", ["Sealing"]],
+    ["Counted", ["Counting (5's)", "Bagging (20's)"]]
+  ]);
+  addMany(shooterItems, [
+    ["Post Cooking Processing", ["Filling (Filling Machine)", "Capping (shooters)"]],
+    ["Sealed", ["Seal-Stickering (shooters)"]],
+    ["Counted", ["Bagging (10's)"]]
+  ]);
+  addMany(sbVapeItems, [
+    ["Post Cooking Processing", ["Filling (SB Vapes)", "Capping (SB Vapes)"]],
+    ["Packaging", ["SB Packaging & Sealing"]],
+    ["Sealed", ["SB Packaging & Sealing"]],
+    ["Counted", ["Counting (SB 5's)", "Bagging (SB 25's)"]]
+  ]);
+  add("Big Stick", [
+    ["Post Cooking Processing", ["Filling (Filling Machine)", "Capping (Topicals)"]],
+    ["Packaging", ["Packaging Product (Into CR Bag)"]],
+    ["Sealed", ["sealing"]],
+    ["Counted", ["Bagging (5's)"]]
+  ]);
+  add("Small Stick", [
+    ["Post Cooking Processing", ["Capping (Topicals)"]],
+    ["Packaging", ["Packaging Product (Into CR Bag)"]],
+    ["Sealed", ["sealing"]],
+    ["Counted", ["Counting (5's)", "Bagging (20's)"]]
+  ]);
+  add("Tiny Stick", [
+    ["Post Cooking Processing", ["Tiny Stick Filling (tray)", "Capping (Topicals)"]],
+    ["Packaging", ["Packaging Product (Into CR Bag)"]],
+    ["Sealed", ["sealing"]],
+    ["Counted", ["Counting (5's)", "Bagging (20's)"]]
+  ]);
+
+  return requirements;
+}
+
+function normalizeCompletionText(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+function getCompletionTaskAliases(taskName) {
+  const normalized = normalizeCompletionText(taskName);
+  const aliases = new Set([normalized]);
+  const addAliases = (...values) => values.forEach(value => aliases.add(normalizeCompletionText(value)));
+
+  if ([
+    "packaging product (into cr bag)",
+    "dots popper packing (50's)",
+    "packaging gummies 1pk",
+    "packaging gummies 2pk",
+    "packaging gummies 10pk"
+  ].includes(normalized)) {
+    addAliases("Packaging");
+  }
+
+  if (normalized === "sb packaging & sealing" || normalized === "sb sealing") {
+    addAliases("SB Packaging & Sealing", "SB Sealing");
+  }
+
+  return aliases;
+}
+
+const batchCompletionRequirementsByItem = buildBatchCompletionRequirements();
+
+function getCompletionItemName(batchItem) {
+  return productionBatchItemAliases[batchItem] || batchItem;
+}
+
+function getBatchFromSourceKey(payload, sourceBatchKey) {
+  if (!sourceBatchKey || typeof sourceBatchKey !== "string") return null;
+
+  const [batchType, rawIndex] = sourceBatchKey.split(":");
+  const batchIndex = Number.parseInt(rawIndex, 10);
+  if (!Number.isInteger(batchIndex) || batchIndex < 0) return null;
+
+  const batchList = batchType === "hijnx"
+    ? payload.batchHijnx
+    : batchType === "sb"
+      ? payload.batchSb
+      : null;
+
+  if (!Array.isArray(batchList)) return null;
+  return batchList[batchIndex] || null;
+}
+
+function taskHasAnyCompletionDate(task) {
+  return Array.isArray(task && task.completedDates) && task.completedDates.some(isIsoDate);
+}
+
+function getCompletedTaskAliasesForBatch(payload, sourceBatchKey) {
+  return (payload.processingTasks || [])
+    .filter(task => task && task.sourceBatchKey === sourceBatchKey && taskHasAnyCompletionDate(task))
+    .reduce((aliases, task) => {
+      getCompletionTaskAliases(task.text).forEach(alias => aliases.add(alias));
+      return aliases;
+    }, new Set());
+}
+
+function updateBatchCompletionFromTask(payload, task) {
+  if (!task || !task.sourceBatchKey) return;
+
+  const batch = getBatchFromSourceKey(payload, task.sourceBatchKey);
+  if (!batch || typeof batch !== "object") return;
+
+  const itemName = getCompletionItemName(String(batch.item || task.item || "").trim());
+  const requirements = batchCompletionRequirementsByItem.get(normalizeCompletionText(itemName));
+  if (!requirements) return;
+
+  const completedTaskAliases = getCompletedTaskAliasesForBatch(payload, task.sourceBatchKey);
+  const changedStepKeys = Object.entries(requirements)
+    .filter(([, requiredTasks]) => requiredTasks.some(requiredTask => getCompletionTaskAliases(requiredTask).has(normalizeCompletionText(task.text))))
+    .map(([stepKey]) => stepKey);
+
+  if (!changedStepKeys.length) return;
+
+  batch.checklist = batch.checklist && typeof batch.checklist === "object" ? batch.checklist : {};
+  changedStepKeys.forEach(stepKey => {
+    const requiredTasks = requirements[stepKey] || [];
+    batch.checklist[stepKey] = requiredTasks.every(requiredTask => {
+      const acceptableTasks = getCompletionTaskAliases(requiredTask);
+      return Array.from(acceptableTasks).some(alias => completedTaskAliases.has(alias));
+    });
+  });
+}
+
 function parseSchedulePayloadForCleanup(rawValue) {
   const empty = {
     batchHijnx: [],
@@ -841,6 +1095,9 @@ function setScheduleTaskCompletion(rawValue, taskType, taskIndex, activeDate, co
   }
 
   task.completedDates = Array.from(completedDates).sort();
+  if (taskType === "processingTasks") {
+    updateBatchCompletionFromTask(payload, task);
+  }
   return JSON.stringify(payload);
 }
 

@@ -914,6 +914,14 @@
       white-space: pre-line;
     }
 
+    .ordered-scroll-window {
+      max-height: min(460px, 48vh);
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding-right: 6px;
+      scrollbar-gutter: stable;
+    }
+
     .ordered-modal {
       position: fixed;
       inset: 0;
@@ -1439,6 +1447,11 @@
         display: grid;
       }
 
+      #orderedTab .ordered-scroll-window {
+        max-height: min(430px, 58vh);
+        padding-right: 0;
+      }
+
       #orderedTab .ordered-card > .request-form,
       #orderedTab .ordered-card > .request-actions,
       #orderedTab .ordered-card > .ordered-import-result,
@@ -1759,7 +1772,7 @@
           <h3>Received Deliveries</h3>
           <span id="receivedDeliveriesCount" class="ordered-section-count"></span>
         </div>
-        <div id="receivedDeliveries"></div>
+        <div id="receivedDeliveries" class="ordered-scroll-window"></div>
       </section>
     </div>
   </div>

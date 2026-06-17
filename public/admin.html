@@ -1159,6 +1159,13 @@
       display: grid;
       gap: 8px;
     }
+    .ordered-scroll-window {
+      max-height: min(460px, 48vh);
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding-right: 6px;
+      scrollbar-gutter: stable;
+    }
     .ordered-review-card {
       display: grid;
       grid-template-columns: minmax(260px, 1fr) minmax(210px, auto);
@@ -1621,6 +1628,10 @@
       }
       #orderedPanel .ordered-review-card {
         grid-template-columns: 1fr;
+      }
+      #orderedPanel .ordered-scroll-window {
+        max-height: min(430px, 58vh);
+        padding-right: 0;
       }
       #orderedPanel .ordered-review-actions {
         justify-content: stretch;
@@ -2140,7 +2151,7 @@
           <h3>Received Deliveries</h3>
           <span id="adminReceivedDeliveriesCount" class="ordered-section-count"></span>
         </div>
-        <div id="adminReceivedDeliveries"></div>
+        <div id="adminReceivedDeliveries" class="ordered-scroll-window"></div>
       </section>
     </div>
   </div>
