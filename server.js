@@ -992,7 +992,7 @@ function getCompletionItemName(batchItem) {
 function getBatchFromSourceKey(payload, sourceBatchKey) {
   if (!sourceBatchKey || typeof sourceBatchKey !== "string") return null;
 
-  const [batchType, rawIndex] = sourceBatchKey.split(":");
+  const [batchType, rawIndex] = getGeneratedSourceBatchBaseKey(sourceBatchKey).split(":");
   const batchIndex = Number.parseInt(rawIndex, 10);
   if (!Number.isInteger(batchIndex) || batchIndex < 0) return null;
 
@@ -1011,8 +1011,9 @@ function taskHasAnyCompletionDate(task) {
 }
 
 function getCompletedTaskAliasesForBatch(payload, sourceBatchKey) {
+  const baseSourceBatchKey = getGeneratedSourceBatchBaseKey(sourceBatchKey);
   return (payload.processingTasks || [])
-    .filter(task => task && task.sourceBatchKey === sourceBatchKey && taskHasAnyCompletionDate(task))
+    .filter(task => task && getGeneratedSourceBatchBaseKey(task.sourceBatchKey) === baseSourceBatchKey && taskHasAnyCompletionDate(task))
     .reduce((aliases, task) => {
       getCompletionTaskAliases(task.text).forEach(alias => aliases.add(alias));
       return aliases;
@@ -1126,14 +1127,21 @@ function normalizeCompletionFallbackTask(value, sourceDate) {
   };
 }
 
+function getGeneratedSourceBatchBaseKey(sourceBatchKey) {
+  const key = String(sourceBatchKey || "").trim();
+  const parts = key.split(":");
+  return parts.length >= 5 ? parts.slice(0, 3).join(":") : key;
+}
+
 function getCompletionTaskIdentities(task) {
   if (!task || !task.sourceBatchKey || !task.text) return [];
+  const sourceBatchKey = getGeneratedSourceBatchBaseKey(task.sourceBatchKey);
   const sourceTaskOrder = task.sourceTaskOrder === null || task.sourceTaskOrder === undefined
     ? ""
     : String(task.sourceTaskOrder);
   return [
-    `${task.sourceBatchKey}:${task.text}`,
-    `${task.sourceBatchKey}:${sourceTaskOrder}:${task.text}`
+    `${sourceBatchKey}:${task.text}`,
+    `${sourceBatchKey}:${sourceTaskOrder}:${task.text}`
   ];
 }
 
