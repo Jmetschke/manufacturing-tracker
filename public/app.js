@@ -692,7 +692,10 @@ function groupDailyTaskAssignments(tasks) {
   const groups = new Map();
 
   tasks.forEach(task => {
-    const key = `${task.taskType || ""}\n${task.sourceScheduleDate || ""}\n${task.sourceTaskIndex ?? ""}\n${task.sourceBatchKey || ""}\n${task.item || ""}\n${task.text}`;
+    const generatedTaskKey = task.taskType === "processingTasks" && task.sourceBatchKey
+      ? `${task.taskType}\n${task.sourceScheduleDate || ""}\n${task.sourceBatchKey}\n${task.item || ""}\n${task.text}`
+      : "";
+    const key = generatedTaskKey || `${task.taskType || ""}\n${task.sourceScheduleDate || ""}\n${task.sourceTaskIndex ?? ""}\n${task.sourceBatchKey || ""}\n${task.item || ""}\n${task.text}`;
     if (!groups.has(key)) {
       groups.set(key, {
         item: task.item || "",
@@ -717,7 +720,10 @@ function groupDailyTaskAssignments(tasks) {
     const group = groups.get(key);
     group.taskCount += 1;
     if (task.completed) group.completedCount += 1;
-    group.completed = group.completedCount === group.taskCount;
+    group.completed = group.completed || Boolean(task.completed);
+    if (task.completed && Number.isInteger(task.sourceTaskIndex)) {
+      group.sourceTaskIndex = task.sourceTaskIndex;
+    }
     if (task.hours) {
       group.assignedHours += task.hours;
     }

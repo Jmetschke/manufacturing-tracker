@@ -2,7 +2,7 @@
 // It is intentionally online-first and only caches static shell files/icons.
 // Database-backed API routes are not intercepted, so Render/Turso requests keep
 // using the live network path and do not serve stale production data.
-const PWA_CACHE_NAME = "production-tracker-static-v1";
+const PWA_CACHE_NAME = "production-tracker-static-v2";
 const STATIC_PATHS = new Set([
   "/",
   "/index.html",
@@ -10,6 +10,7 @@ const STATIC_PATHS = new Set([
   "/access.html",
   "/app.js",
   "/admin.js",
+  "/pwa-install.js",
   "/employees.js",
   "/dispensary-locations.js",
   "/manifest.json",

@@ -56,6 +56,16 @@
       color: #fff;
     }
 
+    .pwa-install-button {
+      border: 1px solid #5d9b45;
+      background: #5d9b45;
+    }
+
+    .pwa-install-button:disabled {
+      opacity: 0.7;
+      cursor: default;
+    }
+
     .tabs {
       display: flex;
       gap: 8px;
@@ -1526,6 +1536,7 @@
 <div class="page-header">
   <h2>Production Tracker</h2>
   <div class="header-actions">
+    <button class="screen-link pwa-install-button" type="button">How to Install</button>
     <a class="screen-link" href="https://delivery-schedele.onrender.com" target="_blank" rel="noopener">Delivery Schedule</a>
     <a class="screen-link" href="https://swag-inventory.onrender.com" target="_blank" rel="noopener">Swag Inventory</a>
     <a class="screen-link" href="/admin.html">Admin Dashboard</a>
@@ -1841,6 +1852,7 @@
 
 <script src="employees.js"></script>
 <script src="dispensary-locations.js"></script>
+<script src="pwa-install.js"></script>
 <script src="app.js"></script>
 
 </body>

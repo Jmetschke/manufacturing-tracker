@@ -30,6 +30,8 @@
       line-height: 1.2;
     }
     .screen-link:visited { color: #fff; }
+    .pwa-install-button { border-color: #5d9b45; background: #5d9b45; }
+    .pwa-install-button:disabled { opacity: 0.7; cursor: default; }
     .admin-tabs { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid #ccc; }
     .admin-tab-button { border: 0; border-bottom: 3px solid transparent; background: transparent; cursor: pointer; padding: 10px 14px; }
     .admin-tab-button.active { border-bottom-color: #2364aa; color: #123c69; font-weight: bold; }
@@ -1719,6 +1721,7 @@
 <div class="page-header">
   <h2>Admin Dashboard</h2>
   <div class="header-actions">
+    <button class="screen-link pwa-install-button" type="button">How to Install</button>
     <a class="screen-link" href="https://delivery-schedele.onrender.com" target="_blank" rel="noopener">Delivery Schedule</a>
     <a class="screen-link" href="https://swag-inventory.onrender.com" target="_blank" rel="noopener">Swag Inventory</a>
     <a class="screen-link" href="/">Production Tracker</a>
@@ -2220,6 +2223,7 @@
 
 <script src="employees.js"></script>
 <script src="dispensary-locations.js"></script>
+<script src="pwa-install.js"></script>
 <script src="admin.js"></script>
 
 </body>

@@ -145,6 +145,11 @@ app.get("/service-worker.js", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "service-worker.js"));
 });
 
+app.get("/pwa-install.js", (req, res) => {
+  res.type("application/javascript");
+  res.sendFile(path.join(__dirname, "public", "pwa-install.js"));
+});
+
 app.get(/^\/icons\/.+\.png$/, (req, res) => {
   res.sendFile(path.join(__dirname, "public", req.path));
 });
@@ -1121,18 +1126,23 @@ function normalizeCompletionFallbackTask(value, sourceDate) {
   };
 }
 
-function getCompletionTaskIdentity(task) {
-  if (!task || !task.sourceBatchKey || !task.text) return "";
+function getCompletionTaskIdentities(task) {
+  if (!task || !task.sourceBatchKey || !task.text) return [];
   const sourceTaskOrder = task.sourceTaskOrder === null || task.sourceTaskOrder === undefined
     ? ""
     : String(task.sourceTaskOrder);
-  return `${task.sourceBatchKey}:${sourceTaskOrder}:${task.text}`;
+  return [
+    `${task.sourceBatchKey}:${task.text}`,
+    `${task.sourceBatchKey}:${sourceTaskOrder}:${task.text}`
+  ];
 }
 
 function getCompletionTargetTask(taskList, taskType, taskIndex, fallbackTask) {
   if (taskType === "processingTasks" && fallbackTask) {
-    const fallbackIdentity = getCompletionTaskIdentity(fallbackTask);
-    const matchingTask = taskList.find(task => getCompletionTaskIdentity(task) === fallbackIdentity);
+    const fallbackIdentities = new Set(getCompletionTaskIdentities(fallbackTask));
+    const matchingTask = taskList.find(task =>
+      getCompletionTaskIdentities(task).some(identity => fallbackIdentities.has(identity))
+    );
     if (matchingTask && typeof matchingTask === "object") return matchingTask;
 
     taskList.push(fallbackTask);
