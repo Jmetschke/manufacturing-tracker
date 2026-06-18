@@ -1031,15 +1031,11 @@ function updateBatchCompletionFromTask(payload, task) {
   if (!requirements) return;
 
   const completedTaskAliases = getCompletedTaskAliasesForBatch(payload, task.sourceBatchKey);
-  const changedStepKeys = Object.entries(requirements)
-    .filter(([, requiredTasks]) => requiredTasks.some(requiredTask => getCompletionTaskAliases(requiredTask).has(normalizeCompletionText(task.text))))
-    .map(([stepKey]) => stepKey);
-
-  if (!changedStepKeys.length) return;
-
   batch.checklist = batch.checklist && typeof batch.checklist === "object" ? batch.checklist : {};
-  changedStepKeys.forEach(stepKey => {
-    const requiredTasks = requirements[stepKey] || [];
+  // Only document-backed production steps are auto-updated here. Manual-only
+  // checklist items, such as final Metrc count entry, stay user controlled.
+  Object.entries(requirements).forEach(([stepKey, requiredTasks]) => {
+    if (!requiredTasks.length) return;
     batch.checklist[stepKey] = requiredTasks.every(requiredTask => {
       const acceptableTasks = getCompletionTaskAliases(requiredTask);
       return Array.from(acceptableTasks).some(alias => completedTaskAliases.has(alias));
