@@ -1538,9 +1538,12 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
           const completedOnDate = taskWasCompletedOn(task, activeDateIso);
           const completedForBatch = generatedTaskWasCompleted(task, completedGeneratedTaskKeys);
           const isPastDay = activeDateIso < todayIso;
+          const isToday = activeDateIso === todayIso;
           const shouldShow = isPastDay
             ? completedOnDate
-            : completedOnDate || (batch && isBatchInProgress(batch) && !completedForBatch);
+            : isToday
+              ? completedOnDate || (batch && isBatchInProgress(batch) && !completedForBatch)
+              : completedOnDate;
 
           if (!shouldShow) continue;
           if (!activeSchedule.has(activeDateIso)) {
