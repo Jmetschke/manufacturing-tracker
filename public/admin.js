@@ -2037,6 +2037,7 @@ function groupDailyTaskAssignments(tasks) {
         people: new Map(),
         legacyDays: task.days || 1,
         completed: Boolean(task.completed),
+        completedAny: Boolean(task.completedAny),
         taskCount: 0,
         completedCount: 0
       });
@@ -2044,6 +2045,7 @@ function groupDailyTaskAssignments(tasks) {
 
     const group = groups.get(key);
     group.taskCount += 1;
+    group.completedAny = group.completedAny || Boolean(task.completedAny);
     if (task.completed) group.completedCount += 1;
     group.completed = group.completed || Boolean(task.completed);
     if (task.completed && Number.isInteger(task.sourceTaskIndex)) {
@@ -2084,6 +2086,7 @@ function createProjectedTask(task, row, taskType, taskIndex, activeDate, dayInde
     activeDate,
     dayIndex,
     completed: (task.completedDates || []).includes(activeDate),
+    completedAny: taskWasCompleted(task),
     ...overrides
   };
 }
@@ -2275,7 +2278,8 @@ function appendFocusLines(container, lines, formatLine, emptyText) {
 }
 
 function appendTaskFocusDetails(block, projectedTasks, emptyText) {
-  const groups = groupDailyTaskAssignments(projectedTasks);
+  const groups = groupDailyTaskAssignments(projectedTasks)
+    .filter(task => task.completed || !task.completedAny);
   if (!groups.length) {
     block.appendChild(createFocusEmpty(emptyText));
     return;
