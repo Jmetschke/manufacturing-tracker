@@ -1135,49 +1135,56 @@ function getCompletionTaskIdentities(task) {
   const sourceTaskOrder = task.sourceTaskOrder === null || task.sourceTaskOrder === undefined
     ? ""
     : String(task.sourceTaskOrder);
+  const sourceBatchLabel = String(task.sourceBatchLabel || "").trim();
+  const normalizedText = normalizeCompletionText(task.text);
   return [
     `${sourceBatchKey}:${task.text}`,
-    `${sourceBatchKey}:${sourceTaskOrder}:${task.text}`
-  ];
+    `${sourceBatchKey}:${sourceTaskOrder}:${task.text}`,
+    `batch:${sourceBatchKey}:order:${sourceTaskOrder}:text:${normalizedText}`,
+    sourceBatchLabel ? `label:${sourceBatchLabel}:order:${sourceTaskOrder}:text:${normalizedText}` : ""
+  ].filter(Boolean);
 }
 
-function getCompletionTargetTask(taskList, taskType, taskIndex, fallbackTask) {
-  if (taskType === "processingTasks" && fallbackTask) {
-    const fallbackIdentities = new Set(getCompletionTaskIdentities(fallbackTask));
-    const matchingTask = taskList.find(task =>
-      getCompletionTaskIdentities(task).some(identity => fallbackIdentities.has(identity))
-    );
-    if (matchingTask && typeof matchingTask === "object") return matchingTask;
-
-    taskList.push(fallbackTask);
-    return fallbackTask;
+function findCompletionTargetTasks(taskList, taskType, taskIndex, fallbackTask) {
+  if (taskType !== "processingTasks" || !fallbackTask) {
+    const task = taskList[taskIndex];
+    return task && typeof task === "object" ? [task] : [];
   }
 
-  const task = taskList[taskIndex];
-  return task && typeof task === "object" ? task : null;
+  const fallbackIdentities = new Set(getCompletionTaskIdentities(fallbackTask));
+  const matchingTasks = taskList.filter(task =>
+    getCompletionTaskIdentities(task).some(identity => fallbackIdentities.has(identity))
+  );
+
+  if (matchingTasks.length) return matchingTasks;
+
+  taskList.push(fallbackTask);
+  return [fallbackTask];
 }
 
 function setScheduleTaskCompletion(rawValue, taskType, taskIndex, activeDate, completed, fallbackTask = null) {
   const payload = parseSchedulePayloadForCleanup(rawValue);
   const taskList = taskType === "processingTasks" ? payload.processingTasks : payload.tasks;
-  const task = getCompletionTargetTask(taskList, taskType, taskIndex, fallbackTask);
-  if (!task) return null;
+  const targetTasks = findCompletionTargetTasks(taskList, taskType, taskIndex, fallbackTask);
+  if (!targetTasks.length) return null;
 
-  const completedDates = new Set(
-    Array.isArray(task.completedDates)
-      ? task.completedDates.filter(isIsoDate)
-      : []
-  );
+  targetTasks.forEach(task => {
+    const completedDates = new Set(
+      Array.isArray(task.completedDates)
+        ? task.completedDates.filter(isIsoDate)
+        : []
+    );
 
-  if (completed) {
-    completedDates.add(activeDate);
-  } else {
-    completedDates.delete(activeDate);
-  }
+    if (completed) {
+      completedDates.add(activeDate);
+    } else {
+      completedDates.delete(activeDate);
+    }
 
-  task.completedDates = Array.from(completedDates).sort();
+    task.completedDates = Array.from(completedDates).sort();
+  });
   if (taskType === "processingTasks") {
-    updateBatchCompletionFromTask(payload, task);
+    updateBatchCompletionFromTask(payload, targetTasks[0]);
   }
   return JSON.stringify(payload);
 }
