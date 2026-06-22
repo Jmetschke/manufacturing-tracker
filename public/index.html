@@ -141,6 +141,95 @@
       font-weight: bold;
     }
 
+    .ph-calculator {
+      display: grid;
+      gap: 18px;
+      max-width: 1120px;
+    }
+
+    .ph-calculator-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: end;
+      gap: 12px;
+    }
+
+    .ph-calculator-header h3 {
+      margin: 0;
+    }
+
+    .ph-calculator-note {
+      color: #555;
+      line-height: 1.4;
+      margin: 4px 0 0;
+      max-width: 720px;
+    }
+
+    .ph-calculator-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .ph-table-wrap {
+      overflow-x: auto;
+      width: 100%;
+    }
+
+    .ph-table {
+      min-width: 760px;
+    }
+
+    .ph-table input {
+      width: 100%;
+      margin: 0;
+    }
+
+    .ph-table .number-cell,
+    .ph-result-value {
+      font-weight: bold;
+      text-align: right;
+    }
+
+    .ph-table .formula-cell {
+      color: #555;
+      font-size: 0.92rem;
+    }
+
+    .ph-section {
+      border: 1px solid #d8d8d2;
+      background: #fff;
+      padding: 14px;
+    }
+
+    .ph-section h4 {
+      margin: 0 0 8px;
+    }
+
+    .ph-result-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 10px;
+    }
+
+    .ph-result {
+      border-left: 4px solid #2364aa;
+      background: #eef5fb;
+      padding: 10px;
+    }
+
+    .ph-result.low {
+      border-left-color: #5d9b45;
+      background: #eef8f0;
+    }
+
+    .ph-result-label {
+      color: #44505a;
+      font-size: 0.9rem;
+      margin-bottom: 4px;
+    }
+
     .schedule-header {
       display: flex;
       flex-wrap: wrap;
@@ -1059,7 +1148,8 @@
       .entry-fields,
       .timer-actions,
       .finish-entry-fields,
-      .calculator-actions {
+      .calculator-actions,
+      .ph-calculator-actions {
         flex-direction: column;
         gap: 10px;
       }
@@ -1072,6 +1162,7 @@
       .finish-entry-fields input,
       .finish-entry-fields button,
       .calculator-actions button,
+      .ph-calculator-actions button,
       .request-actions button {
         width: 100%;
         margin-left: 0;
@@ -1096,7 +1187,8 @@
       .timer-actions button,
       .finish-entry-fields input,
       .finish-entry-fields button,
-      .calculator-actions button {
+      .calculator-actions button,
+      .ph-calculator-actions button {
         flex: none;
       }
 
@@ -1291,6 +1383,26 @@
 
       .calc-total {
         font-size: 1.4rem;
+      }
+
+      .ph-calculator-header {
+        display: block;
+      }
+
+      .ph-section {
+        padding: 12px;
+      }
+
+      .ph-table {
+        min-width: 0;
+      }
+
+      .ph-table.mobile-stack td {
+        align-items: flex-start;
+      }
+
+      .ph-table.mobile-stack td::before {
+        flex-basis: 44%;
       }
 
       .weekly-task-item,
@@ -1546,6 +1658,7 @@
 <div class="tabs">
   <button class="tab-button active" type="button" onclick="showTab('tracker')">Timer</button>
   <button class="tab-button" type="button" onclick="showTab('calculator')">Qty Calculator</button>
+  <button class="tab-button" type="button" onclick="showTab('phCalculator')">Shooters pH Calculator</button>
   <button class="tab-button" type="button" onclick="showTab('schedule')">Schedule</button>
   <button class="tab-button" type="button" onclick="showTab('daily')">Daily Report</button>
   <button class="tab-button" type="button" onclick="showTab('ordered')">Ordered Items</button>
@@ -1630,6 +1743,112 @@
   </datalist>
 
   <div class="calc-total">Total Qty: <span id="calcGrandTotal">0</span></div>
+</section>
+
+<section id="phCalculatorTab" class="tab-panel">
+  <div class="ph-calculator">
+    <div class="ph-calculator-header">
+      <div>
+        <h3>Shooters pH Calculator</h3>
+        <p class="ph-calculator-note">Use a 100g shooter test sample to find the correction amount, then scale that pH adjustment solution to the full batch size.</p>
+      </div>
+      <div class="ph-calculator-actions">
+        <button type="button" onclick="resetShooterPhCalculator()">Reset Defaults</button>
+      </div>
+    </div>
+
+    <section class="ph-section">
+      <h4>Batch Adjustment Formula</h4>
+      <div class="ph-table-wrap">
+        <table class="ph-table mobile-stack">
+          <thead>
+            <tr>
+              <th>pH Result</th>
+              <th>Adjustment Solution</th>
+              <th>Batch Size (g)</th>
+              <th>Solution Added to 100g (g)</th>
+              <th>Math</th>
+              <th>Sized Batch Addition (g)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td data-label="pH Result">If pH is Too High</td>
+              <td data-label="Adjustment Solution">Citric Acid Solution</td>
+              <td data-label="Batch Size (g)">
+                <input type="number" id="phHighBatchSize" min="0" step="0.1" value="90091.5" inputmode="decimal">
+              </td>
+              <td data-label="Solution Added to 100g (g)">
+                <input type="number" id="phHighSolutionAdded" min="0" step="0.01" value="0" inputmode="decimal">
+              </td>
+              <td data-label="Math" class="formula-cell">Batch Size / 100 * Test Addition</td>
+              <td data-label="Sized Batch Addition (g)" id="phHighBatchAddition" class="number-cell">0 g</td>
+            </tr>
+            <tr>
+              <td data-label="pH Result">If pH is Too Low</td>
+              <td data-label="Adjustment Solution">Sodium Citrate Solution</td>
+              <td data-label="Batch Size (g)">
+                <input type="number" id="phLowBatchSize" min="0" step="0.1" value="90091.5" inputmode="decimal">
+              </td>
+              <td data-label="Solution Added to 100g (g)">
+                <input type="number" id="phLowSolutionAdded" min="0" step="0.01" value="0" inputmode="decimal">
+              </td>
+              <td data-label="Math" class="formula-cell">Batch Size / 100 * Test Addition</td>
+              <td data-label="Sized Batch Addition (g)" id="phLowBatchAddition" class="number-cell">0 g</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="ph-section">
+      <h4>Adjustment Solution Ingredients</h4>
+      <div class="ph-table-wrap">
+        <table class="ph-table mobile-stack">
+          <thead>
+            <tr>
+              <th>Solution</th>
+              <th>Desired Batch Size (g)</th>
+              <th>Water (90%)</th>
+              <th>Active Ingredient (10%)</th>
+              <th>Formula</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td data-label="Solution">Citric Acid Solution</td>
+              <td data-label="Desired Batch Size (g)">
+                <input type="number" id="phCitricSolutionSize" min="0" step="0.1" value="1200" inputmode="decimal">
+              </td>
+              <td data-label="Water (90%)" id="phCitricWater" class="number-cell">1,080 g</td>
+              <td data-label="Active Ingredient (10%)" id="phCitricIngredient" class="number-cell">120 g Citric Acid</td>
+              <td data-label="Formula" class="formula-cell">Water = size * 0.9; Citric Acid = size * 0.1</td>
+            </tr>
+            <tr>
+              <td data-label="Solution">Sodium Citrate Solution</td>
+              <td data-label="Desired Batch Size (g)">
+                <input type="number" id="phCitrateSolutionSize" min="0" step="0.1" value="1200" inputmode="decimal">
+              </td>
+              <td data-label="Water (90%)" id="phCitrateWater" class="number-cell">1,080 g</td>
+              <td data-label="Active Ingredient (10%)" id="phCitrateIngredient" class="number-cell">120 g Sodium Citrate</td>
+              <td data-label="Formula" class="formula-cell">Water = size * 0.9; Sodium Citrate = size * 0.1</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="ph-result-grid">
+      <div class="ph-result">
+        <div class="ph-result-label">Too High pH Correction</div>
+        <div id="phHighSummary" class="ph-result-value">Add 0 g Citric Acid Solution</div>
+      </div>
+      <div class="ph-result low">
+        <div class="ph-result-label">Too Low pH Correction</div>
+        <div id="phLowSummary" class="ph-result-value">Add 0 g Sodium Citrate Solution</div>
+      </div>
+    </div>
+  </div>
 </section>
 
 <section id="scheduleTab" class="tab-panel">

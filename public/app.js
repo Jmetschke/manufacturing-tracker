@@ -1740,6 +1740,7 @@ async function load() {
   resetManualReceivedForm();
   setupTimeInput("manual_received_time");
   addCalcRow();
+  setupShooterPhCalculator();
   await restorePendingTimer();
   updateTimerWorkflowUI();
 }
@@ -1747,6 +1748,7 @@ async function load() {
 function showTab(tabName) {
   const trackerTab = document.getElementById("trackerTab");
   const calculatorTab = document.getElementById("calculatorTab");
+  const phCalculatorTab = document.getElementById("phCalculatorTab");
   const scheduleTab = document.getElementById("scheduleTab");
   const dailyTab = document.getElementById("dailyTab");
   const orderedTab = document.getElementById("orderedTab");
@@ -1757,6 +1759,7 @@ function showTab(tabName) {
 
   trackerTab.classList.toggle("active", tabName === "tracker");
   calculatorTab.classList.toggle("active", tabName === "calculator");
+  phCalculatorTab.classList.toggle("active", tabName === "phCalculator");
   scheduleTab.classList.toggle("active", tabName === "schedule");
   dailyTab.classList.toggle("active", tabName === "daily");
   orderedTab.classList.toggle("active", tabName === "ordered");
@@ -1765,6 +1768,7 @@ function showTab(tabName) {
     const labels = {
       tracker: "Timer",
       calculator: "Qty Calculator",
+      phCalculator: "Shooters pH Calculator",
       schedule: "Schedule",
       daily: "Daily Report",
       ordered: "Ordered Items"
@@ -1787,6 +1791,85 @@ function showTab(tabName) {
     loadOrderedTab();
   }
 
+}
+
+function getNumericInputValue(id) {
+  const input = document.getElementById(id);
+  if (!input) return 0;
+  const value = Number(input.value);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function formatGramValue(value) {
+  const number = Number.isFinite(value) ? value : 0;
+  const rounded = Math.round(number * 100) / 100;
+  return `${rounded.toLocaleString(undefined, { maximumFractionDigits: 2 })} g`;
+}
+
+function setText(id, value) {
+  const element = document.getElementById(id);
+  if (element) element.textContent = value;
+}
+
+function calculateScaledPhAddition(batchSize, solutionAddedTo100g) {
+  return (batchSize / 100) * solutionAddedTo100g;
+}
+
+function updateShooterPhCalculator() {
+  const highAddition = calculateScaledPhAddition(
+    getNumericInputValue("phHighBatchSize"),
+    getNumericInputValue("phHighSolutionAdded")
+  );
+  const lowAddition = calculateScaledPhAddition(
+    getNumericInputValue("phLowBatchSize"),
+    getNumericInputValue("phLowSolutionAdded")
+  );
+  const citricSolutionSize = getNumericInputValue("phCitricSolutionSize");
+  const citrateSolutionSize = getNumericInputValue("phCitrateSolutionSize");
+
+  setText("phHighBatchAddition", formatGramValue(highAddition));
+  setText("phLowBatchAddition", formatGramValue(lowAddition));
+  setText("phHighSummary", `Add ${formatGramValue(highAddition)} Citric Acid Solution`);
+  setText("phLowSummary", `Add ${formatGramValue(lowAddition)} Sodium Citrate Solution`);
+
+  setText("phCitricWater", formatGramValue(citricSolutionSize * 0.9));
+  setText("phCitricIngredient", `${formatGramValue(citricSolutionSize * 0.1)} Citric Acid`);
+  setText("phCitrateWater", formatGramValue(citrateSolutionSize * 0.9));
+  setText("phCitrateIngredient", `${formatGramValue(citrateSolutionSize * 0.1)} Sodium Citrate`);
+}
+
+function setupShooterPhCalculator() {
+  [
+    "phHighBatchSize",
+    "phHighSolutionAdded",
+    "phLowBatchSize",
+    "phLowSolutionAdded",
+    "phCitricSolutionSize",
+    "phCitrateSolutionSize"
+  ].forEach(id => {
+    const input = document.getElementById(id);
+    if (input) input.addEventListener("input", updateShooterPhCalculator);
+  });
+
+  updateShooterPhCalculator();
+}
+
+function resetShooterPhCalculator() {
+  const defaults = {
+    phHighBatchSize: "90091.5",
+    phHighSolutionAdded: "0",
+    phLowBatchSize: "90091.5",
+    phLowSolutionAdded: "0",
+    phCitricSolutionSize: "1200",
+    phCitrateSolutionSize: "1200"
+  };
+
+  Object.entries(defaults).forEach(([id, value]) => {
+    const input = document.getElementById(id);
+    if (input) input.value = value;
+  });
+
+  updateShooterPhCalculator();
 }
 
 function createBulkTypeSelect() {
