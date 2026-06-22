@@ -5077,13 +5077,24 @@ function readAdminOrderedImageFileAsDataUrl(file, maxSize = 1200, quality = 0.78
       return;
     }
 
-    if (!file.type.startsWith("image/")) {
+    const fileName = file.name || "";
+    const supportedExtension = /\.(png|jpe?g|webp|gif|heic|heif)$/i.test(fileName);
+    if (!file.type.startsWith("image/") && !supportedExtension) {
       reject(new Error("Only image files can be uploaded."));
       return;
     }
 
     const reader = new FileReader();
     reader.onload = () => {
+      let originalDataUrl = String(reader.result || "");
+      const extensionMime = fileName.match(/\.heic$/i)
+        ? "image/heic"
+        : fileName.match(/\.heif$/i)
+          ? "image/heif"
+          : "";
+      if (extensionMime && !originalDataUrl.startsWith("data:image/")) {
+        originalDataUrl = originalDataUrl.replace(/^data:[^;,]*;base64,/, `data:${extensionMime};base64,`);
+      }
       const image = new Image();
       image.onload = () => {
         const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
@@ -5094,8 +5105,8 @@ function readAdminOrderedImageFileAsDataUrl(file, maxSize = 1200, quality = 0.78
         context.drawImage(image, 0, 0, canvas.width, canvas.height);
         resolve(canvas.toDataURL("image/jpeg", quality));
       };
-      image.onerror = () => reject(new Error("Could not read one of the selected images."));
-      image.src = reader.result;
+      image.onerror = () => resolve(originalDataUrl);
+      image.src = originalDataUrl;
     };
     reader.onerror = () => reject(new Error("Could not read one of the selected images."));
     reader.readAsDataURL(file);
@@ -5125,7 +5136,14 @@ function appendAdminOrderedImageList(container, item) {
     const image = document.createElement("img");
     image.src = src;
     image.alt = `Received image ${index + 1}`;
+    const fallbackLabel = document.createElement("span");
+    fallbackLabel.textContent = `Image ${index + 1}`;
+    image.addEventListener("error", () => {
+      image.hidden = true;
+      fallbackLabel.style.display = "block";
+    });
     button.appendChild(image);
+    button.appendChild(fallbackLabel);
     list.appendChild(button);
   });
 
@@ -5820,12 +5838,12 @@ function showAdminReceiveForm(itemId, cell, checkbox) {
 
   const imageOne = document.createElement("input");
   imageOne.type = "file";
-  imageOne.accept = "image/*";
+  imageOne.accept = "image/*,.heic,.heif";
   imageWrap.appendChild(imageOne);
 
   const imageTwo = document.createElement("input");
   imageTwo.type = "file";
-  imageTwo.accept = "image/*";
+  imageTwo.accept = "image/*,.heic,.heif";
   imageWrap.appendChild(imageTwo);
   form.appendChild(imageWrap);
 

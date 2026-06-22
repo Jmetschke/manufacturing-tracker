@@ -990,6 +990,15 @@
       object-fit: cover;
     }
 
+    .ordered-image-list span {
+      display: none;
+      min-width: 56px;
+      color: #444;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-align: center;
+    }
+
     .ordered-image-focus-window {
       width: min(980px, 100%);
     }
@@ -2228,11 +2237,11 @@
         </div>
         <div class="request-field">
           <label for="manual_received_image_1">Image 1</label>
-          <input type="file" id="manual_received_image_1" accept="image/*">
+          <input type="file" id="manual_received_image_1" accept="image/*,.heic,.heif">
         </div>
         <div class="request-field">
           <label for="manual_received_image_2">Image 2</label>
-          <input type="file" id="manual_received_image_2" accept="image/*">
+          <input type="file" id="manual_received_image_2" accept="image/*,.heic,.heif">
         </div>
       </div>
       <div class="request-actions">

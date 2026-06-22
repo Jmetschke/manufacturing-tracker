@@ -9,7 +9,7 @@ const calendarDb = db.calendar || db;
 const hasSeparateCalendarDb = calendarDb !== db;
 const app = express();
 
-app.use(express.json({ limit: "8mb" }));
+app.use(express.json({ limit: "14mb" }));
 
 const PORT = process.env.PORT || 3000;
 const ACCESS_CODE = process.env.ACCESS_CODE || "5838";
@@ -1765,13 +1765,13 @@ function normalizeOptionalText(value, maxLength = 2000) {
 function normalizeOrderedItemImage(value) {
   const image = String(value || "").trim();
   if (!image) return null;
-  if (!/^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/i.test(image)) {
-    const err = new Error("Images must be PNG, JPG, or WebP files");
+  if (!/^data:image\/(png|jpeg|jpg|webp|gif|heic|heif);base64,[A-Za-z0-9+/=]+$/i.test(image)) {
+    const err = new Error("Images must be PNG, JPG, WebP, GIF, HEIC, or HEIF files");
     err.statusCode = 400;
     throw err;
   }
-  if (image.length > 1500000) {
-    const err = new Error("Each image must be under about 1.5 MB after compression");
+  if (image.length > 5000000) {
+    const err = new Error("Each image must be under about 5 MB");
     err.statusCode = 400;
     throw err;
   }
