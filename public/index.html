@@ -959,6 +959,65 @@
       min-width: 0;
     }
 
+    .receive-row textarea,
+    .ordered-edit-form textarea {
+      flex: 1 1 100%;
+      min-height: 72px;
+      resize: vertical;
+    }
+
+    .ordered-image-inputs,
+    .ordered-image-list {
+      display: flex;
+      flex: 1 1 100%;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .ordered-image-list a {
+      display: inline-flex;
+      border: 1px solid #d8d8d2;
+      background: #fff;
+      padding: 3px;
+    }
+
+    .ordered-image-list img {
+      display: block;
+      width: 72px;
+      height: 72px;
+      object-fit: cover;
+    }
+
+    .ordered-edit-form {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid #d8d8d2;
+      background: #fafafa;
+    }
+
+    .ordered-edit-form label {
+      display: grid;
+      gap: 4px;
+      font-weight: 700;
+    }
+
+    .ordered-edit-form label span {
+      color: #555;
+      font-size: 0.82rem;
+      text-transform: uppercase;
+    }
+
+    .ordered-edit-actions {
+      display: flex;
+      grid-column: 1 / -1;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
     .receive-toggle {
       display: inline-flex;
       align-items: center;
@@ -2149,6 +2208,18 @@
         <div class="request-field">
           <label for="manual_received_location">Received Location</label>
           <input type="text" id="manual_received_location" required>
+        </div>
+        <div class="request-field">
+          <label for="manual_received_notes">Notes</label>
+          <textarea id="manual_received_notes"></textarea>
+        </div>
+        <div class="request-field">
+          <label for="manual_received_image_1">Image 1</label>
+          <input type="file" id="manual_received_image_1" accept="image/*">
+        </div>
+        <div class="request-field">
+          <label for="manual_received_image_2">Image 2</label>
+          <input type="file" id="manual_received_image_2" accept="image/*">
         </div>
       </div>
       <div class="request-actions">

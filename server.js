@@ -9,7 +9,7 @@ const calendarDb = db.calendar || db;
 const hasSeparateCalendarDb = calendarDb !== db;
 const app = express();
 
-app.use(express.json());
+app.use(express.json({ limit: "8mb" }));
 
 const PORT = process.env.PORT || 3000;
 const ACCESS_CODE = process.env.ACCESS_CODE || "5838";
@@ -1356,6 +1356,9 @@ async function initializeDatabase() {
       received_date TEXT,
       received_time TEXT,
       received_location TEXT,
+      received_notes TEXT,
+      received_image_1 TEXT,
+      received_image_2 TEXT,
       import_needs_delivery_date INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
@@ -1417,6 +1420,9 @@ async function initializeDatabase() {
   await addMissingColumn("ordered_items", "received_date", "TEXT");
   await addMissingColumn("ordered_items", "received_time", "TEXT");
   await addMissingColumn("ordered_items", "received_location", "TEXT");
+  await addMissingColumn("ordered_items", "received_notes", "TEXT");
+  await addMissingColumn("ordered_items", "received_image_1", "TEXT");
+  await addMissingColumn("ordered_items", "received_image_2", "TEXT");
   await addMissingColumn("ordered_items", "import_needs_delivery_date", "INTEGER DEFAULT 0");
   await addMissingColumn("ordered_items", "created_at", "TEXT");
   await addMissingColumn("ordered_items", "updated_at", "TEXT");
@@ -1732,6 +1738,9 @@ function orderedItemsSelect(whereClause = "") {
       received_date,
       received_time,
       received_location,
+      received_notes,
+      received_image_1,
+      received_image_2,
       COALESCE(import_needs_delivery_date, 0) AS import_needs_delivery_date,
       created_at,
       updated_at
@@ -1747,6 +1756,33 @@ function orderedItemsSelect(whereClause = "") {
 
 function normalizeRequiredText(value) {
   return String(value || "").trim();
+}
+
+function normalizeOptionalText(value, maxLength = 2000) {
+  return String(value || "").trim().slice(0, maxLength);
+}
+
+function normalizeOrderedItemImage(value) {
+  const image = String(value || "").trim();
+  if (!image) return null;
+  if (!/^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/i.test(image)) {
+    const err = new Error("Images must be PNG, JPG, or WebP files");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (image.length > 1500000) {
+    const err = new Error("Each image must be under about 1.5 MB after compression");
+    err.statusCode = 400;
+    throw err;
+  }
+  return image;
+}
+
+function normalizeOrderedItemImages(body) {
+  return [
+    normalizeOrderedItemImage(body.received_image_1),
+    normalizeOrderedItemImage(body.received_image_2)
+  ];
 }
 
 function decodePdfString(value) {
@@ -2607,6 +2643,69 @@ app.post("/admin/ordered-items", async (req, res) => {
   }
 });
 
+app.put("/ordered-items/:id", (req, res) => {
+  const itemId = Number(req.params.id);
+  const dateOrdered = normalizeRequiredText(req.body.date_ordered);
+  const expectedDeliveryDate = normalizeRequiredText(req.body.expected_delivery_date);
+  const itemName = normalizeRequiredText(req.body.item_name);
+  const itemCompany = normalizeRequiredText(req.body.item_company) || "Manual Entry";
+  const itemSupplier = normalizeRequiredText(req.body.item_supplier);
+  const department = normalizeRequiredText(req.body.department);
+  const packageQty = Number(req.body.package_qty);
+  const unitsPerPackageRaw = normalizeRequiredText(req.body.units_per_package);
+  const unitsPerPackage = unitsPerPackageRaw ? Number(unitsPerPackageRaw) : null;
+
+  if (!Number.isInteger(itemId) || itemId <= 0) {
+    return res.status(400).send("Valid ordered item id is required");
+  }
+
+  if (!isIsoDate(dateOrdered) || !isIsoDate(expectedDeliveryDate)) {
+    return res.status(400).send("Valid ordered and expected delivery dates are required");
+  }
+
+  if (!itemName || !itemSupplier || !department) {
+    return res.status(400).send("Item name, supplier, and department are required");
+  }
+
+  if (!Number.isInteger(packageQty) || packageQty < 0) {
+    return res.status(400).send("Package QTY must be a whole number zero or greater");
+  }
+
+  if (unitsPerPackage !== null && (!Number.isInteger(unitsPerPackage) || unitsPerPackage < 0)) {
+    return res.status(400).send("Units per package must be a whole number zero or greater");
+  }
+
+  db.run(
+    `UPDATE ordered_items
+     SET date_ordered = ?,
+         expected_delivery_date = ?,
+         item_name = ?,
+         item_company = ?,
+         package_qty = ?,
+         units_per_package = ?,
+         item_supplier = ?,
+         department = ?,
+         updated_at = datetime('now')
+     WHERE id = ?`,
+    [
+      dateOrdered,
+      expectedDeliveryDate,
+      itemName,
+      itemCompany,
+      packageQty,
+      unitsPerPackage,
+      itemSupplier,
+      department,
+      itemId
+    ],
+    function (err) {
+      if (err) return res.status(500).send(err.message);
+      if (this.changes === 0) return res.status(404).send("Ordered item not found");
+      res.json({ message: "Ordered item updated" });
+    }
+  );
+});
+
 async function importOrderedItemsPdf(req, res) {
   const department = normalizeRequiredText(req.query.department || req.headers["x-order-department"]);
 
@@ -2757,9 +2856,17 @@ app.post("/ordered-items/received", (req, res) => {
   const receivedDate = normalizeRequiredText(req.body.received_date);
   const receivedTime = normalizeRequiredText(req.body.received_time);
   const receivedLocation = normalizeRequiredText(req.body.received_location);
+  const receivedNotes = normalizeOptionalText(req.body.received_notes);
   const packageQty = Number(req.body.package_qty);
   const unitsPerPackageRaw = normalizeRequiredText(req.body.units_per_package);
   const unitsPerPackage = unitsPerPackageRaw ? Number(unitsPerPackageRaw) : null;
+  let receivedImages;
+
+  try {
+    receivedImages = normalizeOrderedItemImages(req.body);
+  } catch (err) {
+    return res.status(err.statusCode || 400).send(err.message);
+  }
 
   if (!isIsoDate(dateOrdered) || !isIsoDate(expectedDeliveryDate) || !isIsoDate(receivedDate)) {
     return res.status(400).send("Valid ordered, expected delivery, and received dates are required");
@@ -2795,9 +2902,12 @@ app.post("/ordered-items/received", (req, res) => {
        received_date,
        received_time,
        received_location,
+       received_notes,
+       received_image_1,
+       received_image_2,
        updated_at
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
     [
       dateOrdered,
       expectedDeliveryDate,
@@ -2810,7 +2920,10 @@ app.post("/ordered-items/received", (req, res) => {
       itemCompany,
       receivedDate,
       receivedTime || null,
-      receivedLocation
+      receivedLocation,
+      receivedNotes || null,
+      receivedImages[0],
+      receivedImages[1]
     ],
     function (err) {
       if (err) return res.status(500).send(err.message);
@@ -2823,6 +2936,14 @@ app.put("/ordered-items/:id/receive", (req, res) => {
   const receivedDate = normalizeRequiredText(req.body.received_date);
   const receivedTime = normalizeRequiredText(req.body.received_time);
   const receivedLocation = normalizeRequiredText(req.body.received_location);
+  const receivedNotes = normalizeOptionalText(req.body.received_notes);
+  let receivedImages;
+
+  try {
+    receivedImages = normalizeOrderedItemImages(req.body);
+  } catch (err) {
+    return res.status(err.statusCode || 400).send(err.message);
+  }
 
   if (!isIsoDate(receivedDate)) {
     return res.status(400).send("Valid received date is required");
@@ -2841,10 +2962,13 @@ app.put("/ordered-items/:id/receive", (req, res) => {
      SET received_date = ?,
          received_time = ?,
          received_location = ?,
+         received_notes = ?,
+         received_image_1 = ?,
+         received_image_2 = ?,
          import_needs_delivery_date = 0,
          updated_at = datetime('now')
      WHERE id = ?`,
-    [receivedDate, receivedTime || null, receivedLocation, req.params.id],
+    [receivedDate, receivedTime || null, receivedLocation, receivedNotes || null, receivedImages[0], receivedImages[1], req.params.id],
     function (err) {
       if (err) return res.status(500).send(err.message);
       if (this.changes === 0) return res.status(404).send("Ordered item not found");
@@ -2859,6 +2983,9 @@ app.put("/ordered-items/:id/undo-receive", (req, res) => {
      SET received_date = NULL,
          received_time = NULL,
          received_location = NULL,
+         received_notes = NULL,
+         received_image_1 = NULL,
+         received_image_2 = NULL,
          updated_at = datetime('now')
      WHERE id = ?`,
     [req.params.id],

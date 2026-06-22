@@ -2626,6 +2626,72 @@ function resetManualReceivedForm() {
   document.getElementById("manual_received_date").value = today;
   document.getElementById("manual_received_time").value = "";
   document.getElementById("manual_received_location").value = "";
+  document.getElementById("manual_received_notes").value = "";
+  document.getElementById("manual_received_image_1").value = "";
+  document.getElementById("manual_received_image_2").value = "";
+}
+
+function readImageFileAsDataUrl(file, maxSize = 1200, quality = 0.78) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      resolve("");
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      reject(new Error("Only image files can be uploaded."));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const image = new Image();
+      image.onload = () => {
+        const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      image.onerror = () => reject(new Error("Could not read one of the selected images."));
+      image.src = reader.result;
+    };
+    reader.onerror = () => reject(new Error("Could not read one of the selected images."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function getOrderedReceiveImagesFromInputs(firstInput, secondInput) {
+  return {
+    received_image_1: await readImageFileAsDataUrl(firstInput && firstInput.files ? firstInput.files[0] : null),
+    received_image_2: await readImageFileAsDataUrl(secondInput && secondInput.files ? secondInput.files[0] : null)
+  };
+}
+
+function appendOrderedImageList(container, item) {
+  const images = [item.received_image_1, item.received_image_2].filter(Boolean);
+  if (!images.length) return;
+
+  const list = document.createElement("div");
+  list.className = "ordered-image-list";
+
+  images.forEach((src, index) => {
+    const link = document.createElement("a");
+    link.href = src;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.setAttribute("aria-label", `Open received image ${index + 1}`);
+
+    const image = document.createElement("img");
+    image.src = src;
+    image.alt = `Received image ${index + 1}`;
+    link.appendChild(image);
+    list.appendChild(link);
+  });
+
+  container.appendChild(list);
 }
 
 function openManualReceivedWindow() {
@@ -2704,6 +2770,17 @@ async function saveManualReceivedItem() {
     return;
   }
 
+  let receivedImages;
+  try {
+    receivedImages = await getOrderedReceiveImagesFromInputs(
+      document.getElementById("manual_received_image_1"),
+      document.getElementById("manual_received_image_2")
+    );
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+
   const payload = {
     date_ordered: document.getElementById("manual_received_date_ordered").value,
     expected_delivery_date: document.getElementById("manual_received_expected_delivery_date").value,
@@ -2714,7 +2791,9 @@ async function saveManualReceivedItem() {
     department: document.getElementById("manual_received_department").value,
     received_date: document.getElementById("manual_received_date").value,
     received_time: receivedTime,
-    received_location: document.getElementById("manual_received_location").value
+    received_location: document.getElementById("manual_received_location").value,
+    received_notes: document.getElementById("manual_received_notes").value,
+    ...receivedImages
   };
 
   const res = await fetch("/ordered-items/received", {
@@ -2851,9 +2930,104 @@ function createDeliveryDetails(item) {
     appendDeliveryDetail(details, "Received", item.received_date);
     appendDeliveryDetail(details, "Time", item.received_time);
     appendDeliveryDetail(details, "Location", item.received_location);
+    appendDeliveryDetail(details, "Notes", item.received_notes);
+    appendOrderedImageList(details, item);
   }
 
   return details;
+}
+
+function createOrderedEditField(labelText, input) {
+  const label = document.createElement("label");
+  const span = document.createElement("span");
+  span.textContent = labelText;
+  label.appendChild(span);
+  label.appendChild(input);
+  return label;
+}
+
+function createOrderedEditInput(type, value = "") {
+  const input = document.createElement("input");
+  input.type = type;
+  input.value = value || "";
+  return input;
+}
+
+function showOrderedEditForm(card, item) {
+  const existingForm = card.querySelector(".ordered-edit-form");
+  if (existingForm) {
+    existingForm.remove();
+    return;
+  }
+
+  const form = document.createElement("div");
+  form.className = "ordered-edit-form";
+
+  const dateOrdered = createOrderedEditInput("date", item.date_ordered);
+  const expectedDate = createOrderedEditInput("date", item.expected_delivery_date);
+  const itemName = createOrderedEditInput("text", item.item_name);
+  const itemCompany = createOrderedEditInput("text", item.item_company);
+  const packageQty = createOrderedEditInput("number", item.package_qty);
+  packageQty.min = "0";
+  packageQty.step = "1";
+  const unitsPerPackage = createOrderedEditInput("number", item.units_per_package);
+  unitsPerPackage.min = "0";
+  unitsPerPackage.step = "1";
+  const supplier = createOrderedEditInput("text", item.item_supplier);
+  const department = createOrderedEditInput("text", item.department);
+
+  form.appendChild(createOrderedEditField("Date Ordered", dateOrdered));
+  form.appendChild(createOrderedEditField("Expected", expectedDate));
+  form.appendChild(createOrderedEditField("Item", itemName));
+  form.appendChild(createOrderedEditField("Company", itemCompany));
+  form.appendChild(createOrderedEditField("Package QTY", packageQty));
+  form.appendChild(createOrderedEditField("Units/Package", unitsPerPackage));
+  form.appendChild(createOrderedEditField("Supplier", supplier));
+  form.appendChild(createOrderedEditField("Department", department));
+
+  const actions = document.createElement("div");
+  actions.className = "ordered-edit-actions";
+
+  const saveButton = document.createElement("button");
+  saveButton.type = "button";
+  saveButton.textContent = "Save Changes";
+  saveButton.addEventListener("click", () => saveOrderedItemEdit(item.id, {
+    date_ordered: dateOrdered.value,
+    expected_delivery_date: expectedDate.value,
+    item_name: itemName.value,
+    item_company: itemCompany.value,
+    package_qty: packageQty.value,
+    units_per_package: unitsPerPackage.value,
+    item_supplier: supplier.value,
+    department: department.value
+  }));
+  actions.appendChild(saveButton);
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.textContent = "Cancel";
+  cancelButton.addEventListener("click", () => form.remove());
+  actions.appendChild(cancelButton);
+
+  form.appendChild(actions);
+  card.appendChild(form);
+  itemName.focus();
+}
+
+async function saveOrderedItemEdit(itemId, payload) {
+  const res = await fetch(`/ordered-items/${itemId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    alert("Edit failed: " + text);
+    return;
+  }
+
+  await loadOrderedItems();
 }
 
 function appendDeleteDeliveryButton(card, itemId) {
@@ -2883,6 +3057,12 @@ function createDeliveryCard(item, isReceived) {
   });
   card.appendChild(title);
   card.appendChild(createDeliveryDetails(item));
+
+  const editButton = document.createElement("button");
+  editButton.type = "button";
+  editButton.textContent = "Edit";
+  editButton.addEventListener("click", () => showOrderedEditForm(card, item));
+  card.appendChild(editButton);
 
   if (isReceived) {
     const undoButton = document.createElement("button");
@@ -2971,6 +3151,25 @@ function showReceivePrompt(card, itemId) {
   });
   row.appendChild(timeInput);
 
+  const notesInput = document.createElement("textarea");
+  notesInput.placeholder = "Notes";
+  row.appendChild(notesInput);
+
+  const imageWrap = document.createElement("div");
+  imageWrap.className = "ordered-image-inputs";
+
+  const imageInputOne = document.createElement("input");
+  imageInputOne.type = "file";
+  imageInputOne.accept = "image/*";
+  imageWrap.appendChild(imageInputOne);
+
+  const imageInputTwo = document.createElement("input");
+  imageInputTwo.type = "file";
+  imageInputTwo.accept = "image/*";
+  imageWrap.appendChild(imageInputTwo);
+
+  row.appendChild(imageWrap);
+
   const saveButton = document.createElement("button");
   saveButton.type = "button";
   saveButton.textContent = "Save Received";
@@ -2978,7 +3177,10 @@ function showReceivePrompt(card, itemId) {
     itemId,
     dateInput.value,
     locationInput.value,
-    timeInput.value
+    timeInput.value,
+    notesInput.value,
+    imageInputOne,
+    imageInputTwo
   ));
   row.appendChild(saveButton);
 
@@ -2996,7 +3198,7 @@ function showReceivePrompt(card, itemId) {
   locationInput.focus();
 }
 
-async function receiveOrderedItem(itemId, receivedDate, receivedLocation, receivedTime = "") {
+async function receiveOrderedItem(itemId, receivedDate, receivedLocation, receivedTime = "", receivedNotes = "", firstImageInput = null, secondImageInput = null) {
   if (!receivedDate || !receivedLocation.trim()) {
     alert("Received date and location are required");
     return;
@@ -3007,13 +3209,23 @@ async function receiveOrderedItem(itemId, receivedDate, receivedLocation, receiv
     return;
   }
 
+  let receivedImages;
+  try {
+    receivedImages = await getOrderedReceiveImagesFromInputs(firstImageInput, secondImageInput);
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+
   const res = await fetch(`/ordered-items/${itemId}/receive`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       received_date: receivedDate,
       received_location: receivedLocation,
-      received_time: receivedTime.trim()
+      received_time: receivedTime.trim(),
+      received_notes: receivedNotes,
+      ...receivedImages
     })
   });
 

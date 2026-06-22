@@ -1242,6 +1242,56 @@
       flex: 1 1 100%;
       min-width: 220px;
     }
+    .ordered-review-actions .request-order-form textarea,
+    .ordered-edit-form textarea {
+      min-height: 72px;
+      resize: vertical;
+    }
+    .ordered-image-inputs,
+    .ordered-image-list {
+      display: flex;
+      flex: 1 1 100%;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .ordered-image-list a {
+      display: inline-flex;
+      border: 1px solid #d8d8d2;
+      background: #fff;
+      padding: 3px;
+    }
+    .ordered-image-list img {
+      display: block;
+      width: 72px;
+      height: 72px;
+      object-fit: cover;
+    }
+    .ordered-edit-form {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid #d8d8d2;
+      background: #fafafa;
+    }
+    .ordered-edit-form label {
+      display: grid;
+      gap: 4px;
+      font-weight: 700;
+    }
+    .ordered-edit-form label span {
+      color: #555;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+    }
+    .ordered-edit-actions {
+      display: flex;
+      grid-column: 1 / -1;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
     .ordered-import-result {
       margin: 0 0 16px;
       line-height: 1.4;
@@ -2274,6 +2324,18 @@
           <div class="ordered-field">
             <label for="admin_manual_received_location">Received Location</label>
             <input type="text" id="admin_manual_received_location" required>
+          </div>
+          <div class="ordered-field">
+            <label for="admin_manual_received_notes">Notes</label>
+            <textarea id="admin_manual_received_notes"></textarea>
+          </div>
+          <div class="ordered-field">
+            <label for="admin_manual_received_image_1">Image 1</label>
+            <input type="file" id="admin_manual_received_image_1" accept="image/*">
+          </div>
+          <div class="ordered-field">
+            <label for="admin_manual_received_image_2">Image 2</label>
+            <input type="file" id="admin_manual_received_image_2" accept="image/*">
           </div>
         </div>
         <div class="ordered-actions">

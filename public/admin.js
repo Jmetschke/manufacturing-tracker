@@ -5065,6 +5065,72 @@ function resetAdminManualReceivedForm() {
   document.getElementById("admin_manual_received_date").value = today;
   document.getElementById("admin_manual_received_time").value = "";
   document.getElementById("admin_manual_received_location").value = "";
+  document.getElementById("admin_manual_received_notes").value = "";
+  document.getElementById("admin_manual_received_image_1").value = "";
+  document.getElementById("admin_manual_received_image_2").value = "";
+}
+
+function readAdminOrderedImageFileAsDataUrl(file, maxSize = 1200, quality = 0.78) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      resolve("");
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      reject(new Error("Only image files can be uploaded."));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const image = new Image();
+      image.onload = () => {
+        const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      image.onerror = () => reject(new Error("Could not read one of the selected images."));
+      image.src = reader.result;
+    };
+    reader.onerror = () => reject(new Error("Could not read one of the selected images."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function getAdminOrderedReceiveImagesFromInputs(firstInput, secondInput) {
+  return {
+    received_image_1: await readAdminOrderedImageFileAsDataUrl(firstInput && firstInput.files ? firstInput.files[0] : null),
+    received_image_2: await readAdminOrderedImageFileAsDataUrl(secondInput && secondInput.files ? secondInput.files[0] : null)
+  };
+}
+
+function appendAdminOrderedImageList(container, item) {
+  const images = [item.received_image_1, item.received_image_2].filter(Boolean);
+  if (!images.length) return;
+
+  const list = document.createElement("div");
+  list.className = "ordered-image-list";
+
+  images.forEach((src, index) => {
+    const link = document.createElement("a");
+    link.href = src;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.setAttribute("aria-label", `Open received image ${index + 1}`);
+
+    const image = document.createElement("img");
+    image.src = src;
+    image.alt = `Received image ${index + 1}`;
+    link.appendChild(image);
+    list.appendChild(link);
+  });
+
+  container.appendChild(list);
 }
 
 function openAdminManualReceivedWindow() {
@@ -5174,6 +5240,17 @@ async function saveAdminManualReceivedItem() {
     return;
   }
 
+  let receivedImages;
+  try {
+    receivedImages = await getAdminOrderedReceiveImagesFromInputs(
+      document.getElementById("admin_manual_received_image_1"),
+      document.getElementById("admin_manual_received_image_2")
+    );
+  } catch (err) {
+    showMessage(err.message, "error");
+    return;
+  }
+
   const payload = {
     date_ordered: document.getElementById("admin_manual_received_date_ordered").value,
     expected_delivery_date: document.getElementById("admin_manual_received_expected_delivery_date").value,
@@ -5184,7 +5261,9 @@ async function saveAdminManualReceivedItem() {
     department: document.getElementById("admin_manual_received_department").value,
     received_date: document.getElementById("admin_manual_received_date").value,
     received_time: receivedTime,
-    received_location: document.getElementById("admin_manual_received_location").value
+    received_location: document.getElementById("admin_manual_received_location").value,
+    received_notes: document.getElementById("admin_manual_received_notes").value,
+    ...receivedImages
   };
 
   const res = await fetch("/ordered-items/received", {
@@ -5408,6 +5487,8 @@ function createAdminOrderedReviewCard(item, state) {
     appendOrderedReviewMeta(meta, "Received", item.received_date);
     appendOrderedReviewMeta(meta, "Time", item.received_time);
     appendOrderedReviewMeta(meta, "Location", item.received_location);
+    appendOrderedReviewMeta(meta, "Notes", item.received_notes);
+    appendAdminOrderedImageList(meta, item);
   }
   body.appendChild(meta);
   card.appendChild(body);
@@ -5419,11 +5500,114 @@ function createAdminOrderedReviewCard(item, state) {
   return { card, actions };
 }
 
+function createAdminOrderedEditField(labelText, input) {
+  const label = document.createElement("label");
+  const span = document.createElement("span");
+  span.textContent = labelText;
+  label.appendChild(span);
+  label.appendChild(input);
+  return label;
+}
+
+function createAdminOrderedEditInput(type, value = "") {
+  const input = document.createElement("input");
+  input.type = type;
+  input.value = value || "";
+  return input;
+}
+
+function showAdminOrderedEditForm(card, item) {
+  const existingForm = card.querySelector(".ordered-edit-form");
+  if (existingForm) {
+    existingForm.remove();
+    return;
+  }
+
+  const form = document.createElement("div");
+  form.className = "ordered-edit-form";
+
+  const dateOrdered = createAdminOrderedEditInput("date", item.date_ordered);
+  const expectedDate = createAdminOrderedEditInput("date", item.expected_delivery_date);
+  const itemName = createAdminOrderedEditInput("text", item.item_name);
+  const itemCompany = createAdminOrderedEditInput("text", item.item_company);
+  const packageQty = createAdminOrderedEditInput("number", item.package_qty);
+  packageQty.min = "0";
+  packageQty.step = "1";
+  const unitsPerPackage = createAdminOrderedEditInput("number", item.units_per_package);
+  unitsPerPackage.min = "0";
+  unitsPerPackage.step = "1";
+  const supplier = createAdminOrderedEditInput("text", item.item_supplier);
+  const department = createAdminOrderedEditInput("text", item.department);
+
+  form.appendChild(createAdminOrderedEditField("Date Ordered", dateOrdered));
+  form.appendChild(createAdminOrderedEditField("Expected", expectedDate));
+  form.appendChild(createAdminOrderedEditField("Item", itemName));
+  form.appendChild(createAdminOrderedEditField("Company", itemCompany));
+  form.appendChild(createAdminOrderedEditField("Package QTY", packageQty));
+  form.appendChild(createAdminOrderedEditField("Units/Package", unitsPerPackage));
+  form.appendChild(createAdminOrderedEditField("Supplier", supplier));
+  form.appendChild(createAdminOrderedEditField("Department", department));
+
+  const actions = document.createElement("div");
+  actions.className = "ordered-edit-actions";
+
+  const saveButton = document.createElement("button");
+  saveButton.type = "button";
+  saveButton.textContent = "Save Changes";
+  saveButton.addEventListener("click", () => saveAdminOrderedItemEdit(item.id, {
+    date_ordered: dateOrdered.value,
+    expected_delivery_date: expectedDate.value,
+    item_name: itemName.value,
+    item_company: itemCompany.value,
+    package_qty: packageQty.value,
+    units_per_package: unitsPerPackage.value,
+    item_supplier: supplier.value,
+    department: department.value
+  }));
+  actions.appendChild(saveButton);
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.textContent = "Cancel";
+  cancelButton.addEventListener("click", () => form.remove());
+  actions.appendChild(cancelButton);
+
+  form.appendChild(actions);
+  card.appendChild(form);
+  itemName.focus();
+}
+
+async function saveAdminOrderedItemEdit(itemId, payload) {
+  const res = await adminFetch(`/ordered-items/${itemId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Could not update ordered item: " + text, "error");
+    return;
+  }
+
+  showMessage("Ordered item updated.", "success");
+  await loadOrderedAdminData();
+  await loadAdminCalendar();
+}
+
 function appendAdminDeleteOrderedItemButton(container, item) {
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = "Delete";
   button.addEventListener("click", () => deleteAdminOrderedItem(item.id));
+  container.appendChild(button);
+}
+
+function appendAdminEditOrderedItemButton(container, card, item) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = "Edit";
+  button.addEventListener("click", () => showAdminOrderedEditForm(card, item));
   container.appendChild(button);
 }
 
@@ -5518,6 +5702,7 @@ function renderExpectedDeliveriesTable() {
     label.appendChild(checkbox);
     label.appendChild(document.createTextNode("Received"));
     actions.appendChild(label);
+    appendAdminEditOrderedItemButton(actions, card, item);
     appendAdminDeleteOrderedItemButton(actions, item);
 
     list.appendChild(card);
@@ -5561,6 +5746,7 @@ function renderNeedsDeliveryDateTable() {
       showAdminReceiveForm(item.id, actions, { checked: true });
     });
     actions.appendChild(button);
+    appendAdminEditOrderedItemButton(actions, card, item);
     appendAdminDeleteOrderedItemButton(actions, item);
 
     list.appendChild(card);
@@ -5603,13 +5789,33 @@ function showAdminReceiveForm(itemId, cell, checkbox) {
   location.type = "text";
   form.appendChild(createOrderField("Location", location));
 
+  const notes = document.createElement("textarea");
+  form.appendChild(createOrderField("Notes", notes));
+
+  const imageWrap = document.createElement("div");
+  imageWrap.className = "ordered-image-inputs";
+
+  const imageOne = document.createElement("input");
+  imageOne.type = "file";
+  imageOne.accept = "image/*";
+  imageWrap.appendChild(imageOne);
+
+  const imageTwo = document.createElement("input");
+  imageTwo.type = "file";
+  imageTwo.accept = "image/*";
+  imageWrap.appendChild(imageTwo);
+  form.appendChild(imageWrap);
+
   const saveButton = document.createElement("button");
   saveButton.type = "button";
   saveButton.textContent = "Save Received";
   saveButton.addEventListener("click", () => saveAdminReceivedItem(itemId, {
     received_date: receivedDate.value,
     received_time: receivedTime.value,
-    received_location: location.value
+    received_location: location.value,
+    received_notes: notes.value,
+    imageOne,
+    imageTwo
   }));
   form.appendChild(saveButton);
 
@@ -5634,6 +5840,17 @@ async function saveAdminReceivedItem(itemId, payload) {
   }
 
   payload.received_time = receivedTime;
+  const imageOne = payload.imageOne;
+  const imageTwo = payload.imageTwo;
+  delete payload.imageOne;
+  delete payload.imageTwo;
+
+  try {
+    Object.assign(payload, await getAdminOrderedReceiveImagesFromInputs(imageOne, imageTwo));
+  } catch (err) {
+    showMessage(err.message, "error");
+    return;
+  }
 
   const res = await fetch(`/ordered-items/${itemId}/receive`, {
     method: "PUT",
@@ -5682,6 +5899,7 @@ function renderReceivedDeliveriesTable() {
     undoButton.textContent = "Undo";
     undoButton.addEventListener("click", () => undoAdminReceivedItem(item.id));
     actions.appendChild(undoButton);
+    appendAdminEditOrderedItemButton(actions, card, item);
     appendAdminDeleteOrderedItemButton(actions, item);
 
     list.appendChild(card);
