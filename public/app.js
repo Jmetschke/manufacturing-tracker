@@ -23,6 +23,125 @@ const batchChecklistItems = [
   { key: "counted", label: "Counted" },
   { key: "finalCountEnteredMetrc", label: "Final count entered in Metrc" }
 ];
+const chunkBatchTaskTemplate = [
+  { order: 1, task: "Depositing (truffly)" },
+  { order: 2, task: "Nerding" },
+  { order: 3, task: "Popping" },
+  { order: 4, task: "Sugaring" },
+  { order: 5, task: "Packaging" },
+  { order: 6, task: "Sealing" },
+  { order: 7, task: "Counting (5's)" },
+  { order: 8, task: "Bagging (20's)" }
+];
+const miniBatchTaskTemplate = [
+  { order: 1, task: "Depositing (muffly)" },
+  { order: 1, task: "Depositing (truffly)" },
+  { order: 2, task: "Nerding" },
+  { order: 3, task: "Popping" },
+  { order: 4, task: "Sugaring" },
+  { order: 5, task: "Packaging" },
+  { order: 6, task: "Sealing" },
+  { order: 7, task: "Counting (5's)" },
+  { order: 8, task: "Bagging (20's)" }
+];
+const shooterBatchTaskTemplate = [
+  { order: 1, task: "Filling (Filling Machine)" },
+  { order: 2, task: "Capping (shooters)" },
+  { order: 3, task: "Seal-Stickering (shooters)" },
+  { order: 4, task: "Bagging (10's)" }
+];
+const sbVapeBatchTaskTemplate = [
+  { order: 1, task: "Filling (SB Vapes)" },
+  { order: 2, task: "Capping (SB Vapes)" },
+  { order: 3, task: "SB Sealing" },
+  { order: 4, task: "Counting (SB 5's)" },
+  { order: 5, task: "Bagging (SB 25's)" }
+];
+const batchTaskTemplatesByItem = {
+  "Micro Dots (50-piece packs)": [
+    { order: 1, task: "Popping" },
+    { order: 2, task: "Packaging" },
+    { order: 3, task: "Sealing" },
+    { order: 4, task: "Counting (5's)" },
+    { order: 5, task: "Bagging (20's)" }
+  ],
+  "RSO Whoopie Hi": [
+    { order: 1, task: "Depositing (Beldos)" },
+    { order: 2, task: "Packaging" },
+    { order: 3, task: "Sealing" },
+    { order: 4, task: "Counting (5's)" },
+    { order: 5, task: "Bagging (10's)" }
+  ],
+  "Big Stick": [
+    { order: 1, task: "Filling (Filling Machine)" },
+    { order: 2, task: "Capping (Topicals)" },
+    { order: 3, task: "Packaging" },
+    { order: 4, task: "Sealing" },
+    { order: 5, task: "Bagging (5's)" }
+  ],
+  "Small Stick": [
+    { order: 1, task: "Capping (Topicals)" },
+    { order: 2, task: "Packaging" },
+    { order: 3, task: "Sealing" },
+    { order: 4, task: "Counting (5's)" },
+    { order: 5, task: "Bagging (20's)" }
+  ],
+  "Tiny Stick": [
+    { order: 1, task: "Tiny Stick Filling (tray)" },
+    { order: 2, task: "Capping (Topicals)" },
+    { order: 3, task: "Packaging" },
+    { order: 4, task: "Sealing" },
+    { order: 5, task: "Counting (5's)" },
+    { order: 6, task: "Bagging (20's)" }
+  ],
+  "Space Chunk OG 1 chunk (pcs)": chunkBatchTaskTemplate,
+  "Space Chunk ALPHA OG 2 chunk (units)": chunkBatchTaskTemplate,
+  "Space Chunk REX OG 1 chunk (units)": chunkBatchTaskTemplate,
+  "Space Chunk REX OG 2 chunk (units)": chunkBatchTaskTemplate,
+  "Space Chunk ZUUL OG 1 chunk (units)": chunkBatchTaskTemplate,
+  "Space Chunk ZUUL OG 2 chunk (units)": chunkBatchTaskTemplate,
+  "Space Chunk 1 chunk CBD 50mg 1-1 (pcs)": chunkBatchTaskTemplate,
+  "Space Chunks CBD 2 chunks 1-1 (units)": chunkBatchTaskTemplate,
+  "Space Chunk CBN 1 chunk (pcs)": chunkBatchTaskTemplate,
+  "Space Chunk CBN 2 chunk (units)": chunkBatchTaskTemplate,
+  "Space Chunk Mini 10 chunk (units)": miniBatchTaskTemplate,
+  "Space Chunk SUGAR FREE 10pk (units)": miniBatchTaskTemplate,
+  "Space Chunk SUGAR FREE 2pk (units)": chunkBatchTaskTemplate,
+  "Shooters Triple Citrus": shooterBatchTaskTemplate,
+  "Shooters Sour Watermelon": shooterBatchTaskTemplate,
+  "Shooters Sour Blu Raz": shooterBatchTaskTemplate,
+  "Grape 1g": sbVapeBatchTaskTemplate,
+  "Mango 1g": sbVapeBatchTaskTemplate,
+  "Lemon 1g": sbVapeBatchTaskTemplate,
+  "Watermelon 1g": sbVapeBatchTaskTemplate,
+  "Cherry 2g": sbVapeBatchTaskTemplate,
+  "Strawberry 2g": sbVapeBatchTaskTemplate,
+  "Peach 2g": sbVapeBatchTaskTemplate
+};
+const productionBatchItemAliases = {
+  "Alpha Chunk - 1pk": "Space Chunk OG 1 chunk (pcs)",
+  "Alpha Chunk - 2pk": "Space Chunk ALPHA OG 2 chunk (units)",
+  "Chill Chunk - 1pk": "Space Chunk CBN 1 chunk (pcs)",
+  "Chill Chunk - 2pk": "Space Chunk CBN 2 chunk (units)",
+  "Hijnx Shooter - Sour Blue Razz 2oz": "Shooters Sour Blu Raz",
+  "Hijnx Shooter - Triple Citrus": "Shooters Triple Citrus",
+  "Hijnx Shooter - Watermelon": "Shooters Sour Watermelon",
+  "MiNi's Chunks - 10pk": "Space Chunk Mini 10 chunk (units)",
+  "Micro Dots": "Micro Dots (50-piece packs)",
+  "Rex Chunk - 2pk": "Space Chunk REX OG 2 chunk (units)",
+  "Sleep Chunk - 1pk": "Space Chunk CBN 1 chunk (pcs)",
+  "Sleep Chunk - 2pk": "Space Chunk CBN 2 chunk (units)",
+  "Sugar Free MiNi's - 10pk": "Space Chunk SUGAR FREE 10pk (units)",
+  "Whoopie Hi": "RSO Whoopie Hi",
+  "Zuul Chunk - 2pk": "Space Chunk ZUUL OG 2 chunk (units)",
+  "Snackbar Vape - Cherry Pomegranate Lemon 2g": "Cherry 2g",
+  "Snackbar Vape - Grape Crush": "Grape 1g",
+  "Snackbar Vape - Lemon Yuzu": "Lemon 1g",
+  "Snackbar Vape - Mango Magic": "Mango 1g",
+  "Snackbar Vape - Peach Passion Fruit 2g": "Peach 2g",
+  "Snackbar Vape - Strawberry Dragonfruit 2g": "Strawberry 2g",
+  "Snackbar Vape - Watermelon Lychee 1g": "Watermelon 1g"
+};
 
 function savePendingTimer(state) {
   try {
@@ -91,6 +210,16 @@ function renderTaskOptions(itemId, selectedTaskId = "") {
   if (selectedTaskId && taskOptions.some(task => String(task.id) === String(selectedTaskId))) {
     taskSel.value = String(selectedTaskId);
   }
+}
+
+function getItemIdByName(itemName) {
+  const item = loadedItems.find(option => option.name === itemName);
+  return item ? String(item.id) : "";
+}
+
+function getTaskNameById(taskId) {
+  const task = loadedTasks.find(option => String(option.id) === String(taskId));
+  return task ? task.name : "";
 }
 
 function getTodayIsoDate() {
@@ -1001,6 +1130,82 @@ function getPayloadBatchesByKey(payload) {
   return batchesByKey;
 }
 
+function getBatchTaskItemName(batchItem) {
+  return productionBatchItemAliases[batchItem] || batchItem;
+}
+
+function getAssignedBatchTaskTemplate(itemName) {
+  const itemId = getItemIdByName(itemName);
+  if (!itemId) return [];
+
+  return (itemTaskOptionsByItemId[itemId] || [])
+    .map((taskId, index) => ({
+      order: index + 1,
+      task: getTaskNameById(taskId)
+    }))
+    .filter(templateTask => templateTask.task);
+}
+
+function getBatchTaskTemplate(batchItem) {
+  const itemName = getBatchTaskItemName(batchItem);
+  return batchTaskTemplatesByItem[itemName] || getAssignedBatchTaskTemplate(itemName);
+}
+
+function getProcessingTasksWithGeneratedBatchFallback(payload, row) {
+  const processingTasks = [...payload.processingTasks];
+  const existingGeneratedKeys = new Set();
+  const addGeneratedTaskKeys = task => {
+    if (!task || !task.sourceBatchKey || !task.text) return;
+    const sourceBatchKey = getGeneratedSourceBatchBaseKey(task.sourceBatchKey);
+    const sourceTaskOrder = task.sourceTaskOrder === null || task.sourceTaskOrder === undefined ? "" : String(task.sourceTaskOrder);
+    existingGeneratedKeys.add(`${sourceBatchKey}:${task.text}`);
+    existingGeneratedKeys.add(`${sourceBatchKey}:${sourceTaskOrder}:${task.text}`);
+  };
+
+  processingTasks
+    .filter(task => task.autoGenerated && task.sourceBatchKey)
+    .forEach(addGeneratedTaskKeys);
+
+  [
+    ...payload.batchHijnx.map((batch, index) => ({ type: "hijnx", index, batch })),
+    ...payload.batchSb.map((batch, index) => ({ type: "sb", index, batch }))
+  ].forEach(({ type, index, batch }) => {
+    const template = getBatchTaskTemplate(batch.item);
+    if (!template.length) return;
+
+    const sourceBatchKey = getGeneratedBatchKey(type, index, batch.item);
+    const sourceBatchLabel = `${type === "hijnx" ? "Hijnx" : "SB"} batch ${index + 1}: ${batch.item}`;
+    const itemName = getBatchTaskItemName(batch.item);
+    const units = Math.max(0, Number.parseFloat(batch.units) || 0);
+
+    template.forEach(templateTask => {
+      const generatedKey = `${sourceBatchKey}:${templateTask.order}:${templateTask.task}`;
+      const generatedKeyWithoutOrder = `${sourceBatchKey}:${templateTask.task}`;
+      if (existingGeneratedKeys.has(generatedKey)) return;
+      if (existingGeneratedKeys.has(generatedKeyWithoutOrder)) return;
+
+      existingGeneratedKeys.add(generatedKey);
+      existingGeneratedKeys.add(generatedKeyWithoutOrder);
+      processingTasks.push({
+        item: itemName,
+        text: templateTask.task,
+        units,
+        scheduleDate: row.schedule_date,
+        totalHours: 0,
+        days: 1,
+        assignments: [],
+        autoGenerated: true,
+        sourceBatchKey,
+        sourceBatchLabel,
+        sourceTaskOrder: templateTask.order,
+        completedDates: []
+      });
+    });
+  });
+
+  return processingTasks;
+}
+
 function taskWasCompletedOn(task, isoDate) {
   return (task.completedDates || []).includes(isoDate);
 }
@@ -1522,8 +1727,9 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
       });
     });
 
-    const completedGeneratedTaskKeys = getCompletedGeneratedTaskKeys(payload.processingTasks);
-    payload.processingTasks.forEach((task, taskIndex) => {
+    const processingTasks = getProcessingTasksWithGeneratedBatchFallback(payload, row);
+    const completedGeneratedTaskKeys = getCompletedGeneratedTaskKeys(processingTasks);
+    processingTasks.forEach((task, taskIndex) => {
       if (task.autoGenerated && task.sourceBatchKey) {
         const sourceBatchKey = getGeneratedSourceBatchBaseKey(task.sourceBatchKey);
         const batch = batchesByKey.get(sourceBatchKey) || batchesByKey.get(getBatchColorKey(task));
