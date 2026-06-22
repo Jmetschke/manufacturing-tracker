@@ -3806,6 +3806,12 @@ function changeAdminCalendarWeeks(offset) {
   loadAdminCalendar();
 }
 
+function printAdminCalendarView() {
+  closeAdminCalendarDayFocus();
+  document.body.classList.add("printing-admin-calendar");
+  window.print();
+}
+
 async function loadAdminCalendar() {
   if (!adminCalendarStartDate) {
     setDefaultCalendarRange();
@@ -5832,6 +5838,7 @@ document.getElementById("adminCalendarDayFocus").addEventListener("click", event
 });
 
 window.addEventListener("afterprint", () => {
+  document.body.classList.remove("printing-admin-calendar");
   document.body.classList.remove("printing-item-task-report");
   document.body.classList.remove("printing-concern-report");
 });

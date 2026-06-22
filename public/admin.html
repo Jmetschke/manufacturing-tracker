@@ -1659,6 +1659,64 @@
     }
 
     @media print {
+      body.printing-admin-calendar {
+        padding: 0;
+      }
+      body.printing-admin-calendar .page-header,
+      body.printing-admin-calendar .admin-tabs,
+      body.printing-admin-calendar #message,
+      body.printing-admin-calendar .admin-panel:not(#calendarPanel),
+      body.printing-admin-calendar #calendarPanel .calendar-tools button,
+      body.printing-admin-calendar #adminCalendarDayFocus,
+      body.printing-admin-calendar #scheduleEditor,
+      body.printing-admin-calendar .production-needs-upload {
+        display: none !important;
+      }
+      body.printing-admin-calendar #calendarPanel {
+        display: block !important;
+      }
+      body.printing-admin-calendar .calendar-tools {
+        border-bottom: 1px solid #999;
+        display: block;
+        margin-bottom: 8px;
+        padding-bottom: 6px;
+      }
+      body.printing-admin-calendar #calendar_range_label {
+        font-weight: bold;
+      }
+      body.printing-admin-calendar .admin-calendar-workspace {
+        align-items: start;
+        display: grid;
+        gap: 10px;
+        grid-template-columns: minmax(0, 1fr) minmax(250px, 330px);
+      }
+      body.printing-admin-calendar .admin-calendar-grid {
+        border-color: #999;
+        font-size: 10px;
+        overflow: visible;
+      }
+      body.printing-admin-calendar .admin-day-name,
+      body.printing-admin-calendar .admin-calendar-day {
+        break-inside: avoid;
+        min-height: 92px;
+        padding: 5px;
+      }
+      body.printing-admin-calendar .admin-calendar-day.weekend {
+        min-height: 64px;
+      }
+      body.printing-admin-calendar .admin-calendar-date,
+      body.printing-admin-calendar .admin-event-item,
+      body.printing-admin-calendar .admin-batch-item,
+      body.printing-admin-calendar .admin-test-pickup,
+      body.printing-admin-calendar .calendar-delivery,
+      body.printing-admin-calendar .production-needs-item {
+        font-size: 10px;
+      }
+      body.printing-admin-calendar .production-needs-panel {
+        border-left-width: 3px;
+        padding: 8px;
+        position: static;
+      }
       body.printing-item-task-report {
         padding: 0;
       }
@@ -1916,6 +1974,7 @@
     <button type="button" onclick="changeAdminCalendarWeeks(-1)">Previous 2 Weeks</button>
     <span id="calendar_range_label"></span>
     <button type="button" onclick="changeAdminCalendarWeeks(1)">Next 2 Weeks</button>
+    <button type="button" onclick="printAdminCalendarView()">Print View</button>
   </div>
 
   <div class="admin-calendar-workspace">

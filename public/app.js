@@ -2302,6 +2302,12 @@ async function loadSchedule() {
   renderScheduleCalendar(weekStart, scheduleByDate, deliveriesByDate);
 }
 
+function printScheduleView() {
+  closeScheduleDayFocus();
+  document.body.classList.add("printing-schedule");
+  window.print();
+}
+
 function renderScheduleCalendar(weekStart, scheduleByDate, deliveriesByDate) {
   const calendar = document.getElementById("scheduleCalendar");
   const range = document.getElementById("scheduleRange");
@@ -2921,6 +2927,10 @@ document.getElementById("scheduleDayFocus").addEventListener("click", event => {
   if (event.target.id === "scheduleDayFocus") {
     closeScheduleDayFocus();
   }
+});
+
+window.addEventListener("afterprint", () => {
+  document.body.classList.remove("printing-schedule");
 });
 
 function registerProductionTrackerServiceWorker() {

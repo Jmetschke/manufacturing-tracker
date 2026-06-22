@@ -243,6 +243,14 @@
       margin: 0;
     }
 
+    .schedule-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
     .schedule-range {
       color: #555;
       font-size: 14px;
@@ -1660,6 +1668,61 @@
         padding: 0 12px 12px;
       }
     }
+
+    @media print {
+      body.printing-schedule {
+        background: #fff;
+        padding: 0;
+      }
+
+      body.printing-schedule .page-header,
+      body.printing-schedule .tabs,
+      body.printing-schedule .tab-panel:not(#scheduleTab),
+      body.printing-schedule #scheduleDayFocus,
+      body.printing-schedule .schedule-actions button {
+        display: none !important;
+      }
+
+      body.printing-schedule #scheduleTab {
+        display: block !important;
+      }
+
+      body.printing-schedule .schedule-header {
+        align-items: baseline;
+        border-bottom: 1px solid #999;
+        margin-bottom: 8px;
+        padding-bottom: 6px;
+      }
+
+      body.printing-schedule .schedule-range {
+        color: #202124;
+        font-weight: bold;
+      }
+
+      body.printing-schedule .schedule-grid {
+        border-color: #999;
+        gap: 1px;
+        overflow: visible;
+      }
+
+      body.printing-schedule .schedule-day-name,
+      body.printing-schedule .schedule-cell {
+        break-inside: avoid;
+        min-height: 92px;
+        padding: 5px;
+      }
+
+      body.printing-schedule .schedule-cell.weekend {
+        min-height: 64px;
+      }
+
+      body.printing-schedule .schedule-date,
+      body.printing-schedule .event-item,
+      body.printing-schedule .schedule-batch,
+      body.printing-schedule .test-pickup {
+        font-size: 10px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1877,7 +1940,10 @@
 <section id="scheduleTab" class="tab-panel">
   <div class="schedule-header">
     <h3>Two Week Schedule</h3>
-    <div id="scheduleRange" class="schedule-range"></div>
+    <div class="schedule-actions">
+      <div id="scheduleRange" class="schedule-range"></div>
+      <button type="button" onclick="printScheduleView()">Print View</button>
+    </div>
   </div>
   <div id="scheduleCalendar" class="schedule-grid"></div>
   <section id="scheduleDayFocus" class="focus-window calendar-day-focus" hidden>
