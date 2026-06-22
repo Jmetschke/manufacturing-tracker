@@ -2678,20 +2678,43 @@ function appendOrderedImageList(container, item) {
   list.className = "ordered-image-list";
 
   images.forEach((src, index) => {
-    const link = document.createElement("a");
-    link.href = src;
-    link.target = "_blank";
-    link.rel = "noopener";
-    link.setAttribute("aria-label", `Open received image ${index + 1}`);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.setAttribute("aria-label", `Open received image ${index + 1}`);
+    button.addEventListener("click", () => openOrderedImageFocusWindow(src, index + 1));
 
     const image = document.createElement("img");
     image.src = src;
     image.alt = `Received image ${index + 1}`;
-    link.appendChild(image);
-    list.appendChild(link);
+    button.appendChild(image);
+    list.appendChild(button);
   });
 
   container.appendChild(list);
+}
+
+function openOrderedImageFocusWindow(src, imageNumber = 1) {
+  const modal = document.getElementById("orderedImageFocusWindow");
+  const image = document.getElementById("orderedImageFocusImage");
+  const title = document.getElementById("orderedImageFocusTitle");
+  if (!modal || !image || !title) return;
+
+  title.textContent = `Received Image ${imageNumber}`;
+  image.src = src;
+  modal.hidden = false;
+  document.body.style.overflow = "hidden";
+  const closeButton = modal.querySelector(".ordered-modal-close");
+  if (closeButton) closeButton.focus();
+}
+
+function closeOrderedImageFocusWindow() {
+  const modal = document.getElementById("orderedImageFocusWindow");
+  const image = document.getElementById("orderedImageFocusImage");
+  if (!modal) return;
+
+  modal.hidden = true;
+  if (image) image.removeAttribute("src");
+  document.body.style.overflow = "";
 }
 
 function openManualReceivedWindow() {
@@ -3332,6 +3355,7 @@ document.addEventListener("keydown", event => {
     closeDailyReportFocus();
     closeScheduleDayFocus();
     closeManualReceivedWindow();
+    closeOrderedImageFocusWindow();
   }
 });
 
@@ -3344,6 +3368,12 @@ document.getElementById("dailyReportFocus").addEventListener("click", event => {
 document.getElementById("scheduleDayFocus").addEventListener("click", event => {
   if (event.target.id === "scheduleDayFocus") {
     closeScheduleDayFocus();
+  }
+});
+
+document.getElementById("orderedImageFocusWindow").addEventListener("click", event => {
+  if (event.target.id === "orderedImageFocusWindow") {
+    closeOrderedImageFocusWindow();
   }
 });
 

@@ -5117,20 +5117,43 @@ function appendAdminOrderedImageList(container, item) {
   list.className = "ordered-image-list";
 
   images.forEach((src, index) => {
-    const link = document.createElement("a");
-    link.href = src;
-    link.target = "_blank";
-    link.rel = "noopener";
-    link.setAttribute("aria-label", `Open received image ${index + 1}`);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.setAttribute("aria-label", `Open received image ${index + 1}`);
+    button.addEventListener("click", () => openAdminOrderedImageFocusWindow(src, index + 1));
 
     const image = document.createElement("img");
     image.src = src;
     image.alt = `Received image ${index + 1}`;
-    link.appendChild(image);
-    list.appendChild(link);
+    button.appendChild(image);
+    list.appendChild(button);
   });
 
   container.appendChild(list);
+}
+
+function openAdminOrderedImageFocusWindow(src, imageNumber = 1) {
+  const modal = document.getElementById("adminOrderedImageFocusWindow");
+  const image = document.getElementById("adminOrderedImageFocusImage");
+  const title = document.getElementById("adminOrderedImageFocusTitle");
+  if (!modal || !image || !title) return;
+
+  title.textContent = `Received Image ${imageNumber}`;
+  image.src = src;
+  modal.hidden = false;
+  document.body.style.overflow = "hidden";
+  const closeButton = modal.querySelector(".ordered-modal-close");
+  if (closeButton) closeButton.focus();
+}
+
+function closeAdminOrderedImageFocusWindow() {
+  const modal = document.getElementById("adminOrderedImageFocusWindow");
+  const image = document.getElementById("adminOrderedImageFocusImage");
+  if (!modal) return;
+
+  modal.hidden = true;
+  if (image) image.removeAttribute("src");
+  document.body.style.overflow = "";
 }
 
 function openAdminManualReceivedWindow() {
@@ -6043,6 +6066,7 @@ document.addEventListener("keydown", event => {
       closeAdminCalendarDayFocus();
     }
     closeAdminManualReceivedWindow();
+    closeAdminOrderedImageFocusWindow();
   }
 });
 
@@ -6055,6 +6079,12 @@ document.getElementById("dailyReportFocus").addEventListener("click", event => {
 document.getElementById("adminCalendarDayFocus").addEventListener("click", event => {
   if (event.target.id === "adminCalendarDayFocus") {
     closeAdminCalendarDayFocus();
+  }
+});
+
+document.getElementById("adminOrderedImageFocusWindow").addEventListener("click", event => {
+  if (event.target.id === "adminOrderedImageFocusWindow") {
+    closeAdminOrderedImageFocusWindow();
   }
 });
 

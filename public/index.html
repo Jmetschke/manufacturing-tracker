@@ -975,18 +975,31 @@
       align-items: center;
     }
 
-    .ordered-image-list a {
+    .ordered-image-list button {
       display: inline-flex;
       border: 1px solid #d8d8d2;
       background: #fff;
       padding: 3px;
+      cursor: pointer;
     }
 
     .ordered-image-list img {
       display: block;
-      width: 72px;
-      height: 72px;
+      width: 56px;
+      height: 56px;
       object-fit: cover;
+    }
+
+    .ordered-image-focus-window {
+      width: min(980px, 100%);
+    }
+
+    .ordered-image-focus-body img {
+      display: block;
+      width: 100%;
+      max-height: 78vh;
+      object-fit: contain;
+      background: #f5f5f2;
     }
 
     .ordered-edit-form {
@@ -2224,6 +2237,18 @@
       </div>
       <div class="request-actions">
         <button type="button" onclick="saveManualReceivedItem()">Add Received Item</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="orderedImageFocusWindow" class="ordered-modal" hidden role="dialog" aria-modal="true" aria-labelledby="orderedImageFocusTitle">
+    <div class="ordered-modal-window ordered-image-focus-window">
+      <div class="ordered-modal-header">
+        <h3 id="orderedImageFocusTitle">Received Image</h3>
+        <button class="ordered-modal-close" type="button" onclick="closeOrderedImageFocusWindow()" aria-label="Close image focus">X</button>
+      </div>
+      <div class="ordered-image-focus-body">
+        <img id="orderedImageFocusImage" alt="Received item image">
       </div>
     </div>
   </div>
