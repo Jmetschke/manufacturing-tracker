@@ -1669,6 +1669,7 @@
       body.printing-admin-calendar #calendarPanel .calendar-tools button,
       body.printing-admin-calendar #adminCalendarDayFocus,
       body.printing-admin-calendar #scheduleEditor,
+      body.printing-admin-calendar .production-needs-panel,
       body.printing-admin-calendar .production-needs-upload {
         display: none !important;
       }
@@ -1686,9 +1687,7 @@
       }
       body.printing-admin-calendar .admin-calendar-workspace {
         align-items: start;
-        display: grid;
-        gap: 10px;
-        grid-template-columns: minmax(0, 1fr) minmax(250px, 330px);
+        display: block;
       }
       body.printing-admin-calendar .admin-calendar-grid {
         border-color: #999;
@@ -1708,14 +1707,8 @@
       body.printing-admin-calendar .admin-event-item,
       body.printing-admin-calendar .admin-batch-item,
       body.printing-admin-calendar .admin-test-pickup,
-      body.printing-admin-calendar .calendar-delivery,
-      body.printing-admin-calendar .production-needs-item {
+      body.printing-admin-calendar .calendar-delivery {
         font-size: 10px;
-      }
-      body.printing-admin-calendar .production-needs-panel {
-        border-left-width: 3px;
-        padding: 8px;
-        position: static;
       }
       body.printing-item-task-report {
         padding: 0;
