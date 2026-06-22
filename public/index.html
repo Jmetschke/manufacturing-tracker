@@ -803,6 +803,19 @@
       margin-left: 0;
     }
 
+    .entry-note-field {
+      margin-top: 10px;
+    }
+
+    .entry-note-field textarea {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 82px;
+      resize: vertical;
+      font: inherit;
+      padding: 8px;
+    }
+
     .finish-summary {
       margin-bottom: 10px;
       color: #555;
@@ -1190,6 +1203,12 @@
       .calculator-actions button,
       .ph-calculator-actions button {
         flex: none;
+      }
+
+      .entry-note-field textarea {
+        min-height: 110px;
+        font-size: 18px;
+        padding: 12px;
       }
 
       .tab-button {
@@ -1704,6 +1723,10 @@
             <input type="number" id="qty" min="0" step="1" placeholder="Quantity">
           </div>
           <button class="primary-action" type="button" id="saveBtn" onclick="saveQuantity()">Save Entry</button>
+        </div>
+        <div class="entry-note-field">
+          <label for="entry_notes">Notes optional</label>
+          <textarea id="entry_notes" placeholder="Add any notes for this entry"></textarea>
         </div>
       </div>
       <div id="timerMessage" class="timer-message"></div>

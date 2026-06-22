@@ -50,6 +50,14 @@
     .edit-panel.active { display: block; }
     .edit-grid { display: flex; flex-wrap: wrap; gap: 8px; }
     .edit-grid input, .edit-grid select { flex: 1 1 180px; min-width: 0; }
+    .edit-grid textarea {
+      box-sizing: border-box;
+      flex: 1 1 100%;
+      min-height: 82px;
+      resize: vertical;
+      font: inherit;
+      padding: 8px;
+    }
     .edit-actions { margin-top: 8px; }
     .flagged-entry-row { background: #fff5df; }
     .flagged-entry-reason { color: #8a4f00; font-weight: bold; }
@@ -1770,6 +1778,7 @@
       <datalist id="adminDispensaryLocations"></datalist>
       <input type="number" id="edit_quantity" min="0" step="1" placeholder="Quantity">
       <input type="text" id="edit_time" placeholder="Time HH:MM:SS">
+      <textarea id="edit_notes" placeholder="Notes optional"></textarea>
     </div>
     <div class="edit-actions">
       <button type="button" onclick="saveEntryEdit()">Save Changes</button>
@@ -1846,6 +1855,7 @@
       <input type="text" id="review_edit_dispensary_name" list="adminDispensaryLocations" placeholder="Dispensary Name">
       <input type="number" id="review_edit_quantity" min="0" step="1" placeholder="Quantity">
       <input type="text" id="review_edit_time" placeholder="Time HH:MM:SS">
+      <textarea id="review_edit_notes" placeholder="Notes optional"></textarea>
     </div>
     <div class="edit-actions">
       <button type="button" onclick="saveReviewEntryEdit()">Save Changes</button>

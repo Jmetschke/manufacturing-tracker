@@ -1617,7 +1617,7 @@ function renderSavedEntries() {
   table.className = "mobile-stack";
   const thead = document.createElement("thead");
   const headerRow = document.createElement("tr");
-  const labels = ["Date", "Employee", "Item", "Dispensary", "Task", "Qty", "Time"];
+  const labels = ["Date", "Employee", "Item", "Dispensary", "Task", "Qty", "Time", "Notes"];
   labels.forEach(label => {
     const th = document.createElement("th");
     th.textContent = label;
@@ -1636,7 +1636,8 @@ function renderSavedEntries() {
       entry.dispensaryName || "",
       entry.task,
       entry.quantity,
-      formatSeconds(entry.durationSeconds)
+      formatSeconds(entry.durationSeconds),
+      entry.notes || ""
     ].forEach((value, index) => {
       const td = document.createElement("td");
       td.dataset.label = labels[index];
@@ -1651,6 +1652,7 @@ function renderSavedEntries() {
 
 function resetCompletedEntryForm() {
   const qtyInput = document.getElementById("qty");
+  const notesInput = document.getElementById("entry_notes");
   const saveBtn = document.getElementById("saveBtn");
 
   currentLogId = null;
@@ -1661,6 +1663,9 @@ function resetCompletedEntryForm() {
   pausedElapsedSeconds = 0;
   clearPendingTimer();
   qtyInput.value = "";
+  if (notesInput) {
+    notesInput.value = "";
+  }
   document.getElementById("dispensary_name").value = "";
   qtyInput.disabled = true;
   saveBtn.disabled = true;
@@ -2138,6 +2143,7 @@ async function saveQuantity() {
   const qtyInput = document.getElementById("qty");
   const saveBtn = document.getElementById("saveBtn");
   const quantity = qtyInput.value;
+  const notes = document.getElementById("entry_notes").value.trim();
   const logId = currentLogId;
   const itemSel = document.getElementById("item");
   const taskSel = document.getElementById("task");
@@ -2170,7 +2176,8 @@ async function saveQuantity() {
       item_id,
       task_id,
       dispensary_name: dispensaryName,
-      quantity
+      quantity,
+      notes
     })
   });
 
@@ -2188,7 +2195,8 @@ async function saveQuantity() {
     item: selectedItemText,
     task: selectedTaskText,
     dispensaryName,
-    quantity
+    quantity,
+    notes
   });
   renderSavedEntries();
 

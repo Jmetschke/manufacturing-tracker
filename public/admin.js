@@ -2658,7 +2658,7 @@ function createDetailedEntriesTable(entries) {
   const headerRow = document.createElement("tr");
   headerRow.className = "table-heading-row";
 
-  const labels = ["Date", "Status", "Employee", "Item", "Dispensary", "Task", "Qty", "Time", "Sec/Unit", "Action"];
+  const labels = ["Date", "Status", "Employee", "Item", "Dispensary", "Task", "Qty", "Time", "Sec/Unit", "Notes", "Action"];
   labels.forEach(label => {
     const th = document.createElement("th");
     th.textContent = label === "Action" ? "" : label;
@@ -2684,9 +2684,10 @@ function createDetailedEntriesTable(entries) {
     appendCell(row, entry.quantity || 0, labels[6]);
     appendCell(row, secondsToHMS(entry.duration_seconds), labels[7]);
     appendCell(row, Math.round(entry.sec_per_unit || 0), labels[8]);
+    appendCell(row, entry.notes || "", labels[9]);
 
     const actionCell = document.createElement("td");
-    actionCell.dataset.label = labels[9];
+    actionCell.dataset.label = labels[10];
     const editButton = document.createElement("button");
     editButton.type = "button";
     editButton.textContent = "Edit";
@@ -2890,6 +2891,7 @@ function editEntry(logId) {
   updateAdminDispensaryField();
   document.getElementById("edit_quantity").value = entry.quantity || 0;
   document.getElementById("edit_time").value = secondsToHMS(entry.duration_seconds);
+  document.getElementById("edit_notes").value = entry.notes || "";
   document.getElementById("editPanel").classList.add("active");
   showMessage("");
   document.getElementById("edit_quantity").focus();
@@ -2919,7 +2921,8 @@ async function saveEntryEdit() {
     task_id: document.getElementById("edit_task").value,
     dispensary_name: document.getElementById("edit_dispensary_name").value,
     quantity: document.getElementById("edit_quantity").value,
-    duration_seconds: durationSeconds
+    duration_seconds: durationSeconds,
+    notes: document.getElementById("edit_notes").value
   };
 
   const res = await adminFetch(`/admin/entries/${logId}`, {
@@ -2981,7 +2984,7 @@ function renderFlaggedEntryReview() {
   table.className = "mobile-stack";
   const headerRow = document.createElement("tr");
   headerRow.className = "table-heading-row";
-  const labels = ["Date", "Employee", "Item", "Dispensary", "Task", "Qty", "Time", "Sec/Unit", "Alert Level", "Reason", "Action"];
+  const labels = ["Date", "Employee", "Item", "Dispensary", "Task", "Qty", "Time", "Sec/Unit", "Alert Level", "Reason", "Notes", "Action"];
 
   labels.forEach(label => {
     const th = document.createElement("th");
@@ -3004,7 +3007,8 @@ function renderFlaggedEntryReview() {
       secondsToHMS(entry.duration_seconds),
       formatSecondsPerUnit(entry.sec_per_unit),
       entry.seconds_per_unit_alert_level ? formatSecondsPerUnit(entry.seconds_per_unit_alert_level) : "",
-      entry.flag_reason || ""
+      entry.flag_reason || "",
+      entry.notes || ""
     ].forEach((value, index) => {
       const cell = document.createElement("td");
       cell.dataset.label = labels[index];
@@ -3016,7 +3020,7 @@ function renderFlaggedEntryReview() {
     });
 
     const actionCell = document.createElement("td");
-    actionCell.dataset.label = labels[10];
+    actionCell.dataset.label = labels[11];
     actionCell.className = "flagged-entry-actions";
 
     const editButton = document.createElement("button");
@@ -3061,7 +3065,7 @@ function renderConcernEntries() {
   table.className = "mobile-stack";
   const headerRow = document.createElement("tr");
   headerRow.className = "table-heading-row";
-  const labels = ["Date", "Employee", "Item", "Dispensary", "Task", "Qty", "Time", "Reason", "Notes", "Action"];
+  const labels = ["Date", "Employee", "Item", "Dispensary", "Task", "Qty", "Time", "Reason", "Entry Notes", "Follow-up Notes", "Action"];
 
   labels.forEach(label => {
     const th = document.createElement("th");
@@ -3082,7 +3086,8 @@ function renderConcernEntries() {
       entry.task,
       entry.quantity || 0,
       secondsToHMS(entry.duration_seconds),
-      entry.flag_reason || "Dismissed for follow-up"
+      entry.flag_reason || "Dismissed for follow-up",
+      entry.notes || ""
     ].forEach((value, index) => {
       const cell = document.createElement("td");
       cell.dataset.label = labels[index];
@@ -3094,7 +3099,7 @@ function renderConcernEntries() {
     });
 
     const notesCell = document.createElement("td");
-    notesCell.dataset.label = "Notes";
+    notesCell.dataset.label = "Follow-up Notes";
 
     const notesWrapper = document.createElement("div");
     notesWrapper.className = "concern-notes";
@@ -3115,7 +3120,7 @@ function renderConcernEntries() {
     row.appendChild(notesCell);
 
     const actionCell = document.createElement("td");
-    actionCell.dataset.label = labels[9];
+    actionCell.dataset.label = labels[10];
     actionCell.className = "flagged-entry-actions";
 
     const editButton = document.createElement("button");
@@ -3213,6 +3218,7 @@ function editReviewEntry(logId) {
   document.getElementById("review_edit_dispensary_name").value = entry.dispensary_name || "";
   document.getElementById("review_edit_quantity").value = entry.quantity || 0;
   document.getElementById("review_edit_time").value = secondsToHMS(entry.duration_seconds);
+  document.getElementById("review_edit_notes").value = entry.notes || "";
   document.getElementById("reviewEditPanel").classList.add("active");
   showMessage("");
   document.getElementById("review_edit_quantity").focus();
@@ -3247,7 +3253,8 @@ async function saveReviewEntryEdit() {
     task_id: document.getElementById("review_edit_task").value,
     dispensary_name: document.getElementById("review_edit_dispensary_name").value,
     quantity: document.getElementById("review_edit_quantity").value,
-    duration_seconds: durationSeconds
+    duration_seconds: durationSeconds,
+    notes: document.getElementById("review_edit_notes").value
   };
 
   const res = await adminFetch(`/admin/entries/${logId}`, {
@@ -3454,7 +3461,8 @@ function showLoggedConcernFocus(employee) {
     appendCell(row, getConcernEntryRateText(entry), "Employee Rate");
     appendCell(row, getConcernEntryAverageText(entry), "Task Avg Rate");
     appendCell(row, getConcernEntryRateDeltaText(entry), "Comparison");
-    appendCell(row, entry.concern_notes || "", "Notes");
+    appendCell(row, entry.notes || "", "Entry Notes");
+    appendCell(row, entry.concern_notes || "", "Follow-up Notes");
     table.appendChild(row);
   });
 
@@ -3753,7 +3761,7 @@ async function updateMasterTask(taskId, nameValue, alertLevelValue) {
 function exportCSV() {
   if (!reportData.length) return;
 
-  let csv = "Date,Status,Employee,Item,Dispensary,Task,Qty,Total Time,Sec/Unit\n";
+  let csv = "Date,Status,Employee,Item,Dispensary,Task,Qty,Total Time,Sec/Unit,Notes\n";
 
   reportData.forEach(entry => {
     csv += [
@@ -3765,7 +3773,8 @@ function exportCSV() {
       entry.task,
       entry.quantity,
       entry.duration_seconds,
-      Math.round(entry.sec_per_unit || 0)
+      Math.round(entry.sec_per_unit || 0),
+      entry.notes || ""
     ].map(csvValue).join(",") + "\n";
   });
 

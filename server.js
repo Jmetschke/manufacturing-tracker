@@ -1306,6 +1306,7 @@ async function initializeDatabase() {
       pause_started_at TEXT,
       quantity INTEGER,
       dispensary_name TEXT,
+      notes TEXT,
       concern_dismissed_at TEXT,
       concern_notes TEXT
     )
@@ -1390,6 +1391,7 @@ async function initializeDatabase() {
   await addMissingColumn("time_logs", "pause_started_at", "TEXT");
   await addMissingColumn("time_logs", "quantity", "INTEGER");
   await addMissingColumn("time_logs", "dispensary_name", "TEXT");
+  await addMissingColumn("time_logs", "notes", "TEXT");
   await addMissingColumn("time_logs", "concern_dismissed_at", "TEXT");
   await addMissingColumn("time_logs", "concern_notes", "TEXT");
   await addMissingColumn("schedule_days", "tasks", "TEXT DEFAULT ''");
@@ -2956,6 +2958,7 @@ function timerStateSelect(whereClause) {
       COALESCE(l.paused_seconds, 0) AS paused_seconds,
       l.pause_started_at,
       COALESCE(l.dispensary_name, '') AS dispensary_name,
+      COALESCE(l.notes, '') AS notes,
       l.quantity,
       strftime('%s', l.start_time) AS start_epoch,
       strftime('%s', l.pause_started_at) AS pause_started_epoch,
@@ -3149,6 +3152,7 @@ app.post("/stop", (req, res) => {
 app.post("/update-qty", (req, res) => {
   let { log_id, item_id, task_id, quantity } = req.body;
   const dispensaryName = normalizeRequiredText(req.body.dispensary_name);
+  const notes = normalizeRequiredText(req.body.notes);
 
   if (!log_id) {
     return res.status(400).send("Missing log_id");
@@ -3171,10 +3175,11 @@ app.post("/update-qty", (req, res) => {
      SET item_id = ?,
          task_id = ?,
          quantity = ?,
-         dispensary_name = ?
+         dispensary_name = ?,
+         notes = ?
      WHERE id = ?
      AND end_time IS NOT NULL`,
-    [item_id, task_id, quantity, dispensaryName || null, log_id],
+    [item_id, task_id, quantity, dispensaryName || null, notes || null, log_id],
     function (err) {
       if (err) return res.status(500).send(err.message);
 
@@ -3212,6 +3217,7 @@ app.get("/admin/flagged-entries", (req, res) => {
       l.item_id,
       l.task_id,
       COALESCE(l.dispensary_name, '') AS dispensary_name,
+      COALESCE(l.notes, '') AS notes,
       COALESCE(i.name, 'Unknown Item') AS item,
       COALESCE(t.name, 'Unknown Task') AS task,
       l.employee,
@@ -3251,6 +3257,7 @@ app.get("/admin/concern-entries", (req, res) => {
       l.item_id,
       l.task_id,
       COALESCE(l.dispensary_name, '') AS dispensary_name,
+      COALESCE(l.notes, '') AS notes,
       COALESCE(i.name, 'Unknown Item') AS item,
       COALESCE(t.name, 'Unknown Task') AS task,
       l.employee,
@@ -3362,6 +3369,7 @@ app.get("/admin/entries", (req, res) => {
       l.item_id,
       l.task_id,
       COALESCE(l.dispensary_name, '') AS dispensary_name,
+      COALESCE(l.notes, '') AS notes,
       COALESCE(i.name, 'Unknown Item') AS item,
       COALESCE(t.name, 'Unknown Task') AS task,
       l.employee,
@@ -3460,6 +3468,7 @@ app.put("/admin/entries/:id", (req, res) => {
   let { item_id, task_id } = req.body;
   let { quantity, duration_seconds } = req.body;
   const dispensaryName = normalizeRequiredText(req.body.dispensary_name);
+  const notes = normalizeRequiredText(req.body.notes);
 
   if (!employee || !work_date || !item_id || !task_id) {
     return res.status(400).send("Employee, date, item, and task are required");
@@ -3490,10 +3499,11 @@ app.put("/admin/entries/:id", (req, res) => {
          work_date = ?,
          quantity = ?,
          duration_seconds = ?,
-         dispensary_name = ?
+         dispensary_name = ?,
+         notes = ?
      WHERE id = ?
      AND end_time IS NOT NULL`,
-    [item_id, task_id, employee, work_date, quantity, duration_seconds, dispensaryName || null, req.params.id],
+    [item_id, task_id, employee, work_date, quantity, duration_seconds, dispensaryName || null, notes || null, req.params.id],
     function (err) {
       if (err) return res.status(500).send(err.message);
 
