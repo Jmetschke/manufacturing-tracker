@@ -5784,7 +5784,7 @@ function renderNeedsDeliveryDateTable() {
     button.type = "button";
     button.textContent = "Set Date";
     button.addEventListener("click", () => {
-      showAdminReceiveForm(item.id, actions, { checked: true });
+      showAdminExpectedDateForm(item, actions);
     });
     actions.appendChild(button);
     appendAdminEditOrderedItemButton(actions, card, item);
@@ -5794,6 +5794,62 @@ function renderNeedsDeliveryDateTable() {
   });
 
   container.appendChild(list);
+}
+
+function showAdminExpectedDateForm(item, cell) {
+  const existingForm = cell.querySelector(".request-order-form");
+  if (existingForm) {
+    existingForm.classList.add("active");
+    const firstInput = existingForm.querySelector("input");
+    if (firstInput) firstInput.focus();
+    return;
+  }
+
+  const form = document.createElement("div");
+  form.className = "request-order-form active";
+
+  const expectedDate = document.createElement("input");
+  expectedDate.type = "date";
+  expectedDate.value = item.expected_delivery_date || toIsoDate(new Date());
+  form.appendChild(createOrderField("Expected Delivery Date", expectedDate));
+
+  const saveButton = document.createElement("button");
+  saveButton.type = "button";
+  saveButton.textContent = "Save Expected Date";
+  saveButton.addEventListener("click", () => saveAdminExpectedDeliveryDate(item.id, expectedDate.value));
+  form.appendChild(saveButton);
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.textContent = "Cancel";
+  cancelButton.addEventListener("click", () => form.remove());
+  form.appendChild(cancelButton);
+
+  cell.appendChild(form);
+  expectedDate.focus();
+}
+
+async function saveAdminExpectedDeliveryDate(itemId, expectedDeliveryDate) {
+  if (!expectedDeliveryDate) {
+    showMessage("Expected delivery date is required.", "error");
+    return;
+  }
+
+  const res = await adminFetch(`/ordered-items/${itemId}/expected-date`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ expected_delivery_date: expectedDeliveryDate })
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Could not set expected delivery date: " + text, "error");
+    return;
+  }
+
+  showMessage("Expected delivery date set.", "success");
+  await loadOrderedAdminData();
+  await loadAdminCalendar();
 }
 
 function showAdminReceiveForm(itemId, cell, checkbox) {

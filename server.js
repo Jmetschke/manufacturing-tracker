@@ -2706,6 +2706,33 @@ app.put("/ordered-items/:id", (req, res) => {
   );
 });
 
+app.put("/ordered-items/:id/expected-date", (req, res) => {
+  const itemId = Number(req.params.id);
+  const expectedDeliveryDate = normalizeRequiredText(req.body.expected_delivery_date);
+
+  if (!Number.isInteger(itemId) || itemId <= 0) {
+    return res.status(400).send("Valid ordered item id is required");
+  }
+
+  if (!isIsoDate(expectedDeliveryDate)) {
+    return res.status(400).send("Valid expected delivery date is required");
+  }
+
+  db.run(
+    `UPDATE ordered_items
+     SET expected_delivery_date = ?,
+         import_needs_delivery_date = 0,
+         updated_at = datetime('now')
+     WHERE id = ?`,
+    [expectedDeliveryDate, itemId],
+    function (err) {
+      if (err) return res.status(500).send(err.message);
+      if (this.changes === 0) return res.status(404).send("Ordered item not found");
+      res.json({ message: "Expected delivery date updated" });
+    }
+  );
+});
+
 async function importOrderedItemsPdf(req, res) {
   const department = normalizeRequiredText(req.query.department || req.headers["x-order-department"]);
 
