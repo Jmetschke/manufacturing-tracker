@@ -3328,6 +3328,107 @@ function renderDeliveryList(container, items, isReceived, emptyText = "") {
   });
 }
 
+function groupReceivedDeliveriesByDate(items) {
+  const groups = new Map();
+  items.forEach(item => {
+    const date = item.received_date;
+    if (!groups.has(date)) groups.set(date, []);
+    groups.get(date).push(item);
+  });
+
+  return Array.from(groups.entries()).map(([date, groupItems]) => ({
+    date,
+    items: groupItems
+  }));
+}
+
+function renderReceivedDeliveryGroups(container, items) {
+  container.innerHTML = "";
+
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-entries";
+    empty.textContent = "No received deliveries yet.";
+    container.appendChild(empty);
+    return;
+  }
+
+  const receivedDeliveries = [...items].sort((a, b) => {
+    const dateCompare = String(b.received_date).localeCompare(String(a.received_date));
+    if (dateCompare) return dateCompare;
+    return String(a.item_name || "").localeCompare(String(b.item_name || ""));
+  });
+  const groups = groupReceivedDeliveriesByDate(receivedDeliveries);
+  const list = document.createElement("div");
+  list.className = "ordered-received-day-list";
+
+  groups.forEach(group => {
+    const groupCard = document.createElement("div");
+    groupCard.className = "ordered-received-day-group";
+
+    const dateButton = document.createElement("button");
+    dateButton.type = "button";
+    dateButton.className = "ordered-received-date-row";
+    dateButton.addEventListener("click", () => openReceivedDayFocusWindow(group.date, group.items));
+
+    const dateText = document.createElement("span");
+    dateText.textContent = formatDisplayDate(group.date);
+    dateButton.appendChild(dateText);
+
+    const countText = document.createElement("span");
+    countText.textContent = `${group.items.length} received`;
+    dateButton.appendChild(countText);
+    groupCard.appendChild(dateButton);
+
+    const itemList = document.createElement("ul");
+    itemList.className = "ordered-received-item-list";
+    group.items.forEach(item => {
+      const row = document.createElement("li");
+      const itemButton = document.createElement("button");
+      itemButton.type = "button";
+      itemButton.className = "ordered-received-item-button";
+      itemButton.textContent = item.item_name || "Received item";
+      itemButton.addEventListener("click", () => openReceivedDayFocusWindow(group.date, group.items));
+      row.appendChild(itemButton);
+      itemList.appendChild(row);
+    });
+    groupCard.appendChild(itemList);
+
+    list.appendChild(groupCard);
+  });
+
+  container.appendChild(list);
+}
+
+function openReceivedDayFocusWindow(receivedDate, items) {
+  const modal = document.getElementById("receivedDayFocusWindow");
+  const title = document.getElementById("receivedDayFocusTitle");
+  const body = document.getElementById("receivedDayFocusBody");
+  if (!modal || !title || !body) return;
+
+  title.textContent = `Received Deliveries - ${formatDisplayDate(receivedDate)}`;
+  body.innerHTML = "";
+
+  const list = document.createElement("div");
+  list.className = "ordered-received-day-list";
+  items.forEach(item => {
+    list.appendChild(createDeliveryCard(item, true));
+  });
+  body.appendChild(list);
+
+  modal.hidden = false;
+  const closeButton = modal.querySelector(".ordered-modal-close");
+  if (closeButton) closeButton.focus();
+}
+
+function closeReceivedDayFocusWindow() {
+  const modal = document.getElementById("receivedDayFocusWindow");
+  const body = document.getElementById("receivedDayFocusBody");
+  if (!modal) return;
+  modal.hidden = true;
+  if (body) body.innerHTML = "";
+}
+
 function renderDeliveries() {
   const needsDeliveryDate = orderedItems.filter(item => !item.received_date && Number(item.import_needs_delivery_date));
   const expected = orderedItems.filter(item => !item.received_date && !Number(item.import_needs_delivery_date));
@@ -3365,7 +3466,7 @@ function renderDeliveries() {
     false,
     "No imported deliveries need a delivery date."
   );
-  renderDeliveryList(document.getElementById("receivedDeliveries"), received, true);
+  renderReceivedDeliveryGroups(document.getElementById("receivedDeliveries"), received);
 }
 
 document.addEventListener("keydown", event => {
@@ -3373,6 +3474,7 @@ document.addEventListener("keydown", event => {
     closeDailyReportFocus();
     closeScheduleDayFocus();
     closeManualReceivedWindow();
+    closeReceivedDayFocusWindow();
     closeOrderedImageFocusWindow();
   }
 });
@@ -3386,6 +3488,12 @@ document.getElementById("dailyReportFocus").addEventListener("click", event => {
 document.getElementById("scheduleDayFocus").addEventListener("click", event => {
   if (event.target.id === "scheduleDayFocus") {
     closeScheduleDayFocus();
+  }
+});
+
+document.getElementById("receivedDayFocusWindow").addEventListener("click", event => {
+  if (event.target.id === "receivedDayFocusWindow") {
+    closeReceivedDayFocusWindow();
   }
 });
 

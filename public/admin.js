@@ -5970,7 +5970,13 @@ function renderReceivedDeliveriesTable() {
   const count = document.getElementById("adminReceivedDeliveriesCount");
   const mobileCount = document.getElementById("adminReceivedDeliveriesMobileCount");
   container.innerHTML = "";
-  const receivedDeliveries = allOrderedItems.filter(item => item.received_date);
+  const receivedDeliveries = allOrderedItems
+    .filter(item => item.received_date)
+    .sort((a, b) => {
+      const dateCompare = String(b.received_date).localeCompare(String(a.received_date));
+      if (dateCompare) return dateCompare;
+      return String(a.item_name || "").localeCompare(String(b.item_name || ""));
+    });
   if (count) {
     count.textContent = `${receivedDeliveries.length} received`;
   }
@@ -5987,22 +5993,103 @@ function renderReceivedDeliveriesTable() {
   }
 
   const list = document.createElement("div");
-  list.className = "ordered-review-list";
+  list.className = "ordered-received-day-list";
+  const groups = groupAdminReceivedDeliveriesByDate(receivedDeliveries);
 
-  receivedDeliveries.forEach(item => {
-    const { card, actions } = createAdminOrderedReviewCard(item, "received");
-    const undoButton = document.createElement("button");
-    undoButton.type = "button";
-    undoButton.textContent = "Undo";
-    undoButton.addEventListener("click", () => undoAdminReceivedItem(item.id));
-    actions.appendChild(undoButton);
-    appendAdminEditOrderedItemButton(actions, card, item);
-    appendAdminDeleteOrderedItemButton(actions, item);
+  groups.forEach(group => {
+    const groupCard = document.createElement("div");
+    groupCard.className = "ordered-received-day-group";
 
-    list.appendChild(card);
+    const dateButton = document.createElement("button");
+    dateButton.type = "button";
+    dateButton.className = "ordered-received-date-row";
+    dateButton.addEventListener("click", () => openAdminReceivedDayFocusWindow(group.date, group.items));
+
+    const dateText = document.createElement("span");
+    dateText.textContent = formatDisplayDate(group.date);
+    dateButton.appendChild(dateText);
+
+    const countText = document.createElement("span");
+    countText.textContent = `${group.items.length} received`;
+    dateButton.appendChild(countText);
+    groupCard.appendChild(dateButton);
+
+    const itemList = document.createElement("ul");
+    itemList.className = "ordered-received-item-list";
+    group.items.forEach(item => {
+      const row = document.createElement("li");
+      const itemButton = document.createElement("button");
+      itemButton.type = "button";
+      itemButton.className = "ordered-received-item-button";
+      itemButton.textContent = item.item_name || "Received item";
+      itemButton.addEventListener("click", () => openAdminReceivedDayFocusWindow(group.date, group.items));
+      row.appendChild(itemButton);
+      itemList.appendChild(row);
+    });
+    groupCard.appendChild(itemList);
+
+    list.appendChild(groupCard);
   });
 
   container.appendChild(list);
+}
+
+function groupAdminReceivedDeliveriesByDate(items) {
+  const groups = new Map();
+  items.forEach(item => {
+    const date = item.received_date;
+    if (!groups.has(date)) groups.set(date, []);
+    groups.get(date).push(item);
+  });
+
+  return Array.from(groups.entries()).map(([date, groupItems]) => ({
+    date,
+    items: groupItems
+  }));
+}
+
+function appendAdminReceivedItemActions(actions, card, item) {
+  const undoButton = document.createElement("button");
+  undoButton.type = "button";
+  undoButton.textContent = "Undo";
+  undoButton.addEventListener("click", async () => {
+    await undoAdminReceivedItem(item.id);
+    closeAdminReceivedDayFocusWindow();
+  });
+  actions.appendChild(undoButton);
+  appendAdminEditOrderedItemButton(actions, card, item);
+  appendAdminDeleteOrderedItemButton(actions, item);
+}
+
+function openAdminReceivedDayFocusWindow(receivedDate, items) {
+  const modal = document.getElementById("adminReceivedDayFocusWindow");
+  const title = document.getElementById("adminReceivedDayFocusTitle");
+  const body = document.getElementById("adminReceivedDayFocusBody");
+  if (!modal || !title || !body) return;
+
+  title.textContent = `Received Deliveries - ${formatDisplayDate(receivedDate)}`;
+  body.innerHTML = "";
+
+  const list = document.createElement("div");
+  list.className = "ordered-review-list";
+  items.forEach(item => {
+    const { card, actions } = createAdminOrderedReviewCard(item, "received");
+    appendAdminReceivedItemActions(actions, card, item);
+    list.appendChild(card);
+  });
+  body.appendChild(list);
+
+  modal.hidden = false;
+  const closeButton = modal.querySelector(".ordered-modal-close");
+  if (closeButton) closeButton.focus();
+}
+
+function closeAdminReceivedDayFocusWindow() {
+  const modal = document.getElementById("adminReceivedDayFocusWindow");
+  const body = document.getElementById("adminReceivedDayFocusBody");
+  if (!modal) return;
+  modal.hidden = true;
+  if (body) body.innerHTML = "";
 }
 
 async function undoAdminReceivedItem(itemId) {
@@ -6140,6 +6227,7 @@ document.addEventListener("keydown", event => {
       closeAdminCalendarDayFocus();
     }
     closeAdminManualReceivedWindow();
+    closeAdminReceivedDayFocusWindow();
     closeAdminOrderedImageFocusWindow();
   }
 });
@@ -6153,6 +6241,12 @@ document.getElementById("dailyReportFocus").addEventListener("click", event => {
 document.getElementById("adminCalendarDayFocus").addEventListener("click", event => {
   if (event.target.id === "adminCalendarDayFocus") {
     closeAdminCalendarDayFocus();
+  }
+});
+
+document.getElementById("adminReceivedDayFocusWindow").addEventListener("click", event => {
+  if (event.target.id === "adminReceivedDayFocusWindow") {
+    closeAdminReceivedDayFocusWindow();
   }
 });
 
