@@ -5903,17 +5903,28 @@ function showAdminReceiveForm(itemId, cell, checkbox) {
   imageWrap.appendChild(imageTwo);
   form.appendChild(imageWrap);
 
+  const status = document.createElement("div");
+  status.className = "message";
+  form.appendChild(status);
+
   const saveButton = document.createElement("button");
   saveButton.type = "button";
   saveButton.textContent = "Save Received";
-  saveButton.addEventListener("click", () => saveAdminReceivedItem(itemId, {
-    received_date: receivedDate.value,
-    received_time: receivedTime.value,
-    received_location: location.value,
-    received_notes: notes.value,
-    imageOne,
-    imageTwo
-  }));
+  saveButton.addEventListener("click", async () => {
+    saveButton.disabled = true;
+    try {
+      await saveAdminReceivedItem(itemId, {
+        received_date: receivedDate.value,
+        received_time: receivedTime.value,
+        received_location: location.value,
+        received_notes: notes.value,
+        imageOne,
+        imageTwo
+      }, status);
+    } finally {
+      saveButton.disabled = false;
+    }
+  });
   form.appendChild(saveButton);
 
   const cancelButton = document.createElement("button");
@@ -5929,14 +5940,34 @@ function showAdminReceiveForm(itemId, cell, checkbox) {
   location.focus();
 }
 
-async function saveAdminReceivedItem(itemId, payload) {
+function showAdminReceiveMessage(text, type, statusNode) {
+  showMessage(text, type);
+  if (!statusNode) return;
+  statusNode.textContent = text;
+  statusNode.className = type ? `message ${type}` : "message";
+}
+
+async function saveAdminReceivedItem(itemId, payload, statusNode = null) {
   const receivedTime = String(payload.received_time || "").trim();
+  const receivedLocation = String(payload.received_location || "").trim();
+
+  if (!payload.received_date) {
+    showAdminReceiveMessage("Received date is required.", "error", statusNode);
+    return;
+  }
+
+  if (!receivedLocation) {
+    showAdminReceiveMessage("Received location is required.", "error", statusNode);
+    return;
+  }
+
   if (receivedTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(receivedTime)) {
-    showMessage("Received time must use HH:MM format.", "error");
+    showAdminReceiveMessage("Received time must use HH:MM format.", "error", statusNode);
     return;
   }
 
   payload.received_time = receivedTime;
+  payload.received_location = receivedLocation;
   const imageOne = payload.imageOne;
   const imageTwo = payload.imageTwo;
   delete payload.imageOne;
@@ -5945,24 +5976,31 @@ async function saveAdminReceivedItem(itemId, payload) {
   try {
     Object.assign(payload, await getAdminOrderedReceiveImagesFromInputs(imageOne, imageTwo));
   } catch (err) {
-    showMessage(err.message, "error");
+    showAdminReceiveMessage(err.message, "error", statusNode);
     return;
   }
 
-  const res = await fetch(`/ordered-items/${itemId}/receive`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
+  let res;
+  try {
+    res = await adminFetch(`/ordered-items/${itemId}/receive`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+  } catch (err) {
+    showAdminReceiveMessage("Could not mark delivery received: " + err.message, "error", statusNode);
+    return;
+  }
 
   if (!res.ok) {
     const text = await res.text();
-    showMessage("Could not mark delivery received: " + text, "error");
+    showAdminReceiveMessage("Could not mark delivery received: " + text, "error", statusNode);
     return;
   }
 
-  showMessage("Delivery marked received.", "success");
-  await loadOrderedItems();
+  showAdminReceiveMessage("Delivery marked received.", "success", statusNode);
+  await loadOrderedAdminData();
+  await loadAdminCalendar();
 }
 
 function renderReceivedDeliveriesTable() {
