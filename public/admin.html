@@ -32,6 +32,65 @@
     .screen-link:visited { color: #fff; }
     .pwa-install-button { border-color: #5d9b45; background: #5d9b45; }
     .pwa-install-button:disabled { opacity: 0.7; cursor: default; }
+    .alert-widget { position: relative; }
+    .alert-toggle {
+      border: 1px solid #2364aa;
+      background: #fff;
+      color: #123c69;
+      min-height: 36px;
+    }
+    .alert-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      min-height: 20px;
+      margin-left: 6px;
+      border-radius: 999px;
+      background: #b3261e;
+      color: #fff;
+      font-size: 12px;
+      font-weight: bold;
+      line-height: 1;
+    }
+    .alert-panel {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 8px);
+      z-index: 20;
+      width: min(360px, calc(100vw - 48px));
+      max-height: 440px;
+      overflow: auto;
+      border: 1px solid #c8d1da;
+      background: #fff;
+      box-shadow: 0 10px 26px rgba(32, 33, 36, 0.18);
+      padding: 12px;
+    }
+    .alert-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .alert-panel-header h3 { margin: 0; font-size: 1rem; }
+    .alert-panel-header button,
+    .alert-read-button { font-size: 13px; padding: 6px 8px; }
+    .alert-list { display: grid; gap: 8px; }
+    .alert-item,
+    .alert-empty {
+      border: 1px solid #d8d8d2;
+      background: #f8f8f5;
+      padding: 10px;
+    }
+    .alert-item.unread {
+      border-left: 4px solid #2364aa;
+      background: #eef5fb;
+    }
+    .alert-item-title { font-weight: bold; margin-bottom: 3px; }
+    .alert-item-meta { color: #555; font-size: 0.82rem; margin-bottom: 6px; }
+    .alert-item-message { line-height: 1.35; }
+    .alert-read-button { margin: 8px 0 0; }
     .admin-tabs { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid #ccc; }
     .admin-tab-button { border: 0; border-bottom: 3px solid transparent; background: transparent; cursor: pointer; padding: 10px 14px; }
     .admin-tab-button.active { border-bottom-color: #2364aa; color: #123c69; font-weight: bold; }
@@ -1550,6 +1609,14 @@
       .page-header { flex-direction: column; align-items: stretch; }
       .header-actions { flex-direction: column; }
       .screen-link { display: block; text-align: center; font-size: 18px; padding: 14px 12px; }
+      .alert-widget,
+      .alert-toggle { width: 100%; }
+      .alert-panel {
+        position: static;
+        width: auto;
+        max-height: 360px;
+        margin-top: 8px;
+      }
       h3 { font-size: 1.25rem; }
       input, select, button { min-height: 52px; font-size: 18px; padding: 12px; }
       .calendar-day-focus { align-items: stretch; padding: 10px; }
@@ -1908,6 +1975,18 @@
   <h2>Admin Dashboard</h2>
   <div class="header-actions">
     <button class="screen-link pwa-install-button" type="button">How to Install</button>
+    <div class="alert-widget" data-alert-widget>
+      <button id="alertToggle" class="alert-toggle" type="button" aria-expanded="false" aria-controls="alertPanel">
+        Alerts <span id="alertUnreadCount" class="alert-count" hidden>0</span>
+      </button>
+      <div id="alertPanel" class="alert-panel" hidden>
+        <div class="alert-panel-header">
+          <h3>Alerts</h3>
+          <button id="alertMarkAll" type="button">Mark all read</button>
+        </div>
+        <div id="alertList" class="alert-list"></div>
+      </div>
+    </div>
     <a class="screen-link" href="https://delivery-schedele.onrender.com" target="_blank" rel="noopener">Delivery Schedule</a>
     <a class="screen-link" href="https://swag-inventory.onrender.com" target="_blank" rel="noopener">Swag Inventory</a>
     <a class="screen-link" href="https://ingredient-projection-workbook.onrender.com" target="_blank" rel="noopener">Ingredient Projections</a>
@@ -2448,6 +2527,7 @@
 <script src="employees.js"></script>
 <script src="dispensary-locations.js"></script>
 <script src="pwa-install.js"></script>
+<script src="alerts.js"></script>
 <script src="admin.js"></script>
 
 </body>

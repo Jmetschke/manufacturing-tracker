@@ -665,6 +665,57 @@ function allSql(sql, params = [], database = db) {
   });
 }
 
+function getSql(sql, params = [], database = db) {
+  return new Promise((resolve, reject) => {
+    database.get(sql, params, (err, row) => {
+      if (err) return reject(err);
+      resolve(row);
+    });
+  });
+}
+
+async function createAlert({
+  recipient = "all",
+  type,
+  title,
+  message,
+  related_record_id = null
+}) {
+  const alertType = normalizeRequiredText(type);
+  const alertTitle = normalizeRequiredText(title);
+  const alertMessage = normalizeRequiredText(message);
+  const alertRecipient = normalizeRequiredText(recipient) || "all";
+  const relatedRecordId = related_record_id === undefined || related_record_id === null || related_record_id === ""
+    ? null
+    : String(related_record_id);
+
+  if (!alertType || !alertTitle || !alertMessage) {
+    throw new Error("Alert type, title, and message are required");
+  }
+
+  const result = await runSql(
+    `INSERT INTO alerts (
+       recipient,
+       type,
+       title,
+       message,
+       related_record_id
+     )
+     VALUES (?, ?, ?, ?, ?)`,
+    [alertRecipient, alertType, alertTitle, alertMessage, relatedRecordId]
+  );
+
+  return {
+    id: result.lastID,
+    recipient: alertRecipient,
+    type: alertType,
+    title: alertTitle,
+    message: alertMessage,
+    related_record_id: relatedRecordId,
+    is_read: 0
+  };
+}
+
 async function addMissingColumn(table, column, definition, database = db) {
   const columns = await allSql(`PRAGMA table_info(${table})`, [], database);
   const exists = columns.some(c => c.name === column);
@@ -1381,6 +1432,19 @@ async function initializeDatabase() {
     )
   `);
 
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS alerts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      recipient TEXT DEFAULT 'all',
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      related_record_id TEXT,
+      is_read INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
   await addMissingColumn("time_logs", "item_id", "INTEGER");
   await addMissingColumn("tasks", "seconds_per_unit_alert_level", "REAL DEFAULT 0");
   await addMissingColumn("items", "production_company", "TEXT");
@@ -1436,6 +1500,13 @@ async function initializeDatabase() {
   await addMissingColumn("order_requests", "ordered_at", "TEXT");
   await addMissingColumn("order_requests", "created_at", "TEXT");
   await addMissingColumn("order_requests", "updated_at", "TEXT");
+  await addMissingColumn("alerts", "recipient", "TEXT DEFAULT 'all'");
+  await addMissingColumn("alerts", "type", "TEXT");
+  await addMissingColumn("alerts", "title", "TEXT");
+  await addMissingColumn("alerts", "message", "TEXT");
+  await addMissingColumn("alerts", "related_record_id", "TEXT");
+  await addMissingColumn("alerts", "is_read", "INTEGER DEFAULT 0");
+  await addMissingColumn("alerts", "created_at", "TEXT");
   await reconcileCalendarDatabase();
   await clearWeekendScheduleTasks();
 
@@ -1449,6 +1520,73 @@ async function initializeDatabase() {
   await logLookupCount("items");
   await logLookupCount("tasks");
 }
+
+/* ---------- ALERTS ---------- */
+app.get("/alerts", async (req, res) => {
+  try {
+    const rows = await allSql(`
+      SELECT
+        id,
+        recipient,
+        type,
+        title,
+        message,
+        related_record_id,
+        COALESCE(is_read, 0) AS is_read,
+        created_at
+      FROM alerts
+      ORDER BY datetime(created_at) DESC, id DESC
+      LIMIT 100
+    `);
+
+    res.json(rows);
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.post("/alerts", async (req, res) => {
+  try {
+    const alert = await createAlert({
+      recipient: req.body.recipient,
+      type: req.body.type,
+      title: req.body.title,
+      message: req.body.message,
+      related_record_id: req.body.related_record_id
+    });
+
+    const row = await getSql("SELECT * FROM alerts WHERE id = ?", [alert.id]);
+    res.status(201).json(row || alert);
+  } catch (err) {
+    res.status(400).send(err.message);
+  }
+});
+
+app.patch("/alerts/read-all", async (req, res) => {
+  try {
+    const result = await runSql(
+      "UPDATE alerts SET is_read = 1 WHERE COALESCE(is_read, 0) = 0"
+    );
+
+    res.json({ message: "Alerts marked read", changes: result.changes || 0 });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.patch("/alerts/:id/read", async (req, res) => {
+  try {
+    const result = await runSql(
+      "UPDATE alerts SET is_read = 1 WHERE id = ?",
+      [req.params.id]
+    );
+
+    if (result.changes === 0) return res.status(404).send("Alert not found");
+    res.json({ message: "Alert marked read" });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
 
 /* ---------- ITEMS ---------- */
 app.get("/items", (req, res) => {
@@ -2954,6 +3092,14 @@ app.post("/ordered-items/received", (req, res) => {
     ],
     function (err) {
       if (err) return res.status(500).send(err.message);
+      // Add more createAlert() calls near successful event writes like this
+      // when new alert-worthy production events are added.
+      createAlert({
+        type: "delivery_received",
+        title: "Delivery Received",
+        message: `${itemName} was added as received for ${department}.`,
+        related_record_id: this.lastID
+      }).catch(alertErr => console.error("Could not create delivery received alert:", alertErr.message));
       res.status(201).json({ message: "Received item added", id: this.lastID });
     }
   );
@@ -2999,6 +3145,21 @@ app.put("/ordered-items/:id/receive", (req, res) => {
     function (err) {
       if (err) return res.status(500).send(err.message);
       if (this.changes === 0) return res.status(404).send("Ordered item not found");
+      // Add more createAlert() calls near successful event writes like this
+      // when new alert-worthy production events are added.
+      getSql(
+        "SELECT item_name, department FROM ordered_items WHERE id = ?",
+        [req.params.id]
+      )
+        .then(item => createAlert({
+          type: "delivery_received",
+          title: "Delivery Received",
+          message: item
+            ? `${item.item_name} was marked received for ${item.department}.`
+            : "An ordered item was marked received.",
+          related_record_id: req.params.id
+        }))
+        .catch(alertErr => console.error("Could not create delivery received alert:", alertErr.message));
       res.json({ message: "Ordered item received" });
     }
   );

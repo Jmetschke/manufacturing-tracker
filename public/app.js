@@ -2852,6 +2852,7 @@ async function saveManualReceivedItem() {
   resetManualReceivedForm();
   closeManualReceivedWindow();
   await loadOrderedItems();
+  window.productionTrackerAlerts?.load();
   alert("Received item added");
 }
 
@@ -3277,6 +3278,7 @@ async function receiveOrderedItem(itemId, receivedDate, receivedLocation, receiv
   }
 
   await loadOrderedItems();
+  window.productionTrackerAlerts?.load();
 }
 
 async function undoReceivedItem(itemId) {

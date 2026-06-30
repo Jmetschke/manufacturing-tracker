@@ -10,6 +10,7 @@ const STATIC_PATHS = new Set([
   "/access.html",
   "/app.js",
   "/admin.js",
+  "/alerts.js",
   "/pwa-install.js",
   "/employees.js",
   "/dispensary-locations.js",

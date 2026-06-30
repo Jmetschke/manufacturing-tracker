@@ -5323,6 +5323,7 @@ async function saveAdminManualReceivedItem() {
   closeAdminManualReceivedWindow();
   showMessage("Received item added.", "success");
   await loadOrderedItems();
+  window.productionTrackerAlerts?.load();
 }
 
 function renderAdminOrderRequests() {
@@ -6001,6 +6002,7 @@ async function saveAdminReceivedItem(itemId, payload, statusNode = null) {
   showAdminReceiveMessage("Delivery marked received.", "success", statusNode);
   await loadOrderedAdminData();
   await loadAdminCalendar();
+  window.productionTrackerAlerts?.load();
 }
 
 function renderReceivedDeliveriesTable() {
