@@ -265,6 +265,26 @@
       background: #d8d8d2;
     }
 
+    .schedule-links {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 12px;
+    }
+
+    .schedule-link {
+      border: 1px solid #2364aa;
+      background: #2364aa;
+      color: #fff;
+      text-decoration: none;
+      padding: 9px 12px;
+      font-size: 15px;
+      line-height: 1.2;
+    }
+
+    .schedule-link:visited {
+      color: #fff;
+    }
+
     .schedule-day-name,
     .schedule-cell {
       background: #fff;
@@ -1277,6 +1297,18 @@
         padding: 14px 12px;
       }
 
+      .schedule-links {
+        justify-content: stretch;
+      }
+
+      .schedule-link {
+        display: block;
+        flex: 1;
+        text-align: center;
+        font-size: 18px;
+        padding: 14px 12px;
+      }
+
       h3 {
         font-size: 1.25rem;
       }
@@ -2096,6 +2128,9 @@
     </div>
   </div>
   <div id="scheduleCalendar" class="schedule-grid"></div>
+  <div class="schedule-links">
+    <a class="schedule-link" href="https://recipe-workbook.onrender.com" target="_blank" rel="noopener">Recipes</a>
+  </div>
   <section id="scheduleDayFocus" class="focus-window calendar-day-focus" hidden>
     <div class="focus-dialog" role="dialog" aria-modal="true" aria-labelledby="scheduleDayFocusTitle">
       <div class="focus-header">
