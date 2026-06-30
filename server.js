@@ -716,6 +716,17 @@ async function createAlert({
   };
 }
 
+function createDeliveryScheduledAlert(relatedRecordId) {
+  // Add future alert thresholds as small wrappers like this, then call them
+  // immediately after the event write succeeds.
+  return createAlert({
+    type: "delivery_scheduled",
+    title: "Delivery Scheduled",
+    message: "A new delivery has been scheduled. Check Expected Deliveries.",
+    related_record_id: relatedRecordId
+  });
+}
+
 async function addMissingColumn(table, column, definition, database = db) {
   const columns = await allSql(`PRAGMA table_info(${table})`, [], database);
   const exists = columns.some(c => c.name === column);
@@ -2699,10 +2710,14 @@ app.put("/admin/order-requests/:id/order", (req, res) => {
           [orderedItemId, request.id],
           updateErr => {
             if (updateErr) return res.status(500).send(updateErr.message);
-            res.json({
-              message: "Order request marked ordered",
-              ordered_item_id: orderedItemId
-            });
+            createDeliveryScheduledAlert(orderedItemId)
+              .catch(alertErr => console.error("Could not create delivery scheduled alert:", alertErr.message))
+              .finally(() => {
+                res.json({
+                  message: "Order request marked ordered",
+                  ordered_item_id: orderedItemId
+                });
+              });
           }
         );
       }
@@ -2774,6 +2789,9 @@ app.post("/admin/ordered-items", async (req, res) => {
 
       return insertedIds;
     });
+
+    await Promise.all(ids.map(id => createDeliveryScheduledAlert(id)
+      .catch(alertErr => console.error("Could not create delivery scheduled alert:", alertErr.message))));
 
     res.status(201).json({ message: "Ordered delivery added", ids });
   } catch (err) {
@@ -2866,7 +2884,11 @@ app.put("/ordered-items/:id/expected-date", (req, res) => {
     function (err) {
       if (err) return res.status(500).send(err.message);
       if (this.changes === 0) return res.status(404).send("Ordered item not found");
-      res.json({ message: "Expected delivery date updated" });
+      createDeliveryScheduledAlert(itemId)
+        .catch(alertErr => console.error("Could not create delivery scheduled alert:", alertErr.message))
+        .finally(() => {
+          res.json({ message: "Expected delivery date updated" });
+        });
     }
   );
 });
@@ -2928,6 +2950,13 @@ async function importOrderedItemsPdf(req, res) {
 
       return insertedIds;
     });
+
+    await Promise.all(ids.map((id, index) => {
+      const item = parsed.items[index];
+      if (!item || item.import_needs_delivery_date || item.received_date) return Promise.resolve();
+      return createDeliveryScheduledAlert(id)
+        .catch(alertErr => console.error("Could not create delivery scheduled alert:", alertErr.message));
+    }));
 
     res.status(201).json({
       message: "Order PDF imported",
@@ -3092,14 +3121,6 @@ app.post("/ordered-items/received", (req, res) => {
     ],
     function (err) {
       if (err) return res.status(500).send(err.message);
-      // Add more createAlert() calls near successful event writes like this
-      // when new alert-worthy production events are added.
-      createAlert({
-        type: "delivery_received",
-        title: "Delivery Received",
-        message: `${itemName} was added as received for ${department}.`,
-        related_record_id: this.lastID
-      }).catch(alertErr => console.error("Could not create delivery received alert:", alertErr.message));
       res.status(201).json({ message: "Received item added", id: this.lastID });
     }
   );
@@ -3145,21 +3166,6 @@ app.put("/ordered-items/:id/receive", (req, res) => {
     function (err) {
       if (err) return res.status(500).send(err.message);
       if (this.changes === 0) return res.status(404).send("Ordered item not found");
-      // Add more createAlert() calls near successful event writes like this
-      // when new alert-worthy production events are added.
-      getSql(
-        "SELECT item_name, department FROM ordered_items WHERE id = ?",
-        [req.params.id]
-      )
-        .then(item => createAlert({
-          type: "delivery_received",
-          title: "Delivery Received",
-          message: item
-            ? `${item.item_name} was marked received for ${item.department}.`
-            : "An ordered item was marked received.",
-          related_record_id: req.params.id
-        }))
-        .catch(alertErr => console.error("Could not create delivery received alert:", alertErr.message));
       res.json({ message: "Ordered item received" });
     }
   );

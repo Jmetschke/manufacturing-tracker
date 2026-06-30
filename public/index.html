@@ -1827,12 +1827,12 @@
       }
 
       #orderedTab .ordered-expected-list { order: 1; }
-      #orderedTab .ordered-manual-action { order: 2; }
-      #orderedTab .ordered-import-action { order: 3; }
-      #orderedTab .ordered-request-action { order: 4; }
-      #orderedTab .ordered-needs-date-list { order: 5; }
-      #orderedTab .ordered-received-list { order: 6; }
-      #orderedTab .ordered-requests-list { order: 7; }
+      #orderedTab .ordered-needs-date-list { order: 2; }
+      #orderedTab .ordered-request-action { order: 3; }
+      #orderedTab .ordered-requests-list { order: 4; }
+      #orderedTab .ordered-manual-action { order: 5; }
+      #orderedTab .ordered-import-action { order: 6; }
+      #orderedTab .ordered-received-list { order: 7; }
 
       #orderedTab .ordered-card,
       #orderedTab .ordered-section {
@@ -2284,6 +2284,35 @@
 
 <section id="orderedTab" class="tab-panel">
   <div class="ordered-workspace">
+    <div class="ordered-status-grid">
+      <section class="ordered-section ordered-expected-list">
+        <button class="ordered-mobile-toggle" type="button" onclick="toggleMobileOrderedPanel(this)">
+          <span>Expected Deliveries</span>
+          <span id="expectedDeliveriesMobileCount" class="ordered-section-count"></span>
+        </button>
+        <div class="ordered-section-header">
+          <h3>Expected Deliveries</h3>
+          <div class="ordered-section-tools">
+            <span id="expectedDeliveriesCount" class="ordered-section-count"></span>
+            <button type="button" onclick="openManualReceivedWindow()">Manual Received Item</button>
+          </div>
+        </div>
+        <div id="expectedDeliveries"></div>
+      </section>
+
+      <section class="ordered-section ordered-needs-date-list">
+        <button class="ordered-mobile-toggle" type="button" onclick="toggleMobileOrderedPanel(this)">
+          <span>Needs Delivery Date</span>
+          <span id="needsDeliveryDateMobileCount" class="ordered-section-count"></span>
+        </button>
+        <div class="ordered-section-header">
+          <h3>Needs Delivery Date</h3>
+          <span id="needsDeliveryDateCount" class="ordered-section-count"></span>
+        </div>
+        <div id="needsDeliveryDateDeliveries"></div>
+      </section>
+    </div>
+
     <div class="ordered-entry-grid">
       <section class="ordered-card ordered-request-action">
         <button class="ordered-mobile-toggle" type="button" onclick="toggleMobileOrderedPanel(this)">
@@ -2321,6 +2350,18 @@
         </div>
       </section>
 
+      <section class="ordered-section ordered-section-full ordered-requests-list">
+        <button class="ordered-mobile-toggle" type="button" onclick="toggleMobileOrderedPanel(this)">
+          <span>Item Requests</span>
+          <span id="orderRequestsMobileCount" class="ordered-section-count"></span>
+        </button>
+        <div class="ordered-section-header">
+          <h3>Item Requests</h3>
+          <span id="orderRequestsCount" class="ordered-section-count"></span>
+        </div>
+        <div id="orderRequests"></div>
+      </section>
+
       <section class="ordered-card ordered-manual-action">
         <button class="ordered-mobile-toggle" type="button" onclick="openManualReceivedWindow()">
           <span>Manual Received Item</span>
@@ -2354,45 +2395,6 @@
     </div>
 
     <div class="ordered-status-grid">
-      <section class="ordered-section ordered-section-full ordered-requests-list">
-        <button class="ordered-mobile-toggle" type="button" onclick="toggleMobileOrderedPanel(this)">
-          <span>Item Requests</span>
-          <span id="orderRequestsMobileCount" class="ordered-section-count"></span>
-        </button>
-        <div class="ordered-section-header">
-          <h3>Item Requests</h3>
-          <span id="orderRequestsCount" class="ordered-section-count"></span>
-        </div>
-        <div id="orderRequests"></div>
-      </section>
-
-      <section class="ordered-section ordered-expected-list">
-        <button class="ordered-mobile-toggle" type="button" onclick="toggleMobileOrderedPanel(this)">
-          <span>Expected Deliveries</span>
-          <span id="expectedDeliveriesMobileCount" class="ordered-section-count"></span>
-        </button>
-        <div class="ordered-section-header">
-          <h3>Expected Deliveries</h3>
-          <div class="ordered-section-tools">
-            <span id="expectedDeliveriesCount" class="ordered-section-count"></span>
-            <button type="button" onclick="openManualReceivedWindow()">Manual Received Item</button>
-          </div>
-        </div>
-        <div id="expectedDeliveries"></div>
-      </section>
-
-      <section class="ordered-section ordered-needs-date-list">
-        <button class="ordered-mobile-toggle" type="button" onclick="toggleMobileOrderedPanel(this)">
-          <span>Needs Delivery Date</span>
-          <span id="needsDeliveryDateMobileCount" class="ordered-section-count"></span>
-        </button>
-        <div class="ordered-section-header">
-          <h3>Needs Delivery Date</h3>
-          <span id="needsDeliveryDateCount" class="ordered-section-count"></span>
-        </div>
-        <div id="needsDeliveryDateDeliveries"></div>
-      </section>
-
       <section class="ordered-section ordered-received-list">
         <button class="ordered-mobile-toggle" type="button" onclick="toggleMobileOrderedPanel(this)">
           <span>Received Deliveries</span>

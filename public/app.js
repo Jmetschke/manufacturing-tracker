@@ -2895,6 +2895,7 @@ async function importMainOrderedPdf() {
     `${imported.received || 0} delivered, ${imported.needs_delivery_date || 0} need delivery date.`
   ].join("\n");
   await loadOrderedItems();
+  window.productionTrackerAlerts?.load();
 }
 
 function renderOrderRequests() {

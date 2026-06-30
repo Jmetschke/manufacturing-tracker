@@ -5485,6 +5485,7 @@ async function markRequestOrdered(requestId, payload) {
 
   showMessage("Item request marked ordered and added to expected deliveries.", "success");
   await loadOrderedAdminData();
+  window.productionTrackerAlerts?.load();
 }
 
 function renderOrderedItemsTable() {
@@ -5851,6 +5852,7 @@ async function saveAdminExpectedDeliveryDate(itemId, expectedDeliveryDate) {
   showMessage("Expected delivery date set.", "success");
   await loadOrderedAdminData();
   await loadAdminCalendar();
+  window.productionTrackerAlerts?.load();
 }
 
 function showAdminReceiveForm(itemId, cell, checkbox) {
@@ -6173,6 +6175,7 @@ async function saveOrderedItem() {
   resetOrderedForm();
   showMessage("Ordered delivery added.", "success");
   await loadOrderedItems();
+  window.productionTrackerAlerts?.load();
 }
 
 async function importOrderedPdf() {
@@ -6223,6 +6226,7 @@ async function importOrderedPdf() {
 
   await loadOrderedItems();
   await loadAdminCalendar();
+  window.productionTrackerAlerts?.load();
 }
 
 async function importProductionNeedsPdf() {
