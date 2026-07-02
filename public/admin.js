@@ -4978,8 +4978,16 @@ function resetOrderedForm() {
   document.getElementById("ordered_department").value = "";
   document.getElementById("ordered_import_pdf").value = "";
   document.getElementById("orderedImportResult").textContent = "";
+  setOrderedAddStatus("");
   document.getElementById("orderedItemRows").innerHTML = "";
   addOrderedItemRow();
+}
+
+function setOrderedAddStatus(text, type = "") {
+  const status = document.getElementById("orderedAddStatus");
+  if (!status) return;
+  status.textContent = text;
+  status.className = type ? `message ${type}` : "message";
 }
 
 function addOrderedItemRow(value = { item_name: "", package_qty: "" }) {
@@ -5025,6 +5033,25 @@ function getOrderedItemRows() {
       package_qty: row.querySelector(".ordered-item-package-qty").value
     }))
     .filter(item => item.item_name || item.package_qty);
+}
+
+function validateOrderedDeliveryPayload(payload) {
+  if (!payload.date_ordered) return "Date ordered is required.";
+  if (!payload.expected_delivery_date) return "Expected delivery date is required.";
+  if (!payload.item_supplier.trim()) return "Item supplier is required.";
+  if (!payload.department.trim()) return "Department is required.";
+  if (!payload.items.length) return "Add at least one ordered item.";
+
+  const incompleteItem = payload.items.find(item => !item.item_name || item.package_qty === "");
+  if (incompleteItem) return "Each ordered item needs an item name and package QTY.";
+
+  const invalidQty = payload.items.find(item => {
+    const qty = Number(item.package_qty);
+    return !Number.isInteger(qty) || qty < 0;
+  });
+  if (invalidQty) return "Package QTY must be a whole number zero or greater.";
+
+  return "";
 }
 
 function resetAdminOrderRequestForm() {
@@ -6159,23 +6186,45 @@ async function saveOrderedItem() {
     item_supplier: document.getElementById("ordered_item_supplier").value,
     department: document.getElementById("ordered_department").value
   };
-
-  const res = await adminFetch("/admin/ordered-items", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    showMessage("Ordered delivery save failed: " + text, "error");
+  const validationMessage = validateOrderedDeliveryPayload(payload);
+  if (validationMessage) {
+    setOrderedAddStatus(validationMessage, "error");
+    showMessage(validationMessage, "error");
     return;
   }
 
-  resetOrderedForm();
-  showMessage("Ordered delivery added.", "success");
-  await loadOrderedItems();
-  window.productionTrackerAlerts?.load();
+  const saveButton = document.querySelector(".ordered-add-action .ordered-actions button");
+  if (saveButton) saveButton.disabled = true;
+  setOrderedAddStatus("Saving ordered delivery...");
+
+  try {
+    const res = await adminFetch("/admin/ordered-items", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      const message = "Ordered delivery save failed: " + text;
+      setOrderedAddStatus(message, "error");
+      showMessage(message, "error");
+      return;
+    }
+
+    resetOrderedForm();
+    showMessage("Ordered delivery added.", "success");
+    setOrderedAddStatus("Ordered delivery added.", "success");
+    await loadOrderedItems();
+    await loadAdminCalendar();
+    window.productionTrackerAlerts?.load();
+  } catch (err) {
+    const message = "Ordered delivery save failed: " + err.message;
+    setOrderedAddStatus(message, "error");
+    showMessage(message, "error");
+  } finally {
+    if (saveButton) saveButton.disabled = false;
+  }
 }
 
 async function importOrderedPdf() {

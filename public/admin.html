@@ -1203,13 +1203,17 @@
     .ordered-section-full {
       grid-column: 1 / -1;
     }
+    .ordered-final-grid {
+      order: 3;
+    }
     #orderedPanel .ordered-expected-list { order: 1; }
     #orderedPanel .ordered-needs-date-list { order: 2; }
-    #orderedPanel .ordered-received-list { order: 3; }
+    #orderedPanel .ordered-request-action { order: 3; }
     #orderedPanel .ordered-requests-list { order: 4; }
-    .ordered-manual-action {
-      display: none;
-    }
+    #orderedPanel .ordered-add-action { order: 5; }
+    #orderedPanel .ordered-import-action { order: 6; }
+    #orderedPanel .ordered-manual-action { order: 7; }
+    #orderedPanel .ordered-received-list { order: 8; }
     .ordered-section-header {
       display: flex;
       justify-content: space-between;
@@ -1739,13 +1743,13 @@
         display: contents;
       }
       #orderedPanel .ordered-expected-list { order: 1; }
-      #orderedPanel .ordered-manual-action { order: 2; }
-      #orderedPanel .ordered-import-action { order: 3; }
-      #orderedPanel .ordered-request-action { order: 4; }
+      #orderedPanel .ordered-needs-date-list { order: 2; }
+      #orderedPanel .ordered-request-action { order: 3; }
+      #orderedPanel .ordered-requests-list { order: 4; }
       #orderedPanel .ordered-add-action { order: 5; }
-      #orderedPanel .ordered-needs-date-list { order: 6; }
-      #orderedPanel .ordered-received-list { order: 7; }
-      #orderedPanel .ordered-requests-list { order: 8; }
+      #orderedPanel .ordered-import-action { order: 6; }
+      #orderedPanel .ordered-manual-action { order: 7; }
+      #orderedPanel .ordered-received-list { order: 8; }
       #orderedPanel .ordered-card,
       #orderedPanel .ordered-section {
         padding: 0;
@@ -1784,6 +1788,7 @@
       }
       #orderedPanel .ordered-card > .ordered-form,
       #orderedPanel .ordered-card > .ordered-actions,
+      #orderedPanel .ordered-card > .message,
       #orderedPanel .ordered-card > .ordered-import-result,
       #orderedPanel .ordered-section > div:not(.ordered-section-header):not(.ordered-mobile-toggle),
       #orderedPanel .ordered-section .ordered-section-tools button {
@@ -1791,6 +1796,7 @@
       }
       #orderedPanel .ordered-card.mobile-focused > .ordered-form,
       #orderedPanel .ordered-card.mobile-focused > .ordered-actions,
+      #orderedPanel .ordered-card.mobile-focused > .message,
       #orderedPanel .ordered-card.mobile-focused > .ordered-import-result,
       #orderedPanel .ordered-section.mobile-focused > div:not(.ordered-section-header):not(.ordered-mobile-toggle),
       #orderedPanel .ordered-section.mobile-focused .ordered-section-tools button {
@@ -1801,6 +1807,7 @@
       }
       #orderedPanel .ordered-card > .ordered-form,
       #orderedPanel .ordered-card > .ordered-actions,
+      #orderedPanel .ordered-card > .message,
       #orderedPanel .ordered-card > .ordered-import-result,
       #orderedPanel .ordered-section > div:not(.ordered-section-header):not(.ordered-mobile-toggle) {
         padding: 12px;
@@ -2279,6 +2286,35 @@
 
 <section id="orderedPanel" class="admin-panel">
   <div class="ordered-workspace">
+    <div class="ordered-status-grid">
+      <section class="ordered-section ordered-expected-list">
+        <button class="ordered-mobile-toggle" type="button" onclick="toggleAdminMobileOrderedPanel(this)">
+          <span>Expected Deliveries</span>
+          <span id="adminExpectedDeliveriesMobileCount" class="ordered-section-count"></span>
+        </button>
+        <div class="ordered-section-header">
+          <h3>Expected Deliveries</h3>
+          <div class="ordered-section-tools">
+            <span id="adminExpectedDeliveriesCount" class="ordered-section-count"></span>
+            <button type="button" onclick="openAdminManualReceivedWindow()">Manual Received Item</button>
+          </div>
+        </div>
+        <div id="adminExpectedDeliveries"></div>
+      </section>
+
+      <section class="ordered-section ordered-needs-date-list">
+        <button class="ordered-mobile-toggle" type="button" onclick="toggleAdminMobileOrderedPanel(this)">
+          <span>Needs Delivery Date</span>
+          <span id="adminNeedsDeliveryDateMobileCount" class="ordered-section-count"></span>
+        </button>
+        <div class="ordered-section-header">
+          <h3>Needs Delivery Date</h3>
+          <span id="adminNeedsDeliveryDateCount" class="ordered-section-count"></span>
+        </div>
+        <div id="adminNeedsDeliveryDateDeliveries"></div>
+      </section>
+    </div>
+
     <div class="ordered-entry-grid">
       <section class="ordered-card ordered-request-action">
         <button class="ordered-mobile-toggle" type="button" onclick="toggleAdminMobileOrderedPanel(this)">
@@ -2316,25 +2352,16 @@
         </div>
       </section>
 
-      <section class="ordered-card ordered-import-action">
+      <section class="ordered-section ordered-section-full ordered-requests-list">
         <button class="ordered-mobile-toggle" type="button" onclick="toggleAdminMobileOrderedPanel(this)">
-          <span>Import PDF</span>
+          <span>Item Requests</span>
+          <span id="adminOrderRequestsMobileCount" class="ordered-section-count"></span>
         </button>
-        <h3>Import Order PDF</h3>
-        <div class="ordered-form">
-          <div class="ordered-field">
-            <label for="ordered_import_pdf">Order Details PDF</label>
-            <input type="file" id="ordered_import_pdf" accept="application/pdf">
-          </div>
-          <div class="ordered-field">
-            <label for="ordered_import_department">Department</label>
-            <input type="text" id="ordered_import_department">
-          </div>
+        <div class="ordered-section-header">
+          <h3>Item Requests</h3>
+          <span id="adminOrderRequestsCount" class="ordered-section-count"></span>
         </div>
-        <div class="ordered-actions">
-          <button type="button" onclick="importOrderedPdf()">Import PDF</button>
-        </div>
-        <div id="orderedImportResult" class="ordered-import-result"></div>
+        <div id="adminOrderRequests"></div>
       </section>
 
       <section class="ordered-card ordered-add-action">
@@ -2368,49 +2395,32 @@
         <div class="ordered-actions">
           <button type="button" onclick="saveOrderedItem()">Add Ordered Delivery</button>
         </div>
+        <div id="orderedAddStatus" class="message"></div>
+      </section>
+
+      <section class="ordered-card ordered-import-action">
+        <button class="ordered-mobile-toggle" type="button" onclick="toggleAdminMobileOrderedPanel(this)">
+          <span>Import PDF</span>
+        </button>
+        <h3>Import Order PDF</h3>
+        <div class="ordered-form">
+          <div class="ordered-field">
+            <label for="ordered_import_pdf">Order Details PDF</label>
+            <input type="file" id="ordered_import_pdf" accept="application/pdf">
+          </div>
+          <div class="ordered-field">
+            <label for="ordered_import_department">Department</label>
+            <input type="text" id="ordered_import_department">
+          </div>
+        </div>
+        <div class="ordered-actions">
+          <button type="button" onclick="importOrderedPdf()">Import PDF</button>
+        </div>
+        <div id="orderedImportResult" class="ordered-import-result"></div>
       </section>
     </div>
 
-    <div class="ordered-status-grid">
-      <section class="ordered-section ordered-section-full ordered-requests-list">
-        <button class="ordered-mobile-toggle" type="button" onclick="toggleAdminMobileOrderedPanel(this)">
-          <span>Item Requests</span>
-          <span id="adminOrderRequestsMobileCount" class="ordered-section-count"></span>
-        </button>
-        <div class="ordered-section-header">
-          <h3>Item Requests</h3>
-          <span id="adminOrderRequestsCount" class="ordered-section-count"></span>
-        </div>
-        <div id="adminOrderRequests"></div>
-      </section>
-
-      <section class="ordered-section ordered-expected-list">
-        <button class="ordered-mobile-toggle" type="button" onclick="toggleAdminMobileOrderedPanel(this)">
-          <span>Expected Deliveries</span>
-          <span id="adminExpectedDeliveriesMobileCount" class="ordered-section-count"></span>
-        </button>
-        <div class="ordered-section-header">
-          <h3>Expected Deliveries</h3>
-          <div class="ordered-section-tools">
-            <span id="adminExpectedDeliveriesCount" class="ordered-section-count"></span>
-            <button type="button" onclick="openAdminManualReceivedWindow()">Manual Received Item</button>
-          </div>
-        </div>
-        <div id="adminExpectedDeliveries"></div>
-      </section>
-
-      <section class="ordered-section ordered-needs-date-list">
-        <button class="ordered-mobile-toggle" type="button" onclick="toggleAdminMobileOrderedPanel(this)">
-          <span>Needs Delivery Date</span>
-          <span id="adminNeedsDeliveryDateMobileCount" class="ordered-section-count"></span>
-        </button>
-        <div class="ordered-section-header">
-          <h3>Needs Delivery Date</h3>
-          <span id="adminNeedsDeliveryDateCount" class="ordered-section-count"></span>
-        </div>
-        <div id="adminNeedsDeliveryDateDeliveries"></div>
-      </section>
-
+    <div class="ordered-status-grid ordered-final-grid">
       <section class="ordered-section ordered-manual-action">
         <button class="ordered-mobile-toggle" type="button" onclick="openAdminManualReceivedWindow()">
           <span>Manual Received Item</span>

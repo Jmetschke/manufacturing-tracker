@@ -727,6 +727,17 @@ function createDeliveryScheduledAlert(relatedRecordId) {
   });
 }
 
+function createDeliveryAddedAlert(relatedRecordId, { needsDeliveryDate = false } = {}) {
+  return createAlert({
+    type: "delivery_added",
+    title: "Delivery Added",
+    message: needsDeliveryDate
+      ? "A delivery item has been added and needs to be scheduled. Check Needs Delivery Date."
+      : "A delivery item has been added. Check Expected Deliveries.",
+    related_record_id: relatedRecordId
+  });
+}
+
 async function addMissingColumn(table, column, definition, database = db) {
   const columns = await allSql(`PRAGMA table_info(${table})`, [], database);
   const exists = columns.some(c => c.name === column);
@@ -2710,8 +2721,11 @@ app.put("/admin/order-requests/:id/order", (req, res) => {
           [orderedItemId, request.id],
           updateErr => {
             if (updateErr) return res.status(500).send(updateErr.message);
-            createDeliveryScheduledAlert(orderedItemId)
-              .catch(alertErr => console.error("Could not create delivery scheduled alert:", alertErr.message))
+            Promise.all([
+              createDeliveryAddedAlert(orderedItemId),
+              createDeliveryScheduledAlert(orderedItemId)
+            ])
+              .catch(alertErr => console.error("Could not create request ordered delivery alerts:", alertErr.message))
               .finally(() => {
                 res.json({
                   message: "Order request marked ordered",
@@ -2790,8 +2804,10 @@ app.post("/admin/ordered-items", async (req, res) => {
       return insertedIds;
     });
 
-    await Promise.all(ids.map(id => createDeliveryScheduledAlert(id)
-      .catch(alertErr => console.error("Could not create delivery scheduled alert:", alertErr.message))));
+    await Promise.all(ids.map(id => Promise.all([
+      createDeliveryAddedAlert(id),
+      createDeliveryScheduledAlert(id)
+    ]).catch(alertErr => console.error("Could not create ordered delivery alerts:", alertErr.message))));
 
     res.status(201).json({ message: "Ordered delivery added", ids });
   } catch (err) {
@@ -2953,9 +2969,12 @@ async function importOrderedItemsPdf(req, res) {
 
     await Promise.all(ids.map((id, index) => {
       const item = parsed.items[index];
-      if (!item || item.import_needs_delivery_date || item.received_date) return Promise.resolve();
-      return createDeliveryScheduledAlert(id)
-        .catch(alertErr => console.error("Could not create delivery scheduled alert:", alertErr.message));
+      if (!item || item.received_date) return Promise.resolve();
+      const needsDeliveryDate = Boolean(item.import_needs_delivery_date);
+      const alerts = [createDeliveryAddedAlert(id, { needsDeliveryDate })];
+      if (!needsDeliveryDate) alerts.push(createDeliveryScheduledAlert(id));
+      return Promise.all(alerts)
+        .catch(alertErr => console.error("Could not create imported delivery alerts:", alertErr.message));
     }));
 
     res.status(201).json({
