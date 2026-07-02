@@ -6375,6 +6375,7 @@ function registerProductionTrackerServiceWorker() {
   window.addEventListener("load", () => {
     navigator.serviceWorker
       .register("/service-worker.js")
+      .then(registration => registration.update().catch(() => null))
       .catch(err => console.warn("PWA service worker registration failed:", err));
   });
 }

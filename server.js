@@ -184,7 +184,7 @@ app.use((req, res, next) => {
     if (hasAdminAccess(req)) return next();
 
     const acceptsHtml = (req.headers.accept || "").includes("text/html");
-    if (acceptsHtml || req.method === "GET") {
+    if (req.method === "GET" && acceptsHtml) {
       return res.redirect(accessRedirect(req.originalUrl));
     }
 
@@ -194,7 +194,7 @@ app.use((req, res, next) => {
   if (hasAppAccess(req)) return next();
 
   const acceptsHtml = (req.headers.accept || "").includes("text/html");
-  if (acceptsHtml || req.method === "GET") {
+  if (req.method === "GET" && acceptsHtml) {
     return res.redirect(accessRedirect(req.originalUrl));
   }
 
