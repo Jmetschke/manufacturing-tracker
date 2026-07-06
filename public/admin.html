@@ -32,6 +32,7 @@
     .screen-link:visited { color: #fff; }
     .pwa-install-button { border-color: #5d9b45; background: #5d9b45; }
     .pwa-install-button:disabled { opacity: 0.7; cursor: default; }
+    .refresh-button { border-color: #44505a; background: #44505a; }
     .alert-widget { position: relative; }
     .alert-toggle {
       border: 1px solid #2364aa;
@@ -202,6 +203,54 @@
     .item-task-list {
       margin: 0 0 0 18px;
       padding: 0;
+    }
+    .alert-recipient-management {
+      display: grid;
+      grid-template-columns: minmax(280px, 0.75fr) minmax(320px, 1.25fr);
+      gap: 14px;
+      align-items: start;
+    }
+    .alert-recipient-section {
+      border: 1px solid #d8d8d2;
+      background: #fff;
+      padding: 12px;
+    }
+    .alert-recipient-section h3 { margin: 0 0 10px; }
+    .alert-recipient-form {
+      display: grid;
+      gap: 8px;
+    }
+    .alert-recipient-form label,
+    .alert-type-options label {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      font-weight: bold;
+    }
+    .alert-recipient-form input[type="text"],
+    .alert-recipient-form input[type="email"],
+    .alert-recipient-form input[type="tel"] {
+      margin: 0;
+      width: 100%;
+    }
+    .alert-recipient-toggles,
+    .alert-type-options,
+    .alert-recipient-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .alert-type-options label {
+      border: 1px solid #d8d8d2;
+      background: #fbfcfa;
+      padding: 6px 8px;
+      font-weight: normal;
+    }
+    .alert-recipient-status {
+      font-weight: bold;
+    }
+    .alert-recipient-status.inactive {
+      color: #777;
     }
     .task-option-grid {
       display: grid;
@@ -1712,6 +1761,7 @@
       .schedule-assignment-row { grid-template-columns: 1fr; }
       .test-pickup-item-picker { grid-template-columns: 1fr; }
       .item-task-management,
+      .alert-recipient-management,
       .new-item-form,
       .master-task-row { grid-template-columns: 1fr; }
       .ordered-item-row { grid-template-columns: 1fr; }
@@ -1982,6 +2032,7 @@
   <h2>Admin Dashboard</h2>
   <div class="header-actions">
     <button class="screen-link pwa-install-button" type="button">How to Install</button>
+    <button id="adminRefreshButton" class="screen-link refresh-button" type="button" onclick="refreshAdminApp()">Refresh Data</button>
     <div class="alert-widget" data-alert-widget>
       <button id="alertToggle" class="alert-toggle" type="button" aria-expanded="false" aria-controls="alertPanel">
         Alerts <span id="alertUnreadCount" class="alert-count" hidden>0</span>
@@ -2009,6 +2060,7 @@
   <button class="admin-tab-button" type="button" onclick="showAdminTab('batches')">Batch Tracker</button>
   <button class="admin-tab-button" type="button" onclick="showAdminTab('calendar')">Calendar</button>
   <button class="admin-tab-button" type="button" onclick="showAdminTab('ordered')">Ordered Items</button>
+  <button class="admin-tab-button" type="button" onclick="showAdminTab('alertRecipients')">Alert Recipients</button>
 </div>
 
 <div id="message" class="message"></div>
@@ -2102,6 +2154,38 @@
       </div>
     </div>
   </section>
+</section>
+
+<section id="alertRecipientsPanel" class="admin-panel">
+  <div class="alert-recipient-management">
+    <section class="alert-recipient-section">
+      <h3>Alert Recipient</h3>
+      <input type="hidden" id="alert_recipient_id">
+      <div class="alert-recipient-form">
+        <input type="text" id="alert_recipient_name" placeholder="Name">
+        <input type="email" id="alert_recipient_email" placeholder="Email address">
+        <input type="tel" id="alert_recipient_phone" placeholder="+18475551234">
+        <div class="alert-recipient-toggles">
+          <label><input type="checkbox" id="alert_recipient_receive_email"> Email</label>
+          <label><input type="checkbox" id="alert_recipient_receive_sms"> SMS</label>
+          <label><input type="checkbox" id="alert_recipient_is_active" checked> Active</label>
+        </div>
+        <div>
+          <b>Alert Types</b>
+          <div id="alertRecipientTypeOptions" class="alert-type-options"></div>
+        </div>
+        <div class="alert-recipient-actions">
+          <button type="button" onclick="saveAlertRecipient()">Save Recipient</button>
+          <button type="button" onclick="resetAlertRecipientForm()">Clear</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="alert-recipient-section">
+      <h3>Recipients</h3>
+      <div id="alertRecipientsList"></div>
+    </section>
+  </div>
 </section>
 
 <section id="reviewPanel" class="admin-panel">

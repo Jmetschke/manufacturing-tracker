@@ -3,6 +3,8 @@ console.log("SERVER ACTIVE - CORRECT FILE");
 const express = require("express");
 const crypto = require("crypto");
 const path = require("path");
+const nodemailer = require("nodemailer");
+const twilio = require("twilio");
 const db = require("./db");
 const entryAlertThresholds = require("./entry-alert-thresholds.json");
 const calendarDb = db.calendar || db;
@@ -18,6 +20,18 @@ const ACCESS_COOKIE = "manufacturing_tracker_access";
 const ADMIN_ACCESS_COOKIE = "manufacturing_tracker_admin_access";
 const ACCESS_SECRET = process.env.ACCESS_SESSION_SECRET || `${ACCESS_CODE}:${ADMIN_ACCESS_CODE}`;
 const MAX_SCHEDULE_TASKS_LENGTH = 100000;
+let alertEmailTransporter = null;
+let alertSmsClient = null;
+
+const ALERT_TYPE_OPTIONS = Object.freeze([
+  "recipe_published",
+  "delivery_added",
+  "delivery_scheduled",
+  "delivery_completed",
+  "low_inventory",
+  "task_assigned",
+  "system_error"
+]);
 
 function normalizeEntryAlertName(value) {
   return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
@@ -674,12 +688,251 @@ function getSql(sql, params = [], database = db) {
   });
 }
 
+function isEmailAddress(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+}
+
+function isE164PhoneNumber(value) {
+  return /^\+[1-9]\d{1,14}$/.test(String(value || "").trim());
+}
+
+function normalizeBooleanFlag(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback ? 1 : 0;
+  if (value === true || value === 1 || value === "1") return 1;
+  if (value === false || value === 0 || value === "0") return 0;
+  if (String(value).toLowerCase() === "true") return 1;
+  if (String(value).toLowerCase() === "false") return 0;
+  return fallback ? 1 : 0;
+}
+
+function normalizeAlertTypes(value) {
+  let rawTypes = value;
+  if (typeof rawTypes === "string") {
+    try {
+      rawTypes = JSON.parse(rawTypes);
+    } catch (err) {
+      rawTypes = rawTypes.split(",");
+    }
+  }
+
+  if (!Array.isArray(rawTypes)) return [];
+
+  return Array.from(new Set(
+    rawTypes
+      .map(type => normalizeRequiredText(type))
+      .filter(Boolean)
+  ));
+}
+
+function alertRecipientMatchesType(recipient, alertType) {
+  const types = normalizeAlertTypes(recipient.alert_types);
+  return types.includes(alertType) || types.includes("all");
+}
+
+function validateAlertRecipientPayload(body, existing = {}) {
+  const name = normalizeRequiredText(body.name !== undefined ? body.name : existing.name);
+  const email = normalizeRequiredText(body.email !== undefined ? body.email : existing.email);
+  const phoneNumber = normalizeRequiredText(body.phone_number !== undefined ? body.phone_number : existing.phone_number);
+  const receiveEmail = normalizeBooleanFlag(
+    body.receive_email !== undefined ? body.receive_email : existing.receive_email,
+    false
+  );
+  const receiveSms = normalizeBooleanFlag(
+    body.receive_sms !== undefined ? body.receive_sms : existing.receive_sms,
+    false
+  );
+  const isActive = normalizeBooleanFlag(
+    body.is_active !== undefined ? body.is_active : existing.is_active,
+    true
+  );
+  const alertTypes = normalizeAlertTypes(body.alert_types !== undefined ? body.alert_types : existing.alert_types);
+
+  if (!name) throw new Error("Recipient name is required");
+  if (receiveEmail && !isEmailAddress(email)) throw new Error("A valid email address is required when email alerts are enabled");
+  if (email && !isEmailAddress(email)) throw new Error("Email address is not valid");
+  if (receiveSms && !isE164PhoneNumber(phoneNumber)) throw new Error("A valid E.164 phone number is required when SMS alerts are enabled");
+  if (phoneNumber && !isE164PhoneNumber(phoneNumber)) throw new Error("Phone number must use E.164 format, like +18475551234");
+  if (!alertTypes.length) throw new Error("Select at least one alert type");
+
+  return {
+    name,
+    email,
+    phone_number: phoneNumber,
+    receive_email: receiveEmail,
+    receive_sms: receiveSms,
+    alert_types: JSON.stringify(alertTypes),
+    is_active: isActive
+  };
+}
+
+function getAlertEmailConfig() {
+  const host = normalizeRequiredText(process.env.SMTP_HOST);
+  const port = Number(process.env.SMTP_PORT);
+  const user = normalizeRequiredText(process.env.SMTP_USER);
+  const pass = normalizeRequiredText(process.env.SMTP_PASS);
+  const from = normalizeRequiredText(process.env.ALERT_FROM_EMAIL);
+
+  if (!host || !Number.isInteger(port) || port <= 0 || !user || !pass || !from) {
+    return null;
+  }
+
+  return {
+    host,
+    port,
+    user,
+    pass,
+    from
+  };
+}
+
+function getAlertEmailTransporter(config) {
+  if (alertEmailTransporter) return alertEmailTransporter;
+
+  alertEmailTransporter = nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.port === 465,
+    auth: {
+      user: config.user,
+      pass: config.pass
+    }
+  });
+
+  return alertEmailTransporter;
+}
+
+async function sendAlertEmail(alert, recipient) {
+  const config = getAlertEmailConfig();
+  if (!config) {
+    console.warn("Alert email requested but SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and ALERT_FROM_EMAIL are not fully configured.");
+    return { sent: false, error: "Email SMTP settings are not fully configured" };
+  }
+
+  if (!isEmailAddress(recipient.email)) {
+    return { sent: false, error: `Recipient ${recipient.name} does not have a valid email address` };
+  }
+
+  const lines = [
+    alert.message,
+    "",
+    `Type: ${alert.type}`,
+    alert.related_record_id ? `Related record: ${alert.related_record_id}` : ""
+  ].filter(Boolean);
+
+  await getAlertEmailTransporter(config).sendMail({
+    from: config.from,
+    to: recipient.email,
+    subject: alert.title,
+    text: lines.join("\n")
+  });
+
+  return { sent: true, error: "" };
+}
+
+function getAlertSmsConfig() {
+  const accountSid = normalizeRequiredText(process.env.TWILIO_ACCOUNT_SID);
+  const authToken = normalizeRequiredText(process.env.TWILIO_AUTH_TOKEN);
+  const from = normalizeRequiredText(process.env.TWILIO_FROM_PHONE);
+
+  if (!accountSid || !authToken || !isE164PhoneNumber(from)) return null;
+
+  return { accountSid, authToken, from };
+}
+
+function getAlertSmsClient(config) {
+  if (alertSmsClient) return alertSmsClient;
+  alertSmsClient = twilio(config.accountSid, config.authToken);
+  return alertSmsClient;
+}
+
+async function sendAlertSms(alert, recipient) {
+  const config = getAlertSmsConfig();
+  if (!config) {
+    console.warn("Alert SMS requested but TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_PHONE are not fully configured.");
+    return { sent: false, error: "Twilio settings are not fully configured" };
+  }
+
+  if (!isE164PhoneNumber(recipient.phone_number)) {
+    return { sent: false, error: `Recipient ${recipient.name} does not have a valid E.164 phone number` };
+  }
+
+  await getAlertSmsClient(config).messages.create({
+    from: config.from,
+    to: recipient.phone_number,
+    body: `${alert.title}: ${alert.message}`
+  });
+
+  return { sent: true, error: "" };
+}
+
+async function notifyAlertRecipients(alert) {
+  const recipients = await allSql(`
+    SELECT id, name, email, phone_number, receive_email, receive_sms, alert_types, is_active
+    FROM alert_recipients
+    WHERE COALESCE(is_active, 1) = 1
+  `);
+  const matchingRecipients = recipients.filter(recipient => alertRecipientMatchesType(recipient, alert.type));
+  let sentEmail = false;
+  let sentSms = false;
+  const emailErrors = [];
+  const smsErrors = [];
+
+  for (const recipient of matchingRecipients) {
+    if (Number(recipient.receive_email)) {
+      try {
+        const result = await sendAlertEmail(alert, recipient);
+        sentEmail = sentEmail || result.sent;
+        if (result.error) emailErrors.push(`${recipient.name}: ${result.error}`);
+      } catch (err) {
+        emailErrors.push(`${recipient.name}: ${err.message}`);
+      }
+    }
+
+    if (Number(recipient.receive_sms)) {
+      try {
+        const result = await sendAlertSms(alert, recipient);
+        sentSms = sentSms || result.sent;
+        if (result.error) smsErrors.push(`${recipient.name}: ${result.error}`);
+      } catch (err) {
+        smsErrors.push(`${recipient.name}: ${err.message}`);
+      }
+    }
+  }
+
+  await runSql(
+    `UPDATE alerts
+     SET sent_email = ?,
+         sent_sms = ?,
+         email_error = ?,
+         sms_error = ?
+     WHERE id = ?`,
+    [
+      sentEmail ? 1 : 0,
+      sentSms ? 1 : 0,
+      emailErrors.join("; "),
+      smsErrors.join("; "),
+      alert.id
+    ]
+  );
+
+  if (emailErrors.length) console.warn("Alert email warning:", emailErrors.join("; "));
+  if (smsErrors.length) console.warn("Alert SMS warning:", smsErrors.join("; "));
+
+  return {
+    sent_email: sentEmail ? 1 : 0,
+    sent_sms: sentSms ? 1 : 0,
+    email_error: emailErrors.join("; "),
+    sms_error: smsErrors.join("; ")
+  };
+}
+
 async function createAlert({
   recipient = "all",
   type,
   title,
   message,
-  related_record_id = null
+  related_record_id = null,
+  channels = ["in_app"]
 }) {
   const alertType = normalizeRequiredText(type);
   const alertTitle = normalizeRequiredText(title);
@@ -699,31 +952,48 @@ async function createAlert({
        type,
        title,
        message,
-       related_record_id
+       related_record_id,
+       sent_email,
+       sent_sms
      )
-     VALUES (?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, 0, 0)`,
     [alertRecipient, alertType, alertTitle, alertMessage, relatedRecordId]
   );
 
-  return {
+  const alert = {
     id: result.lastID,
     recipient: alertRecipient,
     type: alertType,
     title: alertTitle,
     message: alertMessage,
     related_record_id: relatedRecordId,
-    is_read: 0
+    is_read: 0,
+    sent_email: 0,
+    sent_sms: 0,
+    email_error: "",
+    sms_error: ""
   };
+
+  const channelList = Array.isArray(channels) ? channels : ["in_app"];
+  if (channelList.includes("email") || channelList.includes("sms")) {
+    notifyAlertRecipients(alert).catch(err => {
+      console.warn("Could not notify alert recipients:", err.message);
+    });
+  }
+
+  return alert;
 }
 
 function createDeliveryScheduledAlert(relatedRecordId) {
-  // Add future alert thresholds as small wrappers like this, then call them
-  // immediately after the event write succeeds.
+  // Add future app event triggers as small wrappers like this, then call them
+  // immediately after the event write succeeds. Include "email" and/or "sms"
+  // in channels when alert recipients should be notified outside the app.
   return createAlert({
     type: "delivery_scheduled",
     title: "Delivery Scheduled",
     message: "A new delivery has been scheduled. Check Expected Deliveries.",
-    related_record_id: relatedRecordId
+    related_record_id: relatedRecordId,
+    channels: ["in_app", "email", "sms"]
   });
 }
 
@@ -734,7 +1004,8 @@ function createDeliveryAddedAlert(relatedRecordId, { needsDeliveryDate = false }
     message: needsDeliveryDate
       ? "A delivery item has been added and needs to be scheduled. Check Needs Delivery Date."
       : "A delivery item has been added. Check Expected Deliveries.",
-    related_record_id: relatedRecordId
+    related_record_id: relatedRecordId,
+    channels: ["in_app", "email", "sms"]
   });
 }
 
@@ -1463,6 +1734,24 @@ async function initializeDatabase() {
       message TEXT NOT NULL,
       related_record_id TEXT,
       is_read INTEGER DEFAULT 0,
+      sent_email INTEGER DEFAULT 0,
+      sent_sms INTEGER DEFAULT 0,
+      email_error TEXT,
+      sms_error TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS alert_recipients (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      email TEXT,
+      phone_number TEXT,
+      receive_email INTEGER DEFAULT 0,
+      receive_sms INTEGER DEFAULT 0,
+      alert_types TEXT,
+      is_active INTEGER DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now'))
     )
   `);
@@ -1528,7 +1817,19 @@ async function initializeDatabase() {
   await addMissingColumn("alerts", "message", "TEXT");
   await addMissingColumn("alerts", "related_record_id", "TEXT");
   await addMissingColumn("alerts", "is_read", "INTEGER DEFAULT 0");
+  await addMissingColumn("alerts", "sent_email", "INTEGER DEFAULT 0");
+  await addMissingColumn("alerts", "sent_sms", "INTEGER DEFAULT 0");
+  await addMissingColumn("alerts", "email_error", "TEXT");
+  await addMissingColumn("alerts", "sms_error", "TEXT");
   await addMissingColumn("alerts", "created_at", "TEXT");
+  await addMissingColumn("alert_recipients", "name", "TEXT");
+  await addMissingColumn("alert_recipients", "email", "TEXT");
+  await addMissingColumn("alert_recipients", "phone_number", "TEXT");
+  await addMissingColumn("alert_recipients", "receive_email", "INTEGER DEFAULT 0");
+  await addMissingColumn("alert_recipients", "receive_sms", "INTEGER DEFAULT 0");
+  await addMissingColumn("alert_recipients", "alert_types", "TEXT");
+  await addMissingColumn("alert_recipients", "is_active", "INTEGER DEFAULT 1");
+  await addMissingColumn("alert_recipients", "created_at", "TEXT");
   await reconcileCalendarDatabase();
   await clearWeekendScheduleTasks();
 
@@ -1555,6 +1856,10 @@ app.get("/alerts", async (req, res) => {
         message,
         related_record_id,
         COALESCE(is_read, 0) AS is_read,
+        COALESCE(sent_email, 0) AS sent_email,
+        COALESCE(sent_sms, 0) AS sent_sms,
+        email_error,
+        sms_error,
         created_at
       FROM alerts
       ORDER BY datetime(created_at) DESC, id DESC
@@ -1574,7 +1879,12 @@ app.post("/alerts", async (req, res) => {
       type: req.body.type,
       title: req.body.title,
       message: req.body.message,
-      related_record_id: req.body.related_record_id
+      related_record_id: req.body.related_record_id,
+      channels: normalizeAlertChannels(
+        req.body.channels,
+        req.body.sendEmail === true || req.body.send_email === true,
+        req.body.sendSms === true || req.body.sendSMS === true || req.body.send_sms === true
+      )
     });
 
     const row = await getSql("SELECT * FROM alerts WHERE id = ?", [alert.id]);
@@ -1605,6 +1915,138 @@ app.patch("/alerts/:id/read", async (req, res) => {
 
     if (result.changes === 0) return res.status(404).send("Alert not found");
     res.json({ message: "Alert marked read" });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+function requireAdminAccessRoute(req, res) {
+  if (hasAdminAccess(req)) return true;
+  res.status(403).json({ message: "Admin access code required" });
+  return false;
+}
+
+function serializeAlertRecipient(row) {
+  return {
+    ...row,
+    receive_email: Number(row.receive_email) ? 1 : 0,
+    receive_sms: Number(row.receive_sms) ? 1 : 0,
+    is_active: Number(row.is_active) ? 1 : 0,
+    alert_types: normalizeAlertTypes(row.alert_types)
+  };
+}
+
+function normalizeAlertChannels(value, sendEmail = false, sendSms = false) {
+  const channels = Array.isArray(value) ? value.map(channel => normalizeRequiredText(channel)) : ["in_app"];
+  if (!channels.includes("in_app")) channels.push("in_app");
+  if (sendEmail && !channels.includes("email")) channels.push("email");
+  if (sendSms && !channels.includes("sms")) channels.push("sms");
+  return Array.from(new Set(channels.filter(Boolean)));
+}
+
+app.get("/alert-recipients", async (req, res) => {
+  if (!requireAdminAccessRoute(req, res)) return;
+
+  try {
+    const rows = await allSql(`
+      SELECT
+        id,
+        name,
+        email,
+        phone_number,
+        COALESCE(receive_email, 0) AS receive_email,
+        COALESCE(receive_sms, 0) AS receive_sms,
+        alert_types,
+        COALESCE(is_active, 1) AS is_active,
+        created_at
+      FROM alert_recipients
+      ORDER BY COALESCE(is_active, 1) DESC, name COLLATE NOCASE ASC
+    `);
+    res.json(rows.map(serializeAlertRecipient));
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.post("/alert-recipients", async (req, res) => {
+  if (!requireAdminAccessRoute(req, res)) return;
+
+  try {
+    const recipient = validateAlertRecipientPayload(req.body);
+    const result = await runSql(
+      `INSERT INTO alert_recipients (
+         name,
+         email,
+         phone_number,
+         receive_email,
+         receive_sms,
+         alert_types,
+         is_active
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        recipient.name,
+        recipient.email,
+        recipient.phone_number,
+        recipient.receive_email,
+        recipient.receive_sms,
+        recipient.alert_types,
+        recipient.is_active
+      ]
+    );
+    const row = await getSql("SELECT * FROM alert_recipients WHERE id = ?", [result.lastID]);
+    res.status(201).json(serializeAlertRecipient(row));
+  } catch (err) {
+    res.status(400).send(err.message);
+  }
+});
+
+app.put("/alert-recipients/:id", async (req, res) => {
+  if (!requireAdminAccessRoute(req, res)) return;
+
+  try {
+    const existing = await getSql("SELECT * FROM alert_recipients WHERE id = ?", [req.params.id]);
+    if (!existing) return res.status(404).send("Alert recipient not found");
+
+    const recipient = validateAlertRecipientPayload(req.body, existing);
+    await runSql(
+      `UPDATE alert_recipients
+       SET name = ?,
+           email = ?,
+           phone_number = ?,
+           receive_email = ?,
+           receive_sms = ?,
+           alert_types = ?,
+           is_active = ?
+       WHERE id = ?`,
+      [
+        recipient.name,
+        recipient.email,
+        recipient.phone_number,
+        recipient.receive_email,
+        recipient.receive_sms,
+        recipient.alert_types,
+        recipient.is_active,
+        req.params.id
+      ]
+    );
+    const row = await getSql("SELECT * FROM alert_recipients WHERE id = ?", [req.params.id]);
+    res.json(serializeAlertRecipient(row));
+  } catch (err) {
+    res.status(400).send(err.message);
+  }
+});
+
+app.delete("/alert-recipients/:id", async (req, res) => {
+  if (!requireAdminAccessRoute(req, res)) return;
+
+  try {
+    const result = await runSql(
+      "UPDATE alert_recipients SET is_active = 0 WHERE id = ?",
+      [req.params.id]
+    );
+    if (result.changes === 0) return res.status(404).send("Alert recipient not found");
+    res.json({ message: "Alert recipient deactivated" });
   } catch (err) {
     res.status(500).send(err.message);
   }

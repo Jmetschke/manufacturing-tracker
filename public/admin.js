@@ -8,6 +8,7 @@ let itemTaskOptionsByItemId = {};
 let itemTaskManagementAssignments = [];
 let allOrderedItems = [];
 let allOrderRequests = [];
+let allAlertRecipients = [];
 let adminScheduleRows = new Map();
 let adminExpectedDeliveriesByDate = new Map();
 let adminActiveScheduleByDate = new Map();
@@ -15,6 +16,15 @@ let adminCalendarStartDate = null;
 let productionNeedsRows = [];
 const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const eventCompanyOptions = ["Snackbar", "Hijnx", "Snackbar & Hijnx"];
+const alertRecipientTypeOptions = [
+  { value: "recipe_published", label: "Recipe Published" },
+  { value: "delivery_added", label: "Delivery Added" },
+  { value: "delivery_scheduled", label: "Delivery Scheduled" },
+  { value: "delivery_completed", label: "Delivery Completed" },
+  { value: "low_inventory", label: "Low Inventory" },
+  { value: "task_assigned", label: "Task Assigned" },
+  { value: "system_error", label: "System Error" }
+];
 const hijnxBatchOptions = [
   "Alpha Chunk - 1pk",
   "Alpha Chunk - 2pk",
@@ -294,8 +304,13 @@ async function loadProductionNeedsReport() {
   renderProductionNeeds(report.items || [], getProductionNeedsMetaText(report));
 }
 
+function getAdminAccessRedirectPath() {
+  const nextPath = `${window.location.pathname || "/admin.html"}${window.location.search || ""}`;
+  return `/access?next=${encodeURIComponent(nextPath)}`;
+}
+
 function redirectToAdminAccess() {
-  window.location.href = `/access?next=${encodeURIComponent("/admin.html")}`;
+  window.location.href = getAdminAccessRedirectPath();
 }
 
 function handleAdminAccessResponse(res) {
@@ -313,6 +328,39 @@ async function adminFetch(url, options = {}) {
     return new Response("Admin access code required", { status: 403 });
   }
   return res;
+}
+
+async function ensureAdminAccess() {
+  try {
+    const res = await fetch("/admin/database-status", {
+      headers: { Accept: "application/json" },
+      cache: "no-store"
+    });
+
+    if (handleAdminAccessResponse(res)) return false;
+    if (!res.ok) {
+      showMessage("Could not verify admin access. Try Refresh Data again.", "error");
+      return false;
+    }
+    return true;
+  } catch (err) {
+    showMessage("Could not verify admin access: " + err.message, "error");
+    return false;
+  }
+}
+
+async function readAdminJson(url, failureMessage) {
+  const res = await adminFetch(url, {
+    headers: { Accept: "application/json" },
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || failureMessage || "Request failed.");
+  }
+
+  return res.json();
 }
 
 function fillSelect(select, options, placeholder = "") {
@@ -427,9 +475,9 @@ function updateAdminDispensaryField() {
 
 async function loadLookups() {
   const [items, tasks, taskOptions] = await Promise.all([
-    fetch("/items").then(r => r.json()),
-    fetch("/tasks").then(r => r.json()),
-    fetch("/item-task-options").then(r => r.json())
+    readAdminJson("/items", "Could not load items."),
+    readAdminJson("/tasks", "Could not load tasks."),
+    readAdminJson("/item-task-options", "Could not load item task options.")
   ]);
 
   allItems = items;
@@ -2339,6 +2387,7 @@ function showAdminTab(tabName) {
   document.getElementById("entriesPanel").classList.toggle("active", tabName === "entries");
   document.getElementById("reviewPanel").classList.toggle("active", tabName === "review");
   document.getElementById("itemTaskManagementPanel").classList.toggle("active", tabName === "itemTasks");
+  document.getElementById("alertRecipientsPanel").classList.toggle("active", tabName === "alertRecipients");
   document.getElementById("dailyPanel").classList.toggle("active", tabName === "daily");
   document.getElementById("batchTrackerPanel").classList.toggle("active", tabName === "batches");
   document.getElementById("calendarPanel").classList.toggle("active", tabName === "calendar");
@@ -2349,6 +2398,7 @@ function showAdminTab(tabName) {
       (tabName === "entries" && button.textContent === "Entries") ||
       (tabName === "review" && button.textContent === "Entries for Review") ||
       (tabName === "itemTasks" && button.textContent === "Item & Task Management") ||
+      (tabName === "alertRecipients" && button.textContent === "Alert Recipients") ||
       (tabName === "daily" && button.textContent === "Daily Report") ||
       (tabName === "batches" && button.textContent === "Batch Tracker") ||
       (tabName === "calendar" && button.textContent === "Calendar") ||
@@ -2372,6 +2422,10 @@ function showAdminTab(tabName) {
 
   if (tabName === "itemTasks") {
     loadItemTaskManagement();
+  }
+
+  if (tabName === "alertRecipients") {
+    loadAlertRecipients();
   }
 
   if (tabName === "batches") {
@@ -3497,6 +3551,204 @@ async function loadItemTaskManagement() {
 
   renderItemTaskManagement();
   renderMasterTaskList();
+}
+
+function renderAlertRecipientTypeOptions(selectedTypes = []) {
+  const container = document.getElementById("alertRecipientTypeOptions");
+  if (!container) return;
+
+  const selected = new Set(selectedTypes);
+  container.innerHTML = "";
+
+  alertRecipientTypeOptions.forEach(option => {
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "alert-recipient-type";
+    checkbox.value = option.value;
+    checkbox.checked = selected.has(option.value);
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(option.label));
+    container.appendChild(label);
+  });
+}
+
+function getSelectedAlertRecipientTypes() {
+  return Array.from(document.querySelectorAll(".alert-recipient-type:checked"))
+    .map(input => input.value);
+}
+
+function resetAlertRecipientForm() {
+  document.getElementById("alert_recipient_id").value = "";
+  document.getElementById("alert_recipient_name").value = "";
+  document.getElementById("alert_recipient_email").value = "";
+  document.getElementById("alert_recipient_phone").value = "";
+  document.getElementById("alert_recipient_receive_email").checked = false;
+  document.getElementById("alert_recipient_receive_sms").checked = false;
+  document.getElementById("alert_recipient_is_active").checked = true;
+  renderAlertRecipientTypeOptions();
+}
+
+function getAlertRecipientPayload() {
+  return {
+    name: document.getElementById("alert_recipient_name").value,
+    email: document.getElementById("alert_recipient_email").value,
+    phone_number: document.getElementById("alert_recipient_phone").value,
+    receive_email: document.getElementById("alert_recipient_receive_email").checked,
+    receive_sms: document.getElementById("alert_recipient_receive_sms").checked,
+    is_active: document.getElementById("alert_recipient_is_active").checked,
+    alert_types: getSelectedAlertRecipientTypes()
+  };
+}
+
+async function loadAlertRecipients() {
+  renderAlertRecipientTypeOptions(getSelectedAlertRecipientTypes());
+  const res = await adminFetch("/alert-recipients", {
+    headers: { Accept: "application/json" },
+    cache: "no-store"
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Alert recipients load failed: " + text, "error");
+    return;
+  }
+
+  allAlertRecipients = await res.json();
+  renderAlertRecipients();
+}
+
+function renderAlertRecipients() {
+  const container = document.getElementById("alertRecipientsList");
+  if (!container) return;
+
+  container.innerHTML = "";
+  if (!allAlertRecipients.length) {
+    const empty = document.createElement("div");
+    empty.className = "alert-empty";
+    empty.textContent = "No alert recipients.";
+    container.appendChild(empty);
+    return;
+  }
+
+  const table = document.createElement("table");
+  const header = document.createElement("tr");
+  ["Name", "Email", "Phone", "Channels", "Types", "Status", "Actions"].forEach(text => {
+    const th = document.createElement("th");
+    th.textContent = text;
+    header.appendChild(th);
+  });
+  table.appendChild(header);
+
+  allAlertRecipients.forEach(recipient => {
+    const row = document.createElement("tr");
+    const channels = [
+      Number(recipient.receive_email) ? "Email" : "",
+      Number(recipient.receive_sms) ? "SMS" : ""
+    ].filter(Boolean).join(", ") || "In-app only";
+    const status = Number(recipient.is_active) ? "Active" : "Inactive";
+
+    [recipient.name, recipient.email || "-", recipient.phone_number || "-", channels, (recipient.alert_types || []).join(", "), status].forEach((value, index) => {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+      if (index === 5) {
+        cell.className = `alert-recipient-status${Number(recipient.is_active) ? "" : " inactive"}`;
+      }
+      row.appendChild(cell);
+    });
+
+    const actions = document.createElement("td");
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.textContent = "Edit";
+    editButton.addEventListener("click", () => editAlertRecipient(recipient.id));
+    actions.appendChild(editButton);
+
+    const toggleButton = document.createElement("button");
+    toggleButton.type = "button";
+    toggleButton.textContent = Number(recipient.is_active) ? "Deactivate" : "Activate";
+    toggleButton.addEventListener("click", () => toggleAlertRecipientActive(recipient.id));
+    actions.appendChild(toggleButton);
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.textContent = "Delete";
+    deleteButton.addEventListener("click", () => deactivateAlertRecipient(recipient.id));
+    actions.appendChild(deleteButton);
+    row.appendChild(actions);
+
+    table.appendChild(row);
+  });
+
+  container.appendChild(table);
+}
+
+function editAlertRecipient(id) {
+  const recipient = allAlertRecipients.find(item => String(item.id) === String(id));
+  if (!recipient) return;
+
+  document.getElementById("alert_recipient_id").value = recipient.id;
+  document.getElementById("alert_recipient_name").value = recipient.name || "";
+  document.getElementById("alert_recipient_email").value = recipient.email || "";
+  document.getElementById("alert_recipient_phone").value = recipient.phone_number || "";
+  document.getElementById("alert_recipient_receive_email").checked = Boolean(Number(recipient.receive_email));
+  document.getElementById("alert_recipient_receive_sms").checked = Boolean(Number(recipient.receive_sms));
+  document.getElementById("alert_recipient_is_active").checked = Boolean(Number(recipient.is_active));
+  renderAlertRecipientTypeOptions(recipient.alert_types || []);
+  document.getElementById("alert_recipient_name").focus();
+}
+
+async function saveAlertRecipient() {
+  const id = document.getElementById("alert_recipient_id").value;
+  const payload = getAlertRecipientPayload();
+  const url = id ? `/alert-recipients/${id}` : "/alert-recipients";
+  const method = id ? "PUT" : "POST";
+
+  const res = await adminFetch(url, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Alert recipient save failed: " + text, "error");
+    return;
+  }
+
+  resetAlertRecipientForm();
+  showMessage("Alert recipient saved.", "success");
+  await loadAlertRecipients();
+}
+
+async function toggleAlertRecipientActive(id) {
+  const recipient = allAlertRecipients.find(item => String(item.id) === String(id));
+  if (!recipient) return;
+
+  const res = await adminFetch(`/alert-recipients/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...recipient, is_active: !Number(recipient.is_active) })
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Alert recipient update failed: " + text, "error");
+    return;
+  }
+
+  await loadAlertRecipients();
+}
+
+async function deactivateAlertRecipient(id) {
+  const res = await adminFetch(`/alert-recipients/${id}`, { method: "DELETE" });
+  if (!res.ok) {
+    const text = await res.text();
+    showMessage("Alert recipient deactivate failed: " + text, "error");
+    return;
+  }
+
+  showMessage("Alert recipient deactivated.", "success");
+  await loadAlertRecipients();
 }
 
 function renderItemTaskManagement() {
@@ -5244,7 +5496,10 @@ function toggleAdminMobileOrderedPanel(button) {
 }
 
 async function loadOrderedItems() {
-  const res = await fetch("/ordered-items");
+  const res = await adminFetch("/ordered-items", {
+    headers: { Accept: "application/json" },
+    cache: "no-store"
+  });
 
   if (!res.ok) {
     showMessage("Could not load ordered items.", "error");
@@ -5256,7 +5511,10 @@ async function loadOrderedItems() {
 }
 
 async function loadOrderRequests() {
-  const res = await fetch("/order-requests");
+  const res = await adminFetch("/order-requests", {
+    headers: { Accept: "application/json" },
+    cache: "no-store"
+  });
 
   if (!res.ok) {
     showMessage("Could not load item requests.", "error");
@@ -5284,7 +5542,7 @@ async function saveAdminOrderRequest() {
     suggested_retailer: document.getElementById("admin_request_suggested_retailer").value
   };
 
-  const res = await fetch("/order-requests", {
+  const res = await adminFetch("/order-requests", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
@@ -5334,7 +5592,7 @@ async function saveAdminManualReceivedItem() {
     ...receivedImages
   };
 
-  const res = await fetch("/ordered-items/received", {
+  const res = await adminFetch("/ordered-items/received", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
@@ -6162,7 +6420,7 @@ function closeAdminReceivedDayFocusWindow() {
 }
 
 async function undoAdminReceivedItem(itemId) {
-  const res = await fetch(`/ordered-items/${itemId}/undo-receive`, {
+  const res = await adminFetch(`/ordered-items/${itemId}/undo-receive`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" }
   });
@@ -6355,16 +6613,97 @@ window.addEventListener("afterprint", () => {
   document.body.classList.remove("printing-concern-report");
 });
 
-async function initAdmin() {
-  loadEmployeeSelects();
-  await loadLookups();
-  setDefaultCalendarRange();
-  resetOrderedForm();
-  resetAdminOrderRequestForm();
-  resetAdminManualReceivedForm();
-  setupAdminTimeInput("admin_manual_received_time");
-  await loadProductionNeedsReport();
+function getActiveAdminTabName() {
+  if (document.getElementById("reviewPanel").classList.contains("active")) return "review";
+  if (document.getElementById("itemTaskManagementPanel").classList.contains("active")) return "itemTasks";
+  if (document.getElementById("alertRecipientsPanel").classList.contains("active")) return "alertRecipients";
+  if (document.getElementById("dailyPanel").classList.contains("active")) return "daily";
+  if (document.getElementById("batchTrackerPanel").classList.contains("active")) return "batches";
+  if (document.getElementById("calendarPanel").classList.contains("active")) return "calendar";
+  if (document.getElementById("orderedPanel").classList.contains("active")) return "ordered";
+  return "entries";
+}
+
+async function loadActiveAdminTabData() {
+  const tabName = getActiveAdminTabName();
+
+  if (tabName === "calendar") {
+    await loadAdminCalendar();
+    return;
+  }
+
+  if (tabName === "daily") {
+    await loadDailyReport();
+    return;
+  }
+
+  if (tabName === "review") {
+    await loadFlaggedEntryReview();
+    return;
+  }
+
+  if (tabName === "itemTasks") {
+    await loadItemTaskManagement();
+    return;
+  }
+
+  if (tabName === "alertRecipients") {
+    await loadAlertRecipients();
+    return;
+  }
+
+  if (tabName === "batches") {
+    await loadBatchTracker();
+    return;
+  }
+
+  if (tabName === "ordered") {
+    await loadOrderedAdminData();
+    return;
+  }
+
   await loadReport();
+}
+
+async function refreshAdminApp() {
+  const refreshButton = document.getElementById("adminRefreshButton");
+  if (refreshButton) refreshButton.disabled = true;
+  showMessage("Refreshing data...");
+
+  try {
+    const hasAccess = await ensureAdminAccess();
+    if (!hasAccess) return;
+
+    await loadLookups();
+    await loadProductionNeedsReport();
+    await loadActiveAdminTabData();
+    window.productionTrackerAlerts?.load();
+    showMessage("Data refreshed.", "success");
+  } catch (err) {
+    showMessage("Refresh failed: " + err.message, "error");
+  } finally {
+    if (refreshButton) refreshButton.disabled = false;
+  }
+}
+
+async function initAdmin() {
+  const hasAccess = await ensureAdminAccess();
+  if (!hasAccess) return;
+
+  try {
+    loadEmployeeSelects();
+    await loadLookups();
+    setDefaultCalendarRange();
+    resetOrderedForm();
+    resetAdminOrderRequestForm();
+    resetAdminManualReceivedForm();
+    resetAlertRecipientForm();
+    setupAdminTimeInput("admin_manual_received_time");
+    await loadProductionNeedsReport();
+    await loadReport();
+  } catch (err) {
+    showMessage("Admin data load failed: " + err.message, "error");
+  }
 }
 
 function registerProductionTrackerServiceWorker() {
