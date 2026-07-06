@@ -3,6 +3,9 @@
 // and Android often allow it; iPhone/iPad Safari requires the user to use
 // Share > Add to Home Screen, so this helper shows device-specific steps.
 let productionTrackerInstallPrompt = null;
+const productionTrackerBuildStorageKey = "productionTracker.activeBuild";
+const productionTrackerReloadFlagKey = "productionTracker.reloadedBuild";
+let productionTrackerVersionCheckInFlight = false;
 
 function isProductionTrackerStandalone() {
   return window.matchMedia("(display-mode: standalone)").matches ||
@@ -260,6 +263,85 @@ function registerProductionTrackerInstallServiceWorker() {
   });
 }
 
+async function clearProductionTrackerStaticCaches() {
+  if ("caches" in window) {
+    const cacheNames = await caches.keys();
+    await Promise.all(
+      cacheNames
+        .filter(cacheName => cacheName.startsWith("production-tracker-"))
+        .map(cacheName => caches.delete(cacheName))
+    );
+  }
+
+  if ("serviceWorker" in navigator) {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.map(registration => registration.update().catch(() => null)));
+  }
+}
+
+function reloadProductionTrackerForBuild(buildId) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("_app_update", String(buildId).slice(0, 12));
+  sessionStorage.setItem(productionTrackerReloadFlagKey, buildId);
+  window.location.replace(url.toString());
+}
+
+async function checkProductionTrackerBuildVersion() {
+  if (productionTrackerVersionCheckInFlight) return;
+  productionTrackerVersionCheckInFlight = true;
+
+  try {
+    const res = await fetch(`/app-version?_=${Date.now()}`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store"
+    });
+    if (!res.ok) return;
+
+    const data = await res.json();
+    const buildId = String(data.build || "").trim();
+    if (!buildId) return;
+
+    const storedBuildId = localStorage.getItem(productionTrackerBuildStorageKey);
+    if (!storedBuildId) {
+      localStorage.setItem(productionTrackerBuildStorageKey, buildId);
+      return;
+    }
+
+    if (storedBuildId === buildId) return;
+
+    const reloadedBuildId = sessionStorage.getItem(productionTrackerReloadFlagKey);
+    localStorage.setItem(productionTrackerBuildStorageKey, buildId);
+    await clearProductionTrackerStaticCaches();
+
+    if (reloadedBuildId !== buildId) {
+      reloadProductionTrackerForBuild(buildId);
+    }
+  } catch (err) {
+    console.warn("App version check failed:", err);
+  } finally {
+    productionTrackerVersionCheckInFlight = false;
+  }
+}
+
+function registerProductionTrackerBuildChecks() {
+  window.addEventListener("load", () => {
+    checkProductionTrackerBuildVersion();
+    setTimeout(checkProductionTrackerBuildVersion, 2000);
+  });
+
+  window.addEventListener("pageshow", event => {
+    if (event.persisted) checkProductionTrackerBuildVersion();
+  });
+
+  window.addEventListener("focus", checkProductionTrackerBuildVersion);
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      checkProductionTrackerBuildVersion();
+    }
+  });
+}
+
 window.addEventListener("beforeinstallprompt", event => {
   event.preventDefault();
   productionTrackerInstallPrompt = event;
@@ -282,3 +364,4 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 registerProductionTrackerInstallServiceWorker();
+registerProductionTrackerBuildChecks();

@@ -20,6 +20,11 @@ const ACCESS_COOKIE = "manufacturing_tracker_access";
 const ADMIN_ACCESS_COOKIE = "manufacturing_tracker_admin_access";
 const ACCESS_SECRET = process.env.ACCESS_SESSION_SECRET || `${ACCESS_CODE}:${ADMIN_ACCESS_CODE}`;
 const MAX_SCHEDULE_TASKS_LENGTH = 100000;
+const APP_BUILD_ID = process.env.RENDER_GIT_COMMIT ||
+  process.env.RENDER_COMMIT ||
+  process.env.SOURCE_VERSION ||
+  process.env.COMMIT_SHA ||
+  `local-${Date.now()}`;
 let alertEmailTransporter = null;
 let alertSmsClient = null;
 
@@ -137,6 +142,7 @@ app.get("/access", (req, res) => {
   const nextPath = getSafeNextPath(req.query.next);
   if (isAdminPath(nextPath) && hasAdminAccess(req)) return res.redirect(nextPath);
   if (!isAdminPath(nextPath) && hasAppAccess(req)) return res.redirect(nextPath);
+  res.set("Cache-Control", "no-store");
   res.sendFile(path.join(__dirname, "public", "access.html"));
 });
 
@@ -144,6 +150,7 @@ app.get("/access.html", (req, res) => {
   const nextPath = getSafeNextPath(req.query.next);
   if (isAdminPath(nextPath) && hasAdminAccess(req)) return res.redirect(nextPath);
   if (!isAdminPath(nextPath) && hasAppAccess(req)) return res.redirect(nextPath);
+  res.set("Cache-Control", "no-store");
   res.sendFile(path.join(__dirname, "public", "access.html"));
 });
 
@@ -156,12 +163,22 @@ app.get("/manifest.json", (req, res) => {
 
 app.get("/service-worker.js", (req, res) => {
   res.type("application/javascript");
+  res.set("Cache-Control", "no-store");
   res.sendFile(path.join(__dirname, "public", "service-worker.js"));
 });
 
 app.get("/pwa-install.js", (req, res) => {
   res.type("application/javascript");
+  res.set("Cache-Control", "no-store");
   res.sendFile(path.join(__dirname, "public", "pwa-install.js"));
+});
+
+app.get("/app-version", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json({
+    build: APP_BUILD_ID,
+    checked_at: new Date().toISOString()
+  });
 });
 
 app.get(/^\/icons\/.+\.png$/, (req, res) => {
@@ -215,7 +232,13 @@ app.use((req, res, next) => {
   return res.status(401).json({ message: "Access code required" });
 });
 
-app.use(express.static("public"));
+app.use(express.static("public", {
+  setHeaders(res, filePath) {
+    if (/\.(html|js|css)$/i.test(filePath)) {
+      res.setHeader("Cache-Control", "no-store");
+    }
+  }
+}));
 
 const itemNames = [
   "Daytime Focus Micro Pump",
