@@ -6,6 +6,7 @@ let productionTrackerInstallPrompt = null;
 const productionTrackerBuildStorageKey = "productionTracker.activeBuild";
 const productionTrackerReloadFlagKey = "productionTracker.reloadedBuild";
 const productionTrackerNavGroupStorageKey = "productionTracker.navRegion";
+const productionTrackerUpdateQueryParam = "_app_update";
 let productionTrackerVersionCheckInFlight = false;
 
 function isProductionTrackerStandalone() {
@@ -308,9 +309,20 @@ async function clearProductionTrackerStaticCaches() {
   }
 }
 
+function clearProductionTrackerUpdateQueryParam() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has(productionTrackerUpdateQueryParam)) return;
+
+  url.searchParams.delete(productionTrackerUpdateQueryParam);
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
 function reloadProductionTrackerForBuild(buildId) {
   const url = new URL(window.location.href);
-  url.searchParams.set("_app_update", String(buildId).slice(0, 12));
+  const updateToken = String(buildId).slice(0, 12);
+  if (url.searchParams.get(productionTrackerUpdateQueryParam) === updateToken) return;
+
+  url.searchParams.set(productionTrackerUpdateQueryParam, updateToken);
   sessionStorage.setItem(productionTrackerReloadFlagKey, buildId);
   window.location.replace(url.toString());
 }
@@ -385,6 +397,7 @@ window.addEventListener("appinstalled", () => {
 
 document.addEventListener("DOMContentLoaded", () => {
   ensureProductionTrackerInstallStyles();
+  clearProductionTrackerUpdateQueryParam();
   initProductionTrackerNavGroups();
   document.querySelectorAll(".pwa-install-button").forEach(button => {
     button.addEventListener("click", promptProductionTrackerInstall);

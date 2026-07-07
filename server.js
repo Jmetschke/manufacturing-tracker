@@ -25,6 +25,7 @@ const APP_BUILD_ID = process.env.RENDER_GIT_COMMIT ||
   process.env.SOURCE_VERSION ||
   process.env.COMMIT_SHA ||
   `local-${Date.now()}`;
+const APP_UPDATE_QUERY_PARAM = "_app_update";
 let alertEmailTransporter = null;
 let alertSmsClient = null;
 
@@ -127,6 +128,14 @@ function isAdminPath(pathname) {
   return pathname === "/admin.html" || pathname.startsWith("/admin/");
 }
 
+function isAppShellPath(pathname) {
+  return pathname === "/" ||
+    pathname === "/index.html" ||
+    pathname === "/admin.html" ||
+    pathname === "/access" ||
+    pathname === "/access.html";
+}
+
 function getSafeNextPath(rawValue) {
   const nextPath = String(rawValue || "/");
   if (!nextPath.startsWith("/") || nextPath.startsWith("//")) return "/";
@@ -137,6 +146,17 @@ function getSafeNextPath(rawValue) {
 function accessRedirect(nextPath) {
   return `/access?next=${encodeURIComponent(nextPath)}`;
 }
+
+app.use((req, res, next) => {
+  if (req.method !== "GET" || !isAppShellPath(req.path) || req.query[APP_UPDATE_QUERY_PARAM] === undefined) {
+    return next();
+  }
+
+  const url = new URL(req.originalUrl, "https://production-tracker.local");
+  url.searchParams.delete(APP_UPDATE_QUERY_PARAM);
+  const normalizedPath = `${url.pathname}${url.search}${url.hash}`;
+  return res.redirect(302, normalizedPath || "/");
+});
 
 app.get("/access", (req, res) => {
   const nextPath = getSafeNextPath(req.query.next);
