@@ -3597,15 +3597,16 @@ async function importTaskAveragePdf() {
   const fileInput = document.getElementById("taskAveragePdf");
   const file = fileInput && fileInput.files ? fileInput.files[0] : null;
   if (!file) {
-    setTaskAverageImportStatus("Choose a task average PDF to import.", "error");
+    setTaskAverageImportStatus("Choose a task average PDF or CSV to import.", "error");
     return;
   }
 
   setTaskAverageImportStatus("Importing ghost averages...");
-  const res = await adminFetch("/admin/task-average-references/import-pdf", {
+  const isCsv = /\.csv$/i.test(file.name) || file.type === "text/csv";
+  const res = await adminFetch("/admin/task-average-references/import", {
     method: "POST",
     headers: {
-      "Content-Type": "application/pdf",
+      "Content-Type": isCsv ? "text/csv" : "application/pdf",
       "X-Task-Average-File-Name": file.name
     },
     body: await file.arrayBuffer()

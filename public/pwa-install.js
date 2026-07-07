@@ -5,6 +5,7 @@
 let productionTrackerInstallPrompt = null;
 const productionTrackerBuildStorageKey = "productionTracker.activeBuild";
 const productionTrackerReloadFlagKey = "productionTracker.reloadedBuild";
+const productionTrackerNavGroupStorageKey = "productionTracker.navRegion";
 let productionTrackerVersionCheckInFlight = false;
 
 function isProductionTrackerStandalone() {
@@ -19,6 +20,34 @@ function isProductionTrackerIOS() {
 function isProductionTrackerSafari() {
   const ua = window.navigator.userAgent;
   return /^((?!chrome|android|crios|fxios).)*safari/i.test(ua);
+}
+
+function setProductionTrackerNavRegion(region) {
+  const selectedRegion = region === "ny" ? "ny" : "il";
+  localStorage.setItem(productionTrackerNavGroupStorageKey, selectedRegion);
+
+  document.querySelectorAll("[data-nav-region]").forEach(button => {
+    const isActive = button.dataset.navRegion === selectedRegion;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
+
+  document.querySelectorAll("[data-nav-group]").forEach(group => {
+    group.hidden = group.dataset.navGroup !== selectedRegion;
+  });
+}
+
+function initProductionTrackerNavGroups() {
+  if (!document.querySelector("[data-nav-region]")) return;
+
+  const storedRegion = localStorage.getItem(productionTrackerNavGroupStorageKey);
+  setProductionTrackerNavRegion(storedRegion === "ny" ? "ny" : "il");
+
+  document.querySelectorAll("[data-nav-region]").forEach(button => {
+    button.addEventListener("click", () => {
+      setProductionTrackerNavRegion(button.dataset.navRegion);
+    });
+  });
 }
 
 function ensureProductionTrackerInstallStyles() {
@@ -356,6 +385,7 @@ window.addEventListener("appinstalled", () => {
 
 document.addEventListener("DOMContentLoaded", () => {
   ensureProductionTrackerInstallStyles();
+  initProductionTrackerNavGroups();
   document.querySelectorAll(".pwa-install-button").forEach(button => {
     button.addEventListener("click", promptProductionTrackerInstall);
   });

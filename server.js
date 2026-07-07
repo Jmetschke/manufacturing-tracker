@@ -2183,17 +2183,26 @@ app.get("/admin/item-task-management", async (req, res) => {
   }
 });
 
-app.post("/admin/task-average-references/import-pdf", express.raw({ type: "application/pdf", limit: "10mb" }), async (req, res) => {
+app.post(["/admin/task-average-references/import", "/admin/task-average-references/import-pdf"], express.raw({
+  type: ["application/pdf", "text/csv", "application/csv", "application/vnd.ms-excel"],
+  limit: "10mb"
+}), async (req, res) => {
   if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
-    return res.status(400).send("Upload a task average PDF");
-  }
-
-  const rows = parseTaskAverageReferencePdf(req.body);
-  if (!rows.length) {
-    return res.status(400).send("Could not find task average reference rows in this PDF");
+    return res.status(400).send("Upload a task average PDF or CSV");
   }
 
   const sourceFileName = normalizeRequiredText(req.headers["x-task-average-file-name"]);
+  const contentType = String(req.headers["content-type"] || "").toLowerCase();
+  const isCsv = contentType.includes("csv") || /\.csv$/i.test(sourceFileName || "");
+  const rows = isCsv
+    ? parseTaskAverageReferenceCsv(req.body.toString("utf8"))
+    : parseTaskAverageReferencePdf(req.body);
+
+  if (!rows.length) {
+    return res.status(400).send(isCsv
+      ? "Could not find task average rows in this CSV"
+      : "Could not find task average reference rows in this PDF");
+  }
 
   try {
     await withTransaction(async transaction => {
@@ -2604,6 +2613,108 @@ function parseTaskAverageReferencePdf(buffer) {
   });
 
   return rows;
+}
+
+function parseCsvCellNumber(value) {
+  const parsed = Number(String(value || "").replace(/,/g, "").trim());
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseCsvDurationSeconds(value) {
+  const text = String(value || "").trim();
+  if (!text) return 0;
+  if (!text.includes(":")) return parseCsvCellNumber(text);
+
+  const parts = text.split(":").map(part => Number.parseFloat(part));
+  if (parts.some(part => !Number.isFinite(part))) return 0;
+  if (parts.length === 3) return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
+  if (parts.length === 2) return (parts[0] * 60) + parts[1];
+  return 0;
+}
+
+function parseCsvRows(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const nextChar = text[index + 1];
+
+    if (char === "\"") {
+      if (quoted && nextChar === "\"") {
+        cell += "\"";
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+      continue;
+    }
+
+    if (char === "," && !quoted) {
+      row.push(cell);
+      cell = "";
+      continue;
+    }
+
+    if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && nextChar === "\n") index += 1;
+      row.push(cell);
+      if (row.some(value => String(value || "").trim())) rows.push(row);
+      row = [];
+      cell = "";
+      continue;
+    }
+
+    cell += char;
+  }
+
+  row.push(cell);
+  if (row.some(value => String(value || "").trim())) rows.push(row);
+  return rows;
+}
+
+function normalizeCsvHeader(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function parseTaskAverageReferenceCsv(text) {
+  const csvRows = parseCsvRows(text);
+  if (csvRows.length < 2) return [];
+
+  const headers = csvRows[0].map(normalizeCsvHeader);
+  const taskIndex = headers.indexOf("task");
+  const quantityIndex = headers.indexOf("qty") >= 0 ? headers.indexOf("qty") : headers.indexOf("quantity");
+  const totalTimeIndex = headers.indexOf("totaltime") >= 0 ? headers.indexOf("totaltime") : headers.indexOf("durationseconds");
+
+  if (taskIndex < 0 || quantityIndex < 0 || totalTimeIndex < 0) return [];
+
+  const totalsByTask = new Map();
+  csvRows.slice(1).forEach(row => {
+    const taskName = normalizeRequiredText(row[taskIndex]);
+    const quantity = parseCsvCellNumber(row[quantityIndex]);
+    const durationSeconds = parseCsvDurationSeconds(row[totalTimeIndex]);
+    if (!taskName || quantity <= 0 || durationSeconds <= 0) return;
+
+    const existing = totalsByTask.get(taskName) || {
+      task_name: taskName,
+      entries: 0,
+      total_quantity: 0,
+      total_duration_seconds: 0
+    };
+    existing.entries += 1;
+    existing.total_quantity += quantity;
+    existing.total_duration_seconds += durationSeconds;
+    totalsByTask.set(taskName, existing);
+  });
+
+  return Array.from(totalsByTask.values())
+    .filter(row => row.total_quantity > 0 && row.total_duration_seconds > 0)
+    .map(row => ({
+      ...row,
+      average_seconds_per_unit: row.total_duration_seconds / row.total_quantity
+    }));
 }
 
 function extractPdfPositionedText(buffer) {
