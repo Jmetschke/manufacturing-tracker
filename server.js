@@ -1652,6 +1652,19 @@ async function initializeDatabase() {
   `);
 
   await runSql(`
+    CREATE TABLE IF NOT EXISTS task_average_references (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_name TEXT NOT NULL UNIQUE,
+      average_seconds_per_unit REAL NOT NULL,
+      entries INTEGER DEFAULT 0,
+      total_quantity REAL DEFAULT 0,
+      total_duration_seconds REAL DEFAULT 0,
+      source_file_name TEXT,
+      imported_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  await runSql(`
     CREATE TABLE IF NOT EXISTS item_task_assignments (
       item_id INTEGER NOT NULL,
       task_id INTEGER NOT NULL,
@@ -1781,6 +1794,13 @@ async function initializeDatabase() {
 
   await addMissingColumn("time_logs", "item_id", "INTEGER");
   await addMissingColumn("tasks", "seconds_per_unit_alert_level", "REAL DEFAULT 0");
+  await addMissingColumn("task_average_references", "task_name", "TEXT");
+  await addMissingColumn("task_average_references", "average_seconds_per_unit", "REAL DEFAULT 0");
+  await addMissingColumn("task_average_references", "entries", "INTEGER DEFAULT 0");
+  await addMissingColumn("task_average_references", "total_quantity", "REAL DEFAULT 0");
+  await addMissingColumn("task_average_references", "total_duration_seconds", "REAL DEFAULT 0");
+  await addMissingColumn("task_average_references", "source_file_name", "TEXT");
+  await addMissingColumn("task_average_references", "imported_at", "TEXT");
   await addMissingColumn("items", "production_company", "TEXT");
   await addMissingColumn("time_logs", "task_id", "INTEGER");
   await addMissingColumn("time_logs", "employee", "TEXT");
@@ -2115,7 +2135,7 @@ app.get("/item-task-options", async (req, res) => {
 
 app.get("/admin/item-task-management", async (req, res) => {
   try {
-    const [items, tasks, assignments] = await Promise.all([
+    const [items, tasks, assignments, taskAverageReferences] = await Promise.all([
       allSql("SELECT id, name, COALESCE(production_company, '') AS production_company FROM items ORDER BY name"),
       allSql(`
         SELECT
@@ -2142,10 +2162,85 @@ app.get("/admin/item-task-management", async (req, res) => {
         SELECT item_id, task_id
         FROM item_task_assignments
         ORDER BY item_id, task_id
+      `),
+      allSql(`
+        SELECT
+          task_name,
+          average_seconds_per_unit,
+          entries,
+          total_quantity,
+          total_duration_seconds,
+          source_file_name,
+          imported_at
+        FROM task_average_references
+        ORDER BY task_name
       `)
     ]);
 
-    res.json({ items, tasks, assignments });
+    res.json({ items, tasks, assignments, task_average_references: taskAverageReferences });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.post("/admin/task-average-references/import-pdf", express.raw({ type: "application/pdf", limit: "10mb" }), async (req, res) => {
+  if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+    return res.status(400).send("Upload a task average PDF");
+  }
+
+  const rows = parseTaskAverageReferencePdf(req.body);
+  if (!rows.length) {
+    return res.status(400).send("Could not find task average reference rows in this PDF");
+  }
+
+  const sourceFileName = normalizeRequiredText(req.headers["x-task-average-file-name"]);
+
+  try {
+    await withTransaction(async transaction => {
+      for (const row of rows) {
+        await runSql(`
+          INSERT INTO task_average_references (
+            task_name,
+            average_seconds_per_unit,
+            entries,
+            total_quantity,
+            total_duration_seconds,
+            source_file_name,
+            imported_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+          ON CONFLICT(task_name) DO UPDATE SET
+            average_seconds_per_unit = excluded.average_seconds_per_unit,
+            entries = excluded.entries,
+            total_quantity = excluded.total_quantity,
+            total_duration_seconds = excluded.total_duration_seconds,
+            source_file_name = excluded.source_file_name,
+            imported_at = excluded.imported_at
+        `, [
+          row.task_name,
+          row.average_seconds_per_unit,
+          row.entries,
+          row.total_quantity,
+          row.total_duration_seconds,
+          sourceFileName || null
+        ], transaction);
+      }
+    });
+
+    res.status(201).json({
+      message: "Task average references imported",
+      imported: rows.length,
+      rows
+    });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.delete("/admin/task-average-references", async (req, res) => {
+  try {
+    const result = await runSql("DELETE FROM task_average_references");
+    res.json({ message: "Task average references cleared", deleted: result.changes || 0 });
   } catch (err) {
     res.status(500).send(err.message);
   }
@@ -2480,6 +2575,35 @@ function extractPdfTextLines(buffer) {
   }
 
   return lines;
+}
+
+function parseTaskAverageReferencePdf(buffer) {
+  const lines = extractPdfTextLines(buffer);
+  const rows = [];
+
+  lines.forEach(line => {
+    const trimmed = String(line || "").trim();
+    if (!trimmed.startsWith("TASK_AVERAGE|")) return;
+
+    const parts = trimmed.split("|");
+    const taskName = normalizeRequiredText(parts[1]);
+    const averageSecondsPerUnit = Number(parts[2]);
+    const entries = Number.parseInt(parts[3], 10) || 0;
+    const totalQuantity = Number(parts[4]) || 0;
+    const totalDurationSeconds = Number(parts[5]) || 0;
+
+    if (!taskName || !Number.isFinite(averageSecondsPerUnit) || averageSecondsPerUnit <= 0) return;
+
+    rows.push({
+      task_name: taskName,
+      average_seconds_per_unit: averageSecondsPerUnit,
+      entries,
+      total_quantity: totalQuantity,
+      total_duration_seconds: totalDurationSeconds
+    });
+  });
+
+  return rows;
 }
 
 function extractPdfPositionedText(buffer) {

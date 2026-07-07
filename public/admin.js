@@ -6,6 +6,7 @@ let allItems = [];
 let allTasks = [];
 let itemTaskOptionsByItemId = {};
 let itemTaskManagementAssignments = [];
+let taskAverageReferencesByName = {};
 let allOrderedItems = [];
 let allOrderRequests = [];
 let allAlertRecipients = [];
@@ -442,6 +443,10 @@ function buildItemTaskOptionsByItemId(assignments) {
 function getTaskName(taskId) {
   const task = allTasks.find(option => String(option.id) === String(taskId));
   return task ? task.name : "";
+}
+
+function normalizeTaskAverageReferenceName(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 function getSelectText(select) {
@@ -2629,7 +2634,7 @@ function renderItemTaskRateReport() {
 
   const printButton = document.createElement("button");
   printButton.type = "button";
-  printButton.textContent = "Print Report";
+  printButton.textContent = "Print / Save PDF";
   printButton.addEventListener("click", printItemTaskRateReport);
   actions.appendChild(printButton);
 
@@ -2691,6 +2696,30 @@ function renderItemTaskRateReport() {
   });
 
   container.appendChild(table);
+
+  const transferRows = summarizeProductionRates(reportData, ["task"]);
+  const transfer = document.createElement("div");
+  transfer.className = "task-average-transfer-data";
+  const transferTitle = document.createElement("h4");
+  transferTitle.textContent = "Task Average Transfer Data";
+  transfer.appendChild(transferTitle);
+  const transferHelp = document.createElement("p");
+  transferHelp.textContent = "Keep this section in the saved PDF. A new location can upload the PDF to show these as ghost averages.";
+  transfer.appendChild(transferHelp);
+  transferRows.forEach(row => {
+    const line = document.createElement("div");
+    line.className = "task-average-transfer-line";
+    line.textContent = [
+      "TASK_AVERAGE",
+      row.values[0],
+      Number(row.secondsPerUnit || 0).toFixed(6),
+      row.entries,
+      Number(row.quantity || 0).toFixed(6),
+      Number(row.seconds || 0).toFixed(6)
+    ].join("|");
+    transfer.appendChild(line);
+  });
+  container.appendChild(transfer);
 }
 
 async function generateItemTaskRateReport() {
@@ -3548,9 +3577,64 @@ async function loadItemTaskManagement() {
   allTasks = data.tasks || [];
   itemTaskManagementAssignments = data.assignments || [];
   itemTaskOptionsByItemId = buildItemTaskOptionsByItemId(itemTaskManagementAssignments);
+  taskAverageReferencesByName = {};
+  (data.task_average_references || []).forEach(reference => {
+    taskAverageReferencesByName[normalizeTaskAverageReferenceName(reference.task_name)] = reference;
+  });
 
   renderItemTaskManagement();
   renderMasterTaskList();
+}
+
+function setTaskAverageImportStatus(text, type = "") {
+  const status = document.getElementById("taskAverageImportStatus");
+  if (!status) return;
+  status.textContent = text;
+  status.className = type ? `message ${type}` : "message";
+}
+
+async function importTaskAveragePdf() {
+  const fileInput = document.getElementById("taskAveragePdf");
+  const file = fileInput && fileInput.files ? fileInput.files[0] : null;
+  if (!file) {
+    setTaskAverageImportStatus("Choose a task average PDF to import.", "error");
+    return;
+  }
+
+  setTaskAverageImportStatus("Importing ghost averages...");
+  const res = await adminFetch("/admin/task-average-references/import-pdf", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/pdf",
+      "X-Task-Average-File-Name": file.name
+    },
+    body: await file.arrayBuffer()
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    setTaskAverageImportStatus("Ghost average import failed: " + text, "error");
+    return;
+  }
+
+  const data = await res.json();
+  fileInput.value = "";
+  setTaskAverageImportStatus(`Imported ${data.imported || 0} ghost average${data.imported === 1 ? "" : "s"}.`, "success");
+  await loadItemTaskManagement();
+}
+
+async function clearTaskAverageReferences() {
+  if (!confirm("Clear all uploaded ghost averages? This will not change entries or alert settings.")) return;
+
+  const res = await adminFetch("/admin/task-average-references", { method: "DELETE" });
+  if (!res.ok) {
+    const text = await res.text();
+    setTaskAverageImportStatus("Could not clear ghost averages: " + text, "error");
+    return;
+  }
+
+  setTaskAverageImportStatus("Ghost averages cleared.", "success");
+  await loadItemTaskManagement();
 }
 
 function renderAlertRecipientTypeOptions(selectedTypes = []) {
@@ -3833,6 +3917,21 @@ function renderMasterTaskList() {
     alertInput.value = String(Number(task.seconds_per_unit_alert_level) || 0);
     alertInput.setAttribute("aria-label", `${task.name} alert seconds per unit`);
     row.appendChild(alertInput);
+
+    const reference = taskAverageReferencesByName[normalizeTaskAverageReferenceName(task.name)];
+    const referenceLabel = document.createElement("span");
+    referenceLabel.className = `ghost-average master-task-reference${reference ? "" : " empty"}`;
+    referenceLabel.textContent = reference
+      ? `Ghost ${formatSecondsPerUnit(reference.average_seconds_per_unit)}`
+      : "No ghost avg";
+    if (reference) {
+      referenceLabel.title = [
+        `${reference.entries || 0} entries`,
+        `Imported ${reference.imported_at || ""}`,
+        reference.source_file_name ? `Source: ${reference.source_file_name}` : ""
+      ].filter(Boolean).join(" | ");
+    }
+    row.appendChild(referenceLabel);
 
     const averageLabel = document.createElement("span");
     averageLabel.className = "master-task-average";
