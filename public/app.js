@@ -1214,6 +1214,17 @@ function taskWasCompleted(task) {
   return (task.completedDates || []).length > 0;
 }
 
+function shouldShowGeneratedProcessingTask(task, activeDateIso, scheduleDate, batch, completedGeneratedTaskKeys) {
+  const completedOnDate = taskWasCompletedOn(task, activeDateIso);
+  const completedForBatch = generatedTaskWasCompleted(task, completedGeneratedTaskKeys);
+  const isScheduledDay = activeDateIso === scheduleDate;
+  const isToday = activeDateIso === getTodayIsoDate();
+
+  return completedOnDate ||
+    isScheduledDay ||
+    (isToday && batch && isBatchInProgress(batch) && !completedForBatch);
+}
+
 function appendBatchDetail(container, batch) {
   const item = document.createElement("div");
   item.className = "calendar-focus-item";
@@ -1636,7 +1647,6 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
   const activeSchedule = new Map();
   const rangeStart = dateOnly(visibleStart);
   const rangeEnd = dateOnly(visibleEnd);
-  const todayIso = getTodayIsoDate();
 
   for (let index = 0; index <= 13; index += 1) {
     activeSchedule.set(toIsoDate(addDays(rangeStart, index)), {
@@ -1741,15 +1751,8 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
           const activeDateIso = toIsoDate(activeDate);
           if (activeDateIso < row.schedule_date) continue;
 
-          const completedOnDate = taskWasCompletedOn(task, activeDateIso);
           const completedForBatch = generatedTaskWasCompleted(task, completedGeneratedTaskKeys);
-          const isPastDay = activeDateIso < todayIso;
-          const isToday = activeDateIso === todayIso;
-          const shouldShow = isPastDay
-            ? completedOnDate
-            : isToday
-              ? completedOnDate || (batch && isBatchInProgress(batch) && !completedForBatch)
-              : completedOnDate;
+          const shouldShow = shouldShowGeneratedProcessingTask(task, activeDateIso, row.schedule_date, batch, completedGeneratedTaskKeys);
 
           if (!shouldShow) continue;
           if (!activeSchedule.has(activeDateIso)) {
