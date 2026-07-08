@@ -2443,6 +2443,8 @@ function showAdminTab(tabName) {
 }
 
 async function loadReport() {
+  clearAdminPrintModes();
+
   const entriesRes = await adminFetch("/admin/entries");
   if (!entriesRes.ok) {
     const text = await entriesRes.text();
@@ -2606,7 +2608,7 @@ function getEntryFilterValues() {
 
 function shouldShowDetailedEntriesTable() {
   const filters = getEntryFilterValues();
-  return Boolean(filters.from && filters.to && filters.item && filters.task);
+  return Boolean(filters.from || filters.to || filters.employee || filters.item || filters.task);
 }
 
 function renderItemTaskRateReport() {
@@ -2642,6 +2644,7 @@ function renderItemTaskRateReport() {
   closeButton.type = "button";
   closeButton.textContent = "Hide Report";
   closeButton.addEventListener("click", () => {
+    clearAdminPrintModes();
     container.hidden = true;
   });
   actions.appendChild(closeButton);
@@ -2723,9 +2726,16 @@ function renderItemTaskRateReport() {
 }
 
 async function generateItemTaskRateReport() {
+  clearAdminPrintModes();
   await loadReport();
   renderItemTaskRateReport();
   document.getElementById("itemTaskRateReport").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function clearAdminPrintModes() {
+  document.body.classList.remove("printing-admin-calendar");
+  document.body.classList.remove("printing-item-task-report");
+  document.body.classList.remove("printing-concern-report");
 }
 
 function printItemTaskRateReport() {
@@ -2734,6 +2744,7 @@ function printItemTaskRateReport() {
     renderItemTaskRateReport();
   }
 
+  clearAdminPrintModes();
   document.body.classList.add("printing-item-task-report");
   window.print();
 }
@@ -2857,6 +2868,14 @@ function createGroupedEntriesTable() {
 function renderTable() {
   const container = document.getElementById("table");
   container.innerHTML = "";
+
+  if (!reportData.length) {
+    const empty = document.createElement("p");
+    empty.className = "printable-report-empty";
+    empty.textContent = "No entries match the current filters.";
+    container.appendChild(empty);
+    return;
+  }
 
   if (shouldShowDetailedEntriesTable()) {
     container.appendChild(createDetailedEntriesTable(reportData));
@@ -3560,6 +3579,7 @@ function printLoggedConcernReport() {
   const focus = document.getElementById("loggedConcernFocus");
   if (focus.hidden) return;
 
+  clearAdminPrintModes();
   document.body.classList.add("printing-concern-report");
   window.print();
 }
@@ -4163,6 +4183,7 @@ function changeAdminCalendarWeeks(offset) {
 
 function printAdminCalendarView() {
   closeAdminCalendarDayFocus();
+  clearAdminPrintModes();
   document.body.classList.add("printing-admin-calendar");
   window.print();
 }
@@ -6708,10 +6729,25 @@ document.getElementById("adminOrderedImageFocusWindow").addEventListener("click"
 });
 
 window.addEventListener("afterprint", () => {
-  document.body.classList.remove("printing-admin-calendar");
-  document.body.classList.remove("printing-item-task-report");
-  document.body.classList.remove("printing-concern-report");
+  clearAdminPrintModes();
 });
+
+window.addEventListener("focus", () => {
+  setTimeout(clearAdminPrintModes, 250);
+});
+
+if (window.matchMedia) {
+  const printMediaQuery = window.matchMedia("print");
+  const handlePrintMediaChange = event => {
+    if (!event.matches) clearAdminPrintModes();
+  };
+
+  if (printMediaQuery.addEventListener) {
+    printMediaQuery.addEventListener("change", handlePrintMediaChange);
+  } else if (printMediaQuery.addListener) {
+    printMediaQuery.addListener(handlePrintMediaChange);
+  }
+}
 
 function getActiveAdminTabName() {
   if (document.getElementById("reviewPanel").classList.contains("active")) return "review";
