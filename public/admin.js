@@ -72,7 +72,7 @@ function getProductionBatchOptions(type) {
   const company = type === "hijnx" ? "hijnx" : "snackbar";
   const baseOptions = type === "hijnx" ? hijnxBatchOptions : sbBatchOptions;
   const itemOptions = allItems
-    .filter(item => getItemProductionCompany(item) === company)
+    .filter(item => shouldIncludeItemInProductionBatchOptions(item, company))
     .map(item => item.name)
     .filter(Boolean)
     .sort((a, b) => a.localeCompare(b));
@@ -206,6 +206,30 @@ const productionBatchItemAliases = {
   "Snackbar Vape - Strawberry Dragonfruit 2g": "Strawberry 2g",
   "Snackbar Vape - Watermelon Lychee 1g": "Watermelon 1g"
 };
+const nonProductionBatchItemNames = new Set(["Delivery Order", "Swag"]);
+
+function itemHasAssignedTasks(item) {
+  return Boolean(item && (itemTaskOptionsByItemId[String(item.id)] || []).length);
+}
+
+function getTemplateProductionCompany(itemName) {
+  const template = batchTaskTemplatesByItem[itemName];
+  if (!template) return "";
+  return template === sbVapeBatchTaskTemplate ? "snackbar" : "hijnx";
+}
+
+function shouldIncludeItemInProductionBatchOptions(item, company) {
+  const savedCompany = getItemProductionCompany(item);
+  if (savedCompany) return savedCompany === company;
+
+  const itemName = String(item && item.name ? item.name : "").trim();
+  if (!itemName || nonProductionBatchItemNames.has(itemName)) return false;
+
+  const templateCompany = getTemplateProductionCompany(itemName);
+  if (templateCompany) return templateCompany === company;
+
+  return itemHasAssignedTasks(item);
+}
 
 function showMessage(text, type = "") {
   const message = document.getElementById("message");

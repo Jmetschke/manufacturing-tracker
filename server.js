@@ -1076,8 +1076,39 @@ async function seedNames(table, names) {
 
 async function seedItemProductionCompanies() {
   const companyByItemName = new Map([
+    ["Daytime Focus Micro Pump", "Hijnx"],
+    ["Good Night Sleep Micro Pump", "Hijnx"],
+    ["Main Squeeze Party Pouch", "Hijnx"],
+    ["Micro Dots (50-piece packs)", "Hijnx"],
+    ["RSO Whoopie Hi", "Hijnx"],
+    ["Big Stick", "Hijnx"],
+    ["Small Stick", "Hijnx"],
+    ["Tiny Stick", "Hijnx"],
+    ["Space Chunk OG 1 chunk (pcs)", "Hijnx"],
+    ["Space Chunk ALPHA OG 2 chunk (units)", "Hijnx"],
+    ["Space Chunk REX OG 1 chunk (units)", "Hijnx"],
+    ["Space Chunk REX OG 2 chunk (units)", "Hijnx"],
+    ["Space Chunk ZUUL OG 1 chunk (units)", "Hijnx"],
+    ["Space Chunk ZUUL OG 2 chunk (units)", "Hijnx"],
+    ["Space Chunk 1 chunk CBD 50mg 1-1 (pcs)", "Hijnx"],
+    ["Space Chunks CBD 2 chunks 1-1 (units)", "Hijnx"],
+    ["Space Chunk CBN 1 chunk (pcs)", "Hijnx"],
+    ["Space Chunk CBN 2 chunk (units)", "Hijnx"],
+    ["Space Chunk Mini 10 chunk (units)", "Hijnx"],
+    ["Space Chunk SUGAR FREE 10pk (units)", "Hijnx"],
+    ["Space Chunk SUGAR FREE 2pk (units)", "Hijnx"],
+    ["Shooters Triple Citrus", "Hijnx"],
+    ["Shooters Sour Watermelon", "Hijnx"],
+    ["Shooters Sour Blu Raz", "Hijnx"],
     ["Pheotera 2oz Stick", "Hijnx"],
-    ["Hijnx 1oz Stick", "Hijnx"]
+    ["Hijnx 1oz Stick", "Hijnx"],
+    ["Grape 1g", "Snackbar"],
+    ["Mango 1g", "Snackbar"],
+    ["Lemon 1g", "Snackbar"],
+    ["Watermelon 1g", "Snackbar"],
+    ["Cherry 2g", "Snackbar"],
+    ["Strawberry 2g", "Snackbar"],
+    ["Peach 2g", "Snackbar"]
   ]);
 
   for (const [name, company] of companyByItemName.entries()) {
