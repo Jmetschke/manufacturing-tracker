@@ -1130,6 +1130,7 @@ function buildAdminProjectedTasksByDate(rows, visibleStart, visibleEnd, taskSele
           const activeDateIso = toIsoDate(activeDate);
           if (activeDateIso < row.schedule_date) continue;
 
+          const completedForBatch = generatedTaskWasCompleted(task, completedGeneratedTaskKeys);
           const shouldShow = shouldShowGeneratedProcessingTask(task, activeDateIso, row.schedule_date, batch, completedGeneratedTaskKeys);
 
           if (!shouldShow) continue;
@@ -1319,6 +1320,7 @@ function buildAdminActiveScheduleByDate(rows, visibleStart, visibleEnd) {
             const activeDateIso = toIsoDate(activeDate);
             if (activeDateIso < row.schedule_date) continue;
 
+            const completedForBatch = generatedTaskWasCompleted(task, completedGeneratedTaskKeys);
             const shouldShow = shouldShowGeneratedProcessingTask(task, activeDateIso, row.schedule_date, batch, completedGeneratedTaskKeys);
 
             if (!shouldShow) continue;
