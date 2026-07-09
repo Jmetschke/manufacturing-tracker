@@ -2382,6 +2382,8 @@ function appendTaskFocusDetails(block, projectedTasks, emptyText) {
 }
 
 function showAdminTab(tabName) {
+  clearAdminPrintModes();
+
   document.getElementById("entriesPanel").classList.toggle("active", tabName === "entries");
   document.getElementById("reviewPanel").classList.toggle("active", tabName === "review");
   document.getElementById("itemTaskManagementPanel").classList.toggle("active", tabName === "itemTasks");
@@ -4190,23 +4192,31 @@ async function loadAdminCalendar() {
   const gridEnd = addDays(gridStart, 41);
   const from = toIsoDate(addDays(gridStart, -3650));
   const to = toIsoDate(gridEnd);
-  const [scheduleRes, orderedRes] = await Promise.all([
-    fetch(`/schedule?from=${from}&to=${to}`),
-    fetch("/ordered-items")
-  ]);
 
-  if (!scheduleRes.ok) {
-    showMessage("Could not load calendar.", "error");
-    return;
-  }
-
-  const rows = await scheduleRes.json();
-  const deliveries = orderedRes.ok ? await orderedRes.json() : [];
-  adminScheduleRows = new Map(rows.map(row => [row.schedule_date, row.tasks || ""]));
-  adminExpectedDeliveriesByDate = buildAdminExpectedDeliveriesByDate(deliveries, gridStart, gridEnd);
-  adminActiveScheduleByDate = buildAdminActiveScheduleByDate(rows, gridStart, gridEnd);
   updateCalendarRangeLabel(gridStart, gridEnd);
-  renderAdminCalendar(gridStart);
+  renderAdminCalendar(gridStart, { status: "Loading calendar..." });
+
+  try {
+    const [scheduleRes, orderedRes] = await Promise.all([
+      adminFetch(`/schedule?from=${from}&to=${to}`),
+      adminFetch("/ordered-items")
+    ]);
+
+    if (!scheduleRes.ok) {
+      throw new Error(await scheduleRes.text() || "Could not load calendar.");
+    }
+
+    const rows = await scheduleRes.json();
+    const deliveries = orderedRes.ok ? await orderedRes.json() : [];
+    adminScheduleRows = new Map(rows.map(row => [row.schedule_date, row.tasks || ""]));
+    adminExpectedDeliveriesByDate = buildAdminExpectedDeliveriesByDate(deliveries, gridStart, gridEnd);
+    adminActiveScheduleByDate = buildAdminActiveScheduleByDate(rows, gridStart, gridEnd);
+    renderAdminCalendar(gridStart);
+  } catch (err) {
+    showMessage("Could not load calendar.", "error");
+    renderAdminCalendar(gridStart, { status: "Calendar could not load. Try Refresh or open the tab again." });
+    console.error("Admin calendar load failed", err);
+  }
 }
 
 function countGroupedTasks(tasks) {
@@ -4609,7 +4619,7 @@ async function loadDailyReport() {
   renderDailyWorkingBatches(workingBatches);
 }
 
-function renderAdminCalendar(gridStart) {
+function renderAdminCalendar(gridStart, options = {}) {
   const calendar = document.getElementById("adminCalendar");
   calendar.innerHTML = "";
 
@@ -4619,6 +4629,14 @@ function renderAdminCalendar(gridStart) {
     header.textContent = dayName;
     calendar.appendChild(header);
   });
+
+  if (options.status) {
+    const status = document.createElement("div");
+    status.className = "calendar-focus-empty admin-calendar-status";
+    status.textContent = options.status;
+    calendar.appendChild(status);
+    return;
+  }
 
   for (let index = 0; index < 42; index += 1) {
     const date = addDays(gridStart, index);
