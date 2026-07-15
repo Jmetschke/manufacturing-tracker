@@ -35,6 +35,27 @@
       margin: 0;
     }
 
+    .header-left {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .production-tracker-navigation,
+    .nav-region-toggle {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .navigation-control-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: #34495e;
+    }
+
     .header-actions {
       display: flex;
       flex-wrap: wrap;
@@ -42,7 +63,6 @@
       gap: 8px;
     }
 
-    .nav-region-toggle,
     .nav-link-group {
       display: flex;
       flex-wrap: wrap;
@@ -2039,7 +2059,14 @@
 <body>
 
 <div class="page-header">
-  <h2>Production Tracker</h2>
+  <div class="header-left">
+    <h2>Production Tracker</h2>
+    <div class="production-tracker-navigation" role="group" aria-label="Production Tracker navigation">
+      <span class="navigation-control-label">Production Tracker Navigation:</span>
+      <a class="screen-link" href="https://manufacturing-tracker.onrender.com">Navigate to IL Production Tracker</a>
+      <a class="screen-link" href="https://manufacturing-tracker-ny.onrender.com">Navigation to NY Production Tracker</a>
+    </div>
+  </div>
   <div class="header-actions">
     <button class="screen-link pwa-install-button" type="button">How to Install</button>
     <div class="alert-widget" data-alert-widget>
@@ -2054,7 +2081,8 @@
         <div id="alertList" class="alert-list"></div>
       </div>
     </div>
-    <div class="nav-region-toggle" role="group" aria-label="Navigation group">
+    <div class="nav-region-toggle" role="group" aria-label="Navigation Links Toggle">
+      <span class="navigation-control-label">Navigation Links Toggle:</span>
       <button class="nav-region-button active" type="button" data-nav-region="il">IL</button>
       <button class="nav-region-button" type="button" data-nav-region="ny">NY</button>
     </div>
