@@ -6,6 +6,7 @@ let allItems = [];
 let allTasks = [];
 let itemTaskOptionsByItemId = {};
 let itemTaskManagementAssignments = [];
+let pendingItemMasterImportToken = "";
 let taskAverageReferencesByName = {};
 let allOrderedItems = [];
 let allOrderRequests = [];
@@ -1508,6 +1509,36 @@ function getBatchRows(type) {
   return document.getElementById(type === "hijnx" ? "batchHijnxRows" : "batchSbRows");
 }
 
+function getProductionItemForBatchName(batchName) {
+  const name = String(batchName || "").trim();
+  if (!name) return null;
+
+  const aliasName = productionBatchItemAliases[name] || name;
+  const directMatch = allItems.find(item => item.name === name) ||
+    allItems.find(item => item.name === aliasName) ||
+    null;
+  if (directMatch) return directMatch;
+
+  const normalizeBatchName = value => String(value || "")
+    .toLowerCase()
+    .replace(/\b(\d+)\s*(?:pk|pack|pieces?|pcs|units?|chunks?)\b/g, "$1")
+    .replace(/\b(?:hijnx|snackbar|edible|gummy|rso|vape|pen|beverage|space|chunk|chunks|og)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+  const normalizedNames = new Set([normalizeBatchName(name), normalizeBatchName(aliasName)]);
+  return allItems.find(item =>
+    [item.name, item.common_name, item.distru_name, item.alternate_names]
+      .some(candidate => candidate && normalizedNames.has(normalizeBatchName(candidate)))
+  ) || null;
+}
+
+function getProductionItemBatchSize(batchName) {
+  const item = getProductionItemForBatchName(batchName);
+  const batchSize = Number(item && item.batch_size);
+  return Number.isFinite(batchSize) && batchSize > 0 ? batchSize : 0;
+}
+
 function getBatchTaskItemName(batchItem) {
   return productionBatchItemAliases[batchItem] || batchItem;
 }
@@ -1732,7 +1763,12 @@ function addBatchEntry(type, value = "", unitsValue = "") {
   }
 
   input.value = batchValue;
-  input.addEventListener("change", syncGeneratedBatchTasksFromBatches);
+  input.addEventListener("change", () => {
+    const importedBatchSize = getProductionItemBatchSize(input.value);
+    units.value = importedBatchSize ? String(importedBatchSize) : "";
+    units.dataset.batchSizeAutofilled = importedBatchSize ? "true" : "false";
+    syncGeneratedBatchTasksFromBatches();
+  });
   row.appendChild(input);
 
   const units = document.createElement("input");
@@ -1741,8 +1777,14 @@ function addBatchEntry(type, value = "", unitsValue = "") {
   units.min = "0";
   units.step = "1";
   units.placeholder = "Units";
-  units.value = batchUnits;
-  units.addEventListener("input", syncGeneratedBatchTasksFromBatches);
+  const savedUnits = Number(batchUnits) > 0 ? batchUnits : "";
+  const initialBatchSize = savedUnits ? 0 : getProductionItemBatchSize(batchValue);
+  units.value = savedUnits || (initialBatchSize ? String(initialBatchSize) : "");
+  units.dataset.batchSizeAutofilled = initialBatchSize ? "true" : "false";
+  units.addEventListener("input", () => {
+    units.dataset.batchSizeAutofilled = "false";
+    syncGeneratedBatchTasksFromBatches();
+  });
   row.appendChild(units);
 
   const checklist = document.createElement("div");
@@ -3627,6 +3669,115 @@ async function loadItemTaskManagement() {
   renderMasterTaskList();
 }
 
+function setItemMasterImportStatus(text, type = "") {
+  const status = document.getElementById("itemMasterImportStatus");
+  if (!status) return;
+  status.textContent = text;
+  status.className = type ? `message ${type}` : "message";
+}
+
+function renderItemMasterImportPreview(data) {
+  const container = document.getElementById("itemMasterImportPreview");
+  const applyButton = document.getElementById("applyItemMasterImportButton");
+  container.innerHTML = "";
+  const actions = data.actions || [];
+  if (!actions.length) {
+    applyButton.hidden = true;
+    return;
+  }
+
+  const warning = document.createElement("div");
+  warning.className = "item-master-warning";
+  warning.textContent = `${data.summary.rename || 0} existing title(s) will be overwritten, ${data.summary.create || 0} new SKU(s) will be added, and ${data.summary.unchanged || 0} already match. Review the yellow rename rows before clicking “Do It.”`;
+  container.appendChild(warning);
+
+  const table = document.createElement("table");
+  const header = document.createElement("tr");
+  ["Action", "Current title", "Item Metrc Name", "Common name", "Match"].forEach(text => {
+    const cell = document.createElement("th");
+    cell.textContent = text;
+    header.appendChild(cell);
+  });
+  table.appendChild(header);
+
+  actions.forEach(action => {
+    const row = document.createElement("tr");
+    row.className = action.action;
+    const values = [
+      action.action === "rename" ? "RENAME (keeps data)" : action.action.toUpperCase(),
+      action.current_name || "—",
+      action.new_name,
+      action.common_name || "—",
+      action.match_score == null ? "—" : `${Math.round(action.match_score * 100)}%`
+    ];
+    values.forEach(value => {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+      row.appendChild(cell);
+    });
+    table.appendChild(row);
+  });
+  container.appendChild(table);
+  applyButton.hidden = false;
+}
+
+async function previewItemMasterImport() {
+  const input = document.getElementById("itemMasterWorkbook");
+  const file = input && input.files ? input.files[0] : null;
+  if (!file) {
+    setItemMasterImportStatus("Choose an .xlsx production item master.", "error");
+    return;
+  }
+
+  pendingItemMasterImportToken = "";
+  document.getElementById("applyItemMasterImportButton").hidden = true;
+  document.getElementById("itemMasterImportPreview").innerHTML = "";
+  setItemMasterImportStatus("Checking Metrc item names and looking for existing matches...");
+  const res = await adminFetch("/admin/item-master/import-preview", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "X-Item-Master-File-Name": file.name
+    },
+    body: await file.arrayBuffer()
+  });
+  if (!res.ok) {
+    setItemMasterImportStatus("Workbook check failed: " + await res.text(), "error");
+    return;
+  }
+
+  const data = await res.json();
+  pendingItemMasterImportToken = data.token;
+  renderItemMasterImportPreview(data);
+  setItemMasterImportStatus("Preview ready. No changes have been made yet.");
+}
+
+async function applyItemMasterImport() {
+  if (!pendingItemMasterImportToken) return;
+  const button = document.getElementById("applyItemMasterImportButton");
+  button.disabled = true;
+  setItemMasterImportStatus("Updating the item master and preserving linked data...");
+  const res = await adminFetch("/admin/item-master/import-apply", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: pendingItemMasterImportToken })
+  });
+  button.disabled = false;
+  if (!res.ok) {
+    setItemMasterImportStatus("Item master update failed: " + await res.text(), "error");
+    return;
+  }
+
+  const data = await res.json();
+  pendingItemMasterImportToken = "";
+  button.hidden = true;
+  document.getElementById("itemMasterImportPreview").innerHTML = "";
+  document.getElementById("itemMasterWorkbook").value = "";
+  setItemMasterImportStatus(`Item master updated: ${data.summary.rename || 0} renamed, ${data.summary.create || 0} added, ${data.summary.unchanged || 0} refreshed.`, "success");
+  await loadLookups();
+  await loadItemTaskManagement();
+}
+
 function setTaskAverageImportStatus(text, type = "") {
   const status = document.getElementById("taskAverageImportStatus");
   if (!status) return;
@@ -3901,6 +4052,16 @@ function renderItemTaskManagement() {
       company.className = "item-task-company";
       company.textContent = item.production_company;
       titleWrap.appendChild(company);
+    }
+
+    if (Number(item.batch_size) > 0) {
+      const batchSize = document.createElement("span");
+      batchSize.className = "item-task-batch-size";
+      batchSize.textContent = `Batch qty ${Number(item.batch_size).toLocaleString()}`;
+      batchSize.title = item.master_source_file
+        ? `Imported from ${item.master_source_file}`
+        : "Saved master batch quantity";
+      titleWrap.appendChild(batchSize);
     }
 
     header.appendChild(titleWrap);

@@ -199,6 +199,13 @@
       gap: 8px;
       align-items: center;
     }
+    .item-master-import-panel { display: grid; gap: 8px; }
+    .item-master-import-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .item-master-preview { overflow-x: auto; }
+    .item-master-preview table { width: 100%; }
+    .item-master-preview .rename { background: #fff4d6; }
+    .item-master-preview .create { background: #eaf6ed; }
+    .item-master-warning { color: #8a4f00; font-weight: 700; }
     .ghost-average {
       border: 1px dashed #aeb8c2;
       background: #f6f8fa;
@@ -233,6 +240,15 @@
       border: 1px solid #bfc8b8;
       background: #eef4ec;
       color: #31513a;
+      padding: 2px 7px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+    .item-task-batch-size {
+      border: 1px solid #b8c6d8;
+      background: #eef5fc;
+      color: #294e73;
       padding: 2px 7px;
       font-size: 0.78rem;
       font-weight: 700;
@@ -2200,6 +2216,20 @@
           <option value="Snackbar">Snackbar</option>
         </select>
         <button type="button" onclick="addNewItem()">Add Item</button>
+      </div>
+    </section>
+
+    <section class="item-task-section item-task-new-item-section">
+      <h3>Import Production Item Master</h3>
+      <div class="item-master-import-panel">
+        <div>The importer uses <b>Item Metrc Name</b> as the new SKU title. It previews similar-name replacements before changing anything; confirmed renames retain the same item ID, task assignments, and history.</div>
+        <div class="item-master-import-actions">
+          <input type="file" id="itemMasterWorkbook" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+          <button type="button" onclick="previewItemMasterImport()">Check Workbook</button>
+          <button type="button" id="applyItemMasterImportButton" onclick="applyItemMasterImport()" hidden>Do It — Update Item Master</button>
+        </div>
+        <div id="itemMasterImportStatus" class="message"></div>
+        <div id="itemMasterImportPreview" class="item-master-preview"></div>
       </div>
     </section>
 

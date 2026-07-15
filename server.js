@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const path = require("path");
 const nodemailer = require("nodemailer");
 const twilio = require("twilio");
+const readXlsxFile = require("read-excel-file/node");
 const db = require("./db");
 const entryAlertThresholds = require("./entry-alert-thresholds.json");
 const calendarDb = db.calendar || db;
@@ -28,6 +29,8 @@ const APP_BUILD_ID = process.env.RENDER_GIT_COMMIT ||
 const APP_UPDATE_QUERY_PARAM = "_app_update";
 let alertEmailTransporter = null;
 let alertSmsClient = null;
+const pendingItemMasterImports = new Map();
+const ITEM_MASTER_IMPORT_TTL_MS = 30 * 60 * 1000;
 
 const ALERT_TYPE_OPTIONS = Object.freeze([
   "recipe_published",
@@ -1074,6 +1077,13 @@ async function seedNames(table, names) {
   }
 }
 
+async function seedInitialItems() {
+  const rows = await allSql("SELECT COUNT(*) AS count FROM items");
+  if ((Number(rows[0] && rows[0].count) || 0) === 0) {
+    await seedNames("items", itemNames);
+  }
+}
+
 async function seedItemProductionCompanies() {
   const companyByItemName = new Map([
     ["Daytime Focus Micro Pump", "Hijnx"],
@@ -1853,6 +1863,12 @@ async function initializeDatabase() {
   await addMissingColumn("task_average_references", "source_file_name", "TEXT");
   await addMissingColumn("task_average_references", "imported_at", "TEXT");
   await addMissingColumn("items", "production_company", "TEXT");
+  await addMissingColumn("items", "common_name", "TEXT");
+  await addMissingColumn("items", "distru_name", "TEXT");
+  await addMissingColumn("items", "alternate_names", "TEXT");
+  await addMissingColumn("items", "batch_size", "REAL");
+  await addMissingColumn("items", "master_source_file", "TEXT");
+  await addMissingColumn("items", "master_imported_at", "TEXT");
   await addMissingColumn("time_logs", "task_id", "INTEGER");
   await addMissingColumn("time_logs", "employee", "TEXT");
   await addMissingColumn("time_logs", "work_date", "TEXT");
@@ -1927,7 +1943,9 @@ async function initializeDatabase() {
   await reconcileCalendarDatabase();
   await clearWeekendScheduleTasks();
 
-  await seedNames("items", itemNames);
+  // The database becomes the durable item master after first initialization. This
+  // prevents names replaced by a master-list import from being re-added on restart.
+  await seedInitialItems();
   await seedItemProductionCompanies();
   await removeNames("items", ["Item A", "Item B"]);
   await seedNames("tasks", taskNames);
@@ -2187,7 +2205,20 @@ app.get("/item-task-options", async (req, res) => {
 app.get("/admin/item-task-management", async (req, res) => {
   try {
     const [items, tasks, assignments, taskAverageReferences] = await Promise.all([
-      allSql("SELECT id, name, COALESCE(production_company, '') AS production_company FROM items ORDER BY name"),
+      allSql(`
+        SELECT
+          id,
+          name,
+          COALESCE(production_company, '') AS production_company,
+          COALESCE(common_name, '') AS common_name,
+          COALESCE(distru_name, '') AS distru_name,
+          COALESCE(alternate_names, '') AS alternate_names,
+          batch_size,
+          COALESCE(master_source_file, '') AS master_source_file,
+          master_imported_at
+        FROM items
+        ORDER BY name
+      `),
       allSql(`
         SELECT
           t.id,
@@ -2301,6 +2332,197 @@ app.delete("/admin/task-average-references", async (req, res) => {
   try {
     const result = await runSql("DELETE FROM task_average_references");
     res.json({ message: "Task average references cleared", deleted: result.changes || 0 });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+function normalizeItemMatchName(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/\b(1|2|3|10)\s*(?:pk|pack|piece|pieces|pcs|units?|chunks?)\b/g, "$1")
+    .replace(/\bmini'?s\b/g, "mini")
+    .replace(/\bblu(?:e)?\s+raz+\b/g, "blue razz")
+    .replace(/\bchill\b/g, "cbd")
+    .replace(/\bsleep\b/g, "cbn")
+    .replace(/\b\d+(?:\.\d+)?mg\b/g, " ")
+    .replace(/\b(?:hijnx|snackbar|edible|gummy|rso|vape|pen|beverage|space|chunk|chunks|og|the)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function itemNameSimilarity(left, right) {
+  const a = normalizeItemMatchName(left);
+  const b = normalizeItemMatchName(right);
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  if (a.includes(b) || b.includes(a)) return Math.min(a.length, b.length) / Math.max(a.length, b.length) * 0.25 + 0.7;
+
+  const aTokens = new Set(a.split(" "));
+  const bTokens = new Set(b.split(" "));
+  let intersection = 0;
+  aTokens.forEach(token => {
+    if (bTokens.has(token)) intersection += 1;
+  });
+  return intersection / Math.max(aTokens.size, bTokens.size);
+}
+
+function inferItemCompany(row) {
+  const text = `${row.metrc_name} ${row.distru_name}`;
+  if (/snackbar/i.test(text)) return "Snackbar";
+  return "Hijnx";
+}
+
+async function parseItemMasterWorkbook(buffer) {
+  let sheetRows;
+  try {
+    sheetRows = await readXlsxFile(buffer);
+  } catch (err) {
+    throw new Error("The uploaded file is not a readable Excel workbook.");
+  }
+  const headerRowIndex = sheetRows.findIndex(row =>
+    row.some(value => normalizeRequiredText(value).toLowerCase() === "item metrc name")
+  );
+  if (headerRowIndex === -1 || sheetRows.length <= headerRowIndex + 1) {
+    throw new Error('The workbook must contain a column named "Item Metrc Name".');
+  }
+
+  const headers = sheetRows[headerRowIndex].map(header => normalizeRequiredText(header));
+  const headerLookup = headers.reduce((lookup, header, index) => {
+    lookup[header.toLowerCase()] = index;
+    return lookup;
+  }, {});
+  const metrcColumn = headerLookup["item metrc name"];
+  if (metrcColumn === undefined) throw new Error('The workbook must contain a column named "Item Metrc Name".');
+
+  const valueFor = (row, name) => {
+    const column = headerLookup[name];
+    return column === undefined ? "" : normalizeRequiredText(row[column]);
+  };
+  const uniqueNames = new Set();
+  const rows = [];
+
+  sheetRows.slice(headerRowIndex + 1).forEach((rawRow, index) => {
+    const metrcName = normalizeRequiredText(rawRow[metrcColumn]);
+    if (!metrcName) return;
+    const key = metrcName.toLowerCase();
+    if (uniqueNames.has(key)) return;
+    uniqueNames.add(key);
+    rows.push({
+      row_number: headerRowIndex + index + 2,
+      metrc_name: metrcName,
+      common_name: valueFor(rawRow, "item common name"),
+      distru_name: valueFor(rawRow, "item distru name"),
+      alternate_names: valueFor(rawRow, "alternate or olld metrc names") || valueFor(rawRow, "alternate or old metrc names"),
+      batch_size: Number(valueFor(rawRow, "batch size")) || null
+    });
+  });
+
+  if (!rows.length) throw new Error('No rows have a value in "Item Metrc Name".');
+  return rows;
+}
+
+function buildItemMasterPreview(importRows, items) {
+  const claimedItemIds = new Set();
+  return importRows.map(row => {
+    const primaryAliases = [row.metrc_name, row.common_name, row.distru_name].filter(Boolean);
+    const candidates = items
+      .filter(item => !claimedItemIds.has(String(item.id)))
+      .map(item => ({
+        item,
+        // Alternate names are useful supporting evidence, but many legacy Metrc
+        // labels are generic enough to produce a false match on their own.
+        score: Math.max(
+          ...primaryAliases.map(alias => itemNameSimilarity(alias, item.name)),
+          Math.min(itemNameSimilarity(row.alternate_names, item.name), 0.49)
+        )
+      }))
+      .sort((a, b) => b.score - a.score);
+    const best = candidates[0];
+    const exact = items.find(item => item.name.toLowerCase() === row.metrc_name.toLowerCase());
+    const matched = exact || (best && best.score >= 0.5 ? best.item : null);
+    if (matched) claimedItemIds.add(String(matched.id));
+
+    return {
+      action: matched ? (matched.name === row.metrc_name ? "unchanged" : "rename") : "create",
+      item_id: matched ? matched.id : null,
+      current_name: matched ? matched.name : "",
+      new_name: row.metrc_name,
+      match_score: matched ? (exact ? 1 : Number(best.score.toFixed(2))) : null,
+      warning: matched && matched.name !== row.metrc_name
+        ? `Rename \"${matched.name}\" to the Metrc title while keeping item ID ${matched.id} and all linked data.`
+        : "",
+      ...row
+    };
+  });
+}
+
+app.post("/admin/item-master/import-preview", express.raw({
+  type: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/octet-stream"],
+  limit: "10mb"
+}), async (req, res) => {
+  if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).send("Choose an Excel workbook to upload.");
+  try {
+    const rows = await parseItemMasterWorkbook(req.body);
+    const items = await allSql("SELECT id, name FROM items ORDER BY name");
+    const actions = buildItemMasterPreview(rows, items);
+    const token = crypto.randomUUID();
+    pendingItemMasterImports.set(token, {
+      actions,
+      source_file: normalizeRequiredText(req.headers["x-item-master-file-name"]) || "item-master.xlsx",
+      expires_at: Date.now() + ITEM_MASTER_IMPORT_TTL_MS
+    });
+    res.json({
+      token,
+      actions,
+      summary: actions.reduce((result, action) => {
+        result[action.action] += 1;
+        return result;
+      }, { rename: 0, create: 0, unchanged: 0 })
+    });
+  } catch (err) {
+    res.status(400).send(err.message);
+  }
+});
+
+app.post("/admin/item-master/import-apply", async (req, res) => {
+  const token = normalizeRequiredText(req.body.token);
+  const pending = pendingItemMasterImports.get(token);
+  if (!pending || pending.expires_at < Date.now()) {
+    pendingItemMasterImports.delete(token);
+    return res.status(410).send("This preview expired. Upload the workbook again.");
+  }
+
+  try {
+    await withTransaction(async transaction => {
+      for (const action of pending.actions) {
+        const company = inferItemCompany(action);
+        if (action.action === "create") {
+          await runSql(`
+            INSERT INTO items (
+              name, production_company, common_name, distru_name, alternate_names,
+              batch_size, master_source_file, master_imported_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+          `, [action.new_name, company, action.common_name, action.distru_name, action.alternate_names,
+            action.batch_size, pending.source_file], transaction);
+        } else {
+          await runSql(`
+            UPDATE items SET
+              name = ?, production_company = COALESCE(NULLIF(production_company, ''), ?),
+              common_name = ?, distru_name = ?, alternate_names = ?, batch_size = ?,
+              master_source_file = ?, master_imported_at = datetime('now')
+            WHERE id = ?
+          `, [action.new_name, company, action.common_name, action.distru_name, action.alternate_names,
+            action.batch_size, pending.source_file, action.item_id], transaction);
+        }
+      }
+    });
+    pendingItemMasterImports.delete(token);
+    res.json({ message: "Item master updated", summary: pending.actions.reduce((result, action) => {
+      result[action.action] += 1;
+      return result;
+    }, { rename: 0, create: 0, unchanged: 0 }) });
   } catch (err) {
     res.status(500).send(err.message);
   }

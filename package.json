@@ -11,6 +11,7 @@
     "@libsql/client": "^0.17.3",
     "express": "^4.19.2",
     "nodemailer": "^9.0.3",
+    "read-excel-file": "^5.8.8",
     "sqlite3": "^5.1.7",
     "twilio": "^6.0.2"
   }
