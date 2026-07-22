@@ -2,7 +2,7 @@
 // It is intentionally online-first and only caches static shell files/icons.
 // Database-backed API routes are not intercepted, so Render/Turso requests keep
 // using the live network path and do not serve stale production data.
-const PWA_CACHE_NAME = "production-tracker-static-v4";
+const PWA_CACHE_NAME = "production-tracker-static-v5";
 const STATIC_PATHS = new Set([
   "/access.html",
   "/app.js",
@@ -54,7 +54,10 @@ self.addEventListener("fetch", event => {
   }
 
   event.respondWith(
-    fetch(request)
+    // Bypass the browser HTTP cache as well as the Cache API. This prevents an
+    // installed desktop app from repeatedly reviving an outdated script after
+    // a new deployment.
+    fetch(request, { cache: "no-store" })
       .then(response => {
         if (response && response.ok) {
           const copy = response.clone();

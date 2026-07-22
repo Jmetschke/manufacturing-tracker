@@ -630,11 +630,20 @@ function isWeekend(date) {
   return date.getDay() === 0 || date.getDay() === 6;
 }
 
+const MAX_SCHEDULE_PROJECTION_DAYS = 366;
+
+function normalizeScheduleDays(value) {
+  const parsedDays = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsedDays)) return 1;
+  return Math.min(MAX_SCHEDULE_PROJECTION_DAYS, Math.max(1, parsedDays));
+}
+
 function getProjectedWorkDates(startDate, days) {
   const dates = [];
   let current = dateOnly(startDate);
+  const safeDays = normalizeScheduleDays(days);
 
-  while (dates.length < days) {
+  while (dates.length < safeDays) {
     if (!isWeekend(current)) {
       dates.push(current);
     }
@@ -720,7 +729,7 @@ function normalizeEventList(value) {
 
   return value
     .map(event => {
-      const days = Math.max(1, Number.parseInt(event && event.days, 10) || 1);
+      const days = normalizeScheduleDays(event && event.days);
       const times = Array.isArray(event && event.times) ? event.times : [];
 
       return {
@@ -847,7 +856,7 @@ function normalizeScheduleTask(task) {
   const text = String(task && task.text ? task.text : "").trim();
   const item = String(task && task.item ? task.item : "").trim();
   const units = Math.max(0, Number.parseFloat(task && task.units) || 0);
-  const days = Math.max(1, Number.parseInt(task && task.days, 10) || 1);
+  const days = normalizeScheduleDays(task && task.days);
   const totalHours = Math.max(0, Number.parseFloat(task && task.totalHours) || 0);
   const scheduleDate = isIsoDate(task && task.scheduleDate) ? task.scheduleDate : "";
   const sourceBatchKey = String(task && task.sourceBatchKey ? task.sourceBatchKey : "").trim();
