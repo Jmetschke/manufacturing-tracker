@@ -8,6 +8,11 @@ const productionTrackerReloadFlagKey = "productionTracker.reloadedBuild";
 const productionTrackerNavGroupStorageKey = "productionTracker.navRegion";
 const productionTrackerUpdateQueryParam = "_app_update";
 let productionTrackerVersionCheckInFlight = false;
+let productionTrackerLaunchSettled = false;
+let resolveProductionTrackerLaunch;
+window.productionTrackerLaunchReady = new Promise(resolve => {
+  resolveProductionTrackerLaunch = resolve;
+});
 
 function isProductionTrackerStandalone() {
   return window.matchMedia("(display-mode: standalone)").matches ||
@@ -328,8 +333,9 @@ function reloadProductionTrackerForBuild(buildId) {
 }
 
 async function checkProductionTrackerBuildVersion() {
-  if (productionTrackerVersionCheckInFlight) return;
+  if (productionTrackerVersionCheckInFlight) return window.productionTrackerLaunchReady;
   productionTrackerVersionCheckInFlight = true;
+  let reloadStarted = false;
 
   try {
     const res = await fetch(`/app-version?_=${Date.now()}`, {
@@ -343,11 +349,6 @@ async function checkProductionTrackerBuildVersion() {
     if (!buildId) return;
 
     const storedBuildId = localStorage.getItem(productionTrackerBuildStorageKey);
-    if (!storedBuildId) {
-      localStorage.setItem(productionTrackerBuildStorageKey, buildId);
-      return;
-    }
-
     if (storedBuildId === buildId) return;
 
     const reloadedBuildId = sessionStorage.getItem(productionTrackerReloadFlagKey);
@@ -355,19 +356,23 @@ async function checkProductionTrackerBuildVersion() {
     await clearProductionTrackerStaticCaches();
 
     if (reloadedBuildId !== buildId) {
+      reloadStarted = true;
       reloadProductionTrackerForBuild(buildId);
     }
   } catch (err) {
     console.warn("App version check failed:", err);
   } finally {
     productionTrackerVersionCheckInFlight = false;
+    if (!reloadStarted && !productionTrackerLaunchSettled) {
+      productionTrackerLaunchSettled = true;
+      resolveProductionTrackerLaunch();
+    }
   }
 }
 
 function registerProductionTrackerBuildChecks() {
   window.addEventListener("load", () => {
     checkProductionTrackerBuildVersion();
-    setTimeout(checkProductionTrackerBuildVersion, 2000);
   });
 
   window.addEventListener("pageshow", event => {
@@ -408,3 +413,4 @@ document.addEventListener("DOMContentLoaded", () => {
 
 registerProductionTrackerInstallServiceWorker();
 registerProductionTrackerBuildChecks();
+checkProductionTrackerBuildVersion();

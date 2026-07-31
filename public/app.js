@@ -3522,18 +3522,4 @@ window.addEventListener("afterprint", () => {
   document.body.classList.remove("printing-schedule");
 });
 
-function registerProductionTrackerServiceWorker() {
-  if (!("serviceWorker" in navigator)) return;
-
-  // Register the PWA shell worker. It only handles static files/icons, so live
-  // Render/Turso API calls continue through the normal network request flow.
-  window.addEventListener("load", () => {
-    navigator.serviceWorker
-      .register("/service-worker.js")
-      .then(registration => registration.update().catch(() => null))
-      .catch(err => console.warn("PWA service worker registration failed:", err));
-  });
-}
-
-registerProductionTrackerServiceWorker();
-load();
+window.productionTrackerLaunchReady.then(load);

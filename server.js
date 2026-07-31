@@ -3,6 +3,7 @@ console.log("SERVER ACTIVE - CORRECT FILE");
 const express = require("express");
 const crypto = require("crypto");
 const path = require("path");
+const { execFileSync } = require("child_process");
 const nodemailer = require("nodemailer");
 const twilio = require("twilio");
 const readXlsxFile = require("read-excel-file/node");
@@ -21,12 +22,25 @@ const ACCESS_COOKIE = "manufacturing_tracker_access";
 const ADMIN_ACCESS_COOKIE = "manufacturing_tracker_admin_access";
 const ACCESS_SECRET = process.env.ACCESS_SESSION_SECRET || `${ACCESS_CODE}:${ADMIN_ACCESS_CODE}`;
 const MAX_SCHEDULE_TASKS_LENGTH = 100000;
-const APP_BUILD_ID = process.env.RENDER_GIT_COMMIT ||
-  process.env.RENDER_COMMIT ||
-  process.env.SOURCE_VERSION ||
-  process.env.COMMIT_SHA ||
-  `local-${Date.now()}`;
-const APP_UPDATE_QUERY_PARAM = "_app_update";
+function getAppBuildId() {
+  const deployedCommit = process.env.RENDER_GIT_COMMIT ||
+    process.env.RENDER_COMMIT ||
+    process.env.SOURCE_VERSION ||
+    process.env.COMMIT_SHA;
+  if (deployedCommit) return deployedCommit;
+
+  try {
+    return execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: __dirname,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+  } catch (err) {
+    return "local-unversioned";
+  }
+}
+
+const APP_BUILD_ID = getAppBuildId();
 let alertEmailTransporter = null;
 let alertSmsClient = null;
 const pendingItemMasterImports = new Map();
@@ -131,14 +145,6 @@ function isAdminPath(pathname) {
   return pathname === "/admin.html" || pathname.startsWith("/admin/");
 }
 
-function isAppShellPath(pathname) {
-  return pathname === "/" ||
-    pathname === "/index.html" ||
-    pathname === "/admin.html" ||
-    pathname === "/access" ||
-    pathname === "/access.html";
-}
-
 function getSafeNextPath(rawValue) {
   const nextPath = String(rawValue || "/");
   if (!nextPath.startsWith("/") || nextPath.startsWith("//")) return "/";
@@ -149,17 +155,6 @@ function getSafeNextPath(rawValue) {
 function accessRedirect(nextPath) {
   return `/access?next=${encodeURIComponent(nextPath)}`;
 }
-
-app.use((req, res, next) => {
-  if (req.method !== "GET" || !isAppShellPath(req.path) || req.query[APP_UPDATE_QUERY_PARAM] === undefined) {
-    return next();
-  }
-
-  const url = new URL(req.originalUrl, "https://production-tracker.local");
-  url.searchParams.delete(APP_UPDATE_QUERY_PARAM);
-  const normalizedPath = `${url.pathname}${url.search}${url.hash}`;
-  return res.redirect(302, normalizedPath || "/");
-});
 
 app.get("/access", (req, res) => {
   const nextPath = getSafeNextPath(req.query.next);
