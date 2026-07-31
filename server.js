@@ -141,7 +141,11 @@ function clearAccessCookie(res) {
   });
 }
 
-function isAdminPath(pathname) {
+function isAdminPath(rawPath) {
+  // Access redirects may include cache-busting or other query parameters.
+  // Authorization must always be based on the pathname alone; otherwise an
+  // app-level session can be bounced indefinitely between /access and admin.
+  const pathname = String(rawPath || "").split(/[?#]/, 1)[0];
   return pathname === "/admin.html" || pathname.startsWith("/admin/");
 }
 
