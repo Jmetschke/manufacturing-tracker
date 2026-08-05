@@ -34,6 +34,10 @@
 .active-sku-room-picker label { align-items: center; display: flex; gap: 7px; }
 .active-sku-room-picker input { margin: 0; }
 .active-sku-summary { background: #eef5fb; border: 1px solid #c8d9e8; padding: 10px 12px; }
+.active-sku-item-filter { align-items: end; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; }
+.active-sku-item-filter label { display: grid; font-size: 0.82rem; font-weight: 700; gap: 4px; width: min(620px, 100%); }
+.active-sku-item-filter input { box-sizing: border-box; margin: 0; width: 100%; }
+.active-sku-item-filter [data-active-sku-item-count] { color: #59636d; font-size: 0.82rem; }
 .active-sku-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .active-sku-card { border: 1px solid #d7dce1; background: #fff; min-width: 0; padding: 14px; }
 .active-sku-card-heading { align-items: flex-start; border-bottom: 1px solid #e2e5e8; padding-bottom: 9px; }

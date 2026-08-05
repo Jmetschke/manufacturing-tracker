@@ -33,13 +33,29 @@
   function renderCards(root, data) {
     const grid = root.querySelector("[data-active-sku-grid]");
     const summary = root.querySelector("[data-active-sku-summary]");
+    const itemSearch = String(root.querySelector("[data-active-sku-item-search]").value || "").trim().toLowerCase();
+    const itemCount = root.querySelector("[data-active-sku-item-count]");
     const importInfo = data.import;
     summary.innerHTML = importInfo
       ? `<span><b>${data.total_skus}</b> SKU${data.total_skus === 1 ? "" : "s"} from ${escapeText(importInfo.source_file_name || "the latest report")}</span><span>${escapeText((importInfo.selected_locations || []).join(", "))}${data.unmatched_skus ? ` · <b>${data.unmatched_skus}</b> unmapped` : ""}</span>`
       : "<span>No Metrc report has been imported yet.</span>";
 
     grid.innerHTML = "";
-    (data.items || []).forEach(item => {
+    const displayedItems = (data.items || []).filter(item => {
+      if (!itemSearch) return true;
+      return [
+        item.name,
+        ...(item.metrc_names || []),
+        ...(item.skus || []).map(sku => sku.sku_tag),
+        ...(item.skus || []).map(sku => sku.metrc_name)
+      ].some(value => String(value || "").toLowerCase().includes(itemSearch));
+    });
+    itemCount.textContent = `${displayedItems.length} of ${(data.items || []).length} items`;
+    if (!displayedItems.length) {
+      grid.innerHTML = '<div class="active-sku-empty">No items match this filter.</div>';
+      return;
+    }
+    displayedItems.forEach(item => {
       const card = document.createElement("article");
       card.className = "active-sku-card";
       const visibleSkus = (item.skus || []).filter(sku => !Number(sku.is_withheld));
@@ -276,6 +292,10 @@
     root.dataset.activeSkuReady = "true";
     root.querySelector("[data-active-sku-preview]").addEventListener("click", () => preview(root));
     root.querySelector("[data-active-sku-apply]").addEventListener("click", () => applyImport(root));
+    root.querySelector("[data-active-sku-item-search]").addEventListener("input", () => {
+      const current = stateByRoot.get(root);
+      if (current && current.data) renderCards(root, current.data);
+    });
     let searchTimer;
     root.querySelector("[data-deleted-sku-search]").addEventListener("input", () => {
       clearTimeout(searchTimer);
