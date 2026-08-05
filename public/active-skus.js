@@ -88,6 +88,12 @@
         withholdButton.addEventListener("click", () => setWithheld(root, sku.sku_tag, !isWithheld, withholdButton));
         row.lastElementChild.appendChild(document.createElement("br"));
         row.lastElementChild.appendChild(withholdButton);
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "active-sku-delete";
+        deleteButton.textContent = "Delete SKU";
+        deleteButton.addEventListener("click", () => deleteSku(root, sku.sku_tag, deleteButton));
+        row.lastElementChild.appendChild(deleteButton);
         return row;
       }
       ordered.forEach(sku => list.appendChild(addSkuRow(sku, false)));
@@ -119,6 +125,21 @@
     } catch (err) {
       button.disabled = false;
       setStatus(root, `SKU could not be updated: ${err.message}`, "error");
+    }
+  }
+
+  async function deleteSku(root, skuTag, button) {
+    if (!window.confirm(`Delete SKU ${skuTag}? It will move to Deleted SKUs and remain excluded from future imports.`)) return;
+    button.disabled = true;
+    setStatus(root, "Deleting SKU...");
+    try {
+      const response = await fetch(`/active-skus/${encodeURIComponent(skuTag)}`, { method: "DELETE" });
+      if (!response.ok) throw new Error(await response.text());
+      await load(root);
+      setStatus(root, "SKU moved to Deleted SKUs.", "success");
+    } catch (err) {
+      button.disabled = false;
+      setStatus(root, `SKU could not be deleted: ${err.message}`, "error");
     }
   }
 
@@ -163,7 +184,7 @@
           <div><span class="deleted-sku-label">SKU #</span><span class="deleted-sku-primary">${escapeText(sku.sku_tag)}</span></div>
           <div><span class="deleted-sku-label">Item</span>${escapeText(sku.item_name || "Unmapped item")}</div>
           <div><span class="deleted-sku-label">Metrc name</span>${escapeText(sku.metrc_name)}</div>
-          <div><span class="deleted-sku-label">Removed</span>${escapeText(formatDateTime(sku.removed_at))}<div class="active-sku-meta">${quantity}</div></div>`;
+          <div><span class="deleted-sku-label">Removed</span>${escapeText(formatDateTime(sku.removed_at))}<div class="deleted-sku-reason">${sku.removal_reason === "manual" ? "Manually deleted" : "Removed by import"}</div><div class="active-sku-meta">${quantity}</div></div>`;
         list.appendChild(row);
       });
     } catch (err) {

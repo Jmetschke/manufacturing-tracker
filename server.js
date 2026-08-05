@@ -1774,6 +1774,7 @@ async function initializeDatabase() {
       quantity REAL,
       unit_of_measure TEXT,
       source_file_name TEXT,
+      removal_reason TEXT NOT NULL DEFAULT 'import',
       removed_at TEXT DEFAULT (datetime('now'))
     )
   `);
@@ -1933,6 +1934,7 @@ async function initializeDatabase() {
   await addMissingColumn("items", "master_imported_at", "TEXT");
   await addMissingColumn("active_skus", "quantity", "REAL");
   await addMissingColumn("active_skus", "unit_of_measure", "TEXT");
+  await addMissingColumn("deleted_active_skus", "removal_reason", "TEXT NOT NULL DEFAULT 'import'");
   await addMissingColumn("time_logs", "task_id", "INTEGER");
   await addMissingColumn("time_logs", "employee", "TEXT");
   await addMissingColumn("time_logs", "work_date", "TEXT");
@@ -2362,11 +2364,20 @@ app.post("/active-skus/import-apply", async (req, res) => {
     : [];
   if (!selectedLocations.length) return res.status(400).send("Select at least one room to import.");
   const selected = new Set(selectedLocations);
-  const importedRows = pending.rows.filter(row => selected.has(row.location));
+  const candidateRows = pending.rows.filter(row => selected.has(row.location));
+  let importedCount = 0;
   try {
     await withTransaction(async transaction => {
+      const manuallyDeleted = await allSql(
+        "SELECT sku_tag FROM deleted_active_skus WHERE removal_reason = 'manual'",
+        [],
+        transaction
+      );
+      const manuallyDeletedTags = new Set(manuallyDeleted.map(row => row.sku_tag));
+      const importedRows = candidateRows.filter(row => !manuallyDeletedTags.has(row.sku_tag));
+      importedCount = importedRows.length;
       const importedTags = importedRows.map(row => row.sku_tag);
-      const importedPlaceholders = importedTags.map(() => "?").join(", ");
+      const importedPlaceholders = importedTags.length ? importedTags.map(() => "?").join(", ") : "NULL";
       const removedRows = await allSql(`
         SELECT
           sku.sku_tag,
@@ -2390,8 +2401,8 @@ app.post("/active-skus/import-apply", async (req, res) => {
         await runSql(`
           INSERT INTO deleted_active_skus (
             sku_tag, metrc_name, item_name, expiration_date, location, quantity,
-            unit_of_measure, source_file_name, removed_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            unit_of_measure, source_file_name, removal_reason, removed_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'import', datetime('now'))
           ON CONFLICT(sku_tag) DO UPDATE SET
             metrc_name = excluded.metrc_name,
             item_name = excluded.item_name,
@@ -2400,6 +2411,7 @@ app.post("/active-skus/import-apply", async (req, res) => {
             quantity = excluded.quantity,
             unit_of_measure = excluded.unit_of_measure,
             source_file_name = excluded.source_file_name,
+            removal_reason = 'import',
             removed_at = excluded.removed_at
         `, [row.sku_tag, row.metrc_name, row.item_name, row.expiration_date, row.location,
           row.quantity, row.unit_of_measure, row.source_file_name], transaction);
@@ -2427,7 +2439,7 @@ app.post("/active-skus/import-apply", async (req, res) => {
       `, [JSON.stringify(selectedLocations), pending.source_file], transaction);
     });
     pendingActiveSkuImports.delete(token);
-    res.json({ message: "Active SKUs imported", imported: importedRows.length, selected_locations: selectedLocations });
+    res.json({ message: "Active SKUs imported", imported: importedCount, selected_locations: selectedLocations });
   } catch (err) {
     res.status(500).send(err.message);
   }
@@ -2447,6 +2459,7 @@ app.get("/active-skus/deleted", async (req, res) => {
         quantity,
         unit_of_measure,
         source_file_name,
+        removal_reason,
         removed_at
       FROM deleted_active_skus
       WHERE ? = ''
@@ -2594,6 +2607,59 @@ app.put("/active-skus/:skuTag/withheld", async (req, res) => {
       }
     });
     res.json({ sku_tag: skuTag, is_withheld: isWithheld });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.delete("/active-skus/:skuTag", async (req, res) => {
+  const skuTag = normalizeRequiredText(req.params.skuTag);
+  if (!skuTag) return res.status(400).send("Choose a valid SKU.");
+  try {
+    const sku = await getSql(`
+      SELECT
+        active.sku_tag,
+        active.metrc_name,
+        active.expiration_date,
+        active.location,
+        active.quantity,
+        active.unit_of_measure,
+        active.source_file_name,
+        (
+          SELECT items.name
+          FROM item_metrc_names names
+          JOIN items ON items.id = names.item_id
+          WHERE names.normalized_name = active.normalized_name
+          LIMIT 1
+        ) AS item_name
+      FROM active_skus active
+      WHERE active.sku_tag = ?
+    `, [skuTag]);
+    if (!sku) return res.status(404).send("SKU not found.");
+
+    await withTransaction(async transaction => {
+      await runSql(`
+        INSERT INTO deleted_active_skus (
+          sku_tag, metrc_name, item_name, expiration_date, location, quantity,
+          unit_of_measure, source_file_name, removal_reason, removed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'manual', datetime('now'))
+        ON CONFLICT(sku_tag) DO UPDATE SET
+          metrc_name = excluded.metrc_name,
+          item_name = excluded.item_name,
+          expiration_date = excluded.expiration_date,
+          location = excluded.location,
+          quantity = excluded.quantity,
+          unit_of_measure = excluded.unit_of_measure,
+          source_file_name = excluded.source_file_name,
+          removal_reason = 'manual',
+          removed_at = excluded.removed_at
+      `, [sku.sku_tag, sku.metrc_name, sku.item_name, sku.expiration_date, sku.location,
+        sku.quantity, sku.unit_of_measure, sku.source_file_name], transaction);
+      await runSql("DELETE FROM active_sku_selections WHERE sku_tag = ?", [skuTag], transaction);
+      await runSql("DELETE FROM active_sku_withholdings WHERE sku_tag = ?", [skuTag], transaction);
+      await runSql("DELETE FROM active_skus WHERE sku_tag = ?", [skuTag], transaction);
+    });
+    res.json({ message: "SKU deleted", sku_tag: skuTag });
   } catch (err) {
     res.status(500).send(err.message);
   }
