@@ -7,6 +7,7 @@ const { execFileSync } = require("child_process");
 const nodemailer = require("nodemailer");
 const twilio = require("twilio");
 const readXlsxFile = require("read-excel-file/node");
+const { strFromU8, strToU8, unzipSync, zipSync } = require("fflate");
 const db = require("./db");
 const entryAlertThresholds = require("./entry-alert-thresholds.json");
 const calendarDb = db.calendar || db;
@@ -44,6 +45,7 @@ const APP_BUILD_ID = getAppBuildId();
 let alertEmailTransporter = null;
 let alertSmsClient = null;
 const pendingItemMasterImports = new Map();
+const pendingActiveSkuImports = new Map();
 const ITEM_MASTER_IMPORT_TTL_MS = 30 * 60 * 1000;
 
 const ALERT_TYPE_OPTIONS = Object.freeze([
@@ -1733,6 +1735,67 @@ async function initializeDatabase() {
   `);
 
   await runSql(`
+    CREATE TABLE IF NOT EXISTS item_metrc_names (
+      item_id INTEGER NOT NULL,
+      metrc_name TEXT NOT NULL,
+      normalized_name TEXT NOT NULL,
+      PRIMARY KEY (item_id, normalized_name)
+    )
+  `);
+
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS active_skus (
+      sku_tag TEXT PRIMARY KEY,
+      metrc_name TEXT NOT NULL,
+      normalized_name TEXT NOT NULL,
+      expiration_date TEXT,
+      location TEXT NOT NULL,
+      quantity REAL,
+      unit_of_measure TEXT,
+      source_file_name TEXT,
+      imported_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS active_sku_withholdings (
+      sku_tag TEXT PRIMARY KEY,
+      withheld_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS deleted_active_skus (
+      sku_tag TEXT PRIMARY KEY,
+      metrc_name TEXT NOT NULL,
+      item_name TEXT,
+      expiration_date TEXT,
+      location TEXT,
+      quantity REAL,
+      unit_of_measure TEXT,
+      source_file_name TEXT,
+      removed_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS active_sku_selections (
+      item_id INTEGER PRIMARY KEY,
+      sku_tag TEXT NOT NULL,
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS active_sku_import_settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      selected_locations TEXT NOT NULL DEFAULT '[]',
+      source_file_name TEXT,
+      imported_at TEXT
+    )
+  `);
+
+  await runSql(`
     CREATE TABLE IF NOT EXISTS time_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       item_id INTEGER,
@@ -1868,6 +1931,8 @@ async function initializeDatabase() {
   await addMissingColumn("items", "batch_size", "REAL");
   await addMissingColumn("items", "master_source_file", "TEXT");
   await addMissingColumn("items", "master_imported_at", "TEXT");
+  await addMissingColumn("active_skus", "quantity", "REAL");
+  await addMissingColumn("active_skus", "unit_of_measure", "TEXT");
   await addMissingColumn("time_logs", "task_id", "INTEGER");
   await addMissingColumn("time_logs", "employee", "TEXT");
   await addMissingColumn("time_logs", "work_date", "TEXT");
@@ -2171,6 +2236,369 @@ app.get("/items", (req, res) => {
   });
 });
 
+function normalizeMetrcName(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function getExcelColumnNumber(reference) {
+  const letters = String(reference || "").match(/^[A-Z]+/i);
+  if (!letters) return 0;
+  return letters[0].toUpperCase().split("").reduce((total, letter) => total * 26 + letter.charCodeAt(0) - 64, 0);
+}
+
+function getExcelColumnName(number) {
+  let result = "";
+  for (let value = number; value > 0; value = Math.floor((value - 1) / 26)) {
+    result = String.fromCharCode(65 + ((value - 1) % 26)) + result;
+  }
+  return result;
+}
+
+function repairWorkbookDimensions(buffer) {
+  const files = unzipSync(new Uint8Array(buffer));
+  Object.keys(files).filter(name => /^xl\/worksheets\/sheet\d+\.xml$/i.test(name)).forEach(name => {
+    let xml = strFromU8(files[name]);
+    let maxRow = 1;
+    let maxColumn = 1;
+    for (const match of xml.matchAll(/<c\b[^>]*\br="([A-Z]+)(\d+)"/gi)) {
+      maxColumn = Math.max(maxColumn, getExcelColumnNumber(match[1]));
+      maxRow = Math.max(maxRow, Number(match[2]) || 1);
+    }
+    const dimension = `<dimension ref="A1:${getExcelColumnName(maxColumn)}${maxRow}" />`;
+    xml = /<dimension\b[^>]*\/>/i.test(xml)
+      ? xml.replace(/<dimension\b[^>]*\/>/i, dimension)
+      : xml.replace(/<worksheet\b[^>]*>/i, match => `${match}\n${dimension}`);
+    files[name] = strToU8(xml);
+  });
+  return Buffer.from(zipSync(files));
+}
+
+function formatWorkbookDate(value) {
+  if (!value) return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, "0")}-${String(value.getUTCDate()).padStart(2, "0")}`;
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10);
+}
+
+async function parseActiveSkuWorkbook(buffer) {
+  let rows;
+  try {
+    rows = await readXlsxFile(repairWorkbookDimensions(buffer));
+  } catch (err) {
+    throw new Error("The uploaded file is not a readable Metrc Excel report.");
+  }
+  const headerIndex = rows.findIndex(row => {
+    const names = new Set(row.map(value => String(value || "").trim().toLowerCase()));
+    return names.has("tag") && names.has("location") && names.has("item") && names.has("expiration date") && names.has("quantity");
+  });
+  if (headerIndex === -1) {
+    throw new Error('The report must include "Tag", "Location", "Item", "Quantity", and "Expiration Date" columns.');
+  }
+  const lookup = {};
+  rows[headerIndex].forEach((value, index) => {
+    lookup[String(value || "").trim().toLowerCase()] = index;
+  });
+  const seen = new Set();
+  const parsedRows = [];
+  rows.slice(headerIndex + 1).forEach(row => {
+    const skuTag = String(row[lookup.tag] || "").trim();
+    const metrcName = String(row[lookup.item] || "").trim().replace(/\s+/g, " ");
+    const location = String(row[lookup.location] || "").trim().replace(/\s+/g, " ");
+    if (!skuTag || !metrcName || !location || seen.has(skuTag)) return;
+    seen.add(skuTag);
+    parsedRows.push({
+      sku_tag: skuTag,
+      metrc_name: metrcName,
+      normalized_name: normalizeMetrcName(metrcName),
+      expiration_date: formatWorkbookDate(row[lookup["expiration date"]]),
+      location,
+      quantity: Number.isFinite(Number(row[lookup.quantity])) ? Number(row[lookup.quantity]) : null,
+      unit_of_measure: lookup["unit of measure"] === undefined ? "" : String(row[lookup["unit of measure"]] || "").trim()
+    });
+  });
+  if (!parsedRows.length) throw new Error("No active package rows were found in the report.");
+  return parsedRows;
+}
+
+app.post("/active-skus/import-preview", express.raw({
+  type: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/octet-stream"],
+  limit: "14mb"
+}), async (req, res) => {
+  if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).send("Choose a Metrc .xlsx report to upload.");
+  try {
+    const rows = await parseActiveSkuWorkbook(req.body);
+    const token = crypto.randomUUID();
+    const locations = Array.from(rows.reduce((counts, row) => {
+      counts.set(row.location, (counts.get(row.location) || 0) + 1);
+      return counts;
+    }, new Map()).entries()).map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name));
+    pendingActiveSkuImports.set(token, {
+      rows,
+      source_file: normalizeRequiredText(req.headers["x-active-sku-file-name"]) || "metrc-active-packages.xlsx",
+      expires_at: Date.now() + ITEM_MASTER_IMPORT_TTL_MS
+    });
+    const previous = await getSql("SELECT selected_locations FROM active_sku_import_settings WHERE id = 1");
+    let selectedLocations = [];
+    try { selectedLocations = JSON.parse(previous && previous.selected_locations || "[]"); } catch (err) { selectedLocations = []; }
+    res.json({ token, locations, selected_locations: selectedLocations, total_rows: rows.length });
+  } catch (err) {
+    res.status(400).send(err.message);
+  }
+});
+
+app.post("/active-skus/import-apply", async (req, res) => {
+  const token = normalizeRequiredText(req.body.token);
+  const pending = pendingActiveSkuImports.get(token);
+  if (!pending || pending.expires_at < Date.now()) {
+    pendingActiveSkuImports.delete(token);
+    return res.status(410).send("This import preview expired. Upload the report again.");
+  }
+  const available = new Set(pending.rows.map(row => row.location));
+  const selectedLocations = Array.isArray(req.body.selected_locations)
+    ? [...new Set(req.body.selected_locations.map(normalizeRequiredText).filter(name => available.has(name)))]
+    : [];
+  if (!selectedLocations.length) return res.status(400).send("Select at least one room to import.");
+  const selected = new Set(selectedLocations);
+  const importedRows = pending.rows.filter(row => selected.has(row.location));
+  try {
+    await withTransaction(async transaction => {
+      const importedTags = importedRows.map(row => row.sku_tag);
+      const importedPlaceholders = importedTags.map(() => "?").join(", ");
+      const removedRows = await allSql(`
+        SELECT
+          sku.sku_tag,
+          sku.metrc_name,
+          sku.expiration_date,
+          sku.location,
+          sku.quantity,
+          sku.unit_of_measure,
+          sku.source_file_name,
+          (
+            SELECT items.name
+            FROM item_metrc_names names
+            JOIN items ON items.id = names.item_id
+            WHERE names.normalized_name = sku.normalized_name
+            LIMIT 1
+          ) AS item_name
+        FROM active_skus sku
+        WHERE sku.sku_tag NOT IN (${importedPlaceholders})
+      `, importedTags, transaction);
+      for (const row of removedRows) {
+        await runSql(`
+          INSERT INTO deleted_active_skus (
+            sku_tag, metrc_name, item_name, expiration_date, location, quantity,
+            unit_of_measure, source_file_name, removed_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+          ON CONFLICT(sku_tag) DO UPDATE SET
+            metrc_name = excluded.metrc_name,
+            item_name = excluded.item_name,
+            expiration_date = excluded.expiration_date,
+            location = excluded.location,
+            quantity = excluded.quantity,
+            unit_of_measure = excluded.unit_of_measure,
+            source_file_name = excluded.source_file_name,
+            removed_at = excluded.removed_at
+        `, [row.sku_tag, row.metrc_name, row.item_name, row.expiration_date, row.location,
+          row.quantity, row.unit_of_measure, row.source_file_name], transaction);
+      }
+      await runSql(`DELETE FROM deleted_active_skus WHERE sku_tag IN (${importedPlaceholders})`, importedTags, transaction);
+      await runSql("DELETE FROM active_skus", [], transaction);
+      for (const row of importedRows) {
+        await runSql(`
+          INSERT INTO active_skus (
+            sku_tag, metrc_name, normalized_name, expiration_date, location, quantity, unit_of_measure,
+            source_file_name, imported_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        `, [row.sku_tag, row.metrc_name, row.normalized_name, row.expiration_date, row.location,
+          row.quantity, row.unit_of_measure, pending.source_file], transaction);
+      }
+      await runSql("DELETE FROM active_sku_selections WHERE sku_tag NOT IN (SELECT sku_tag FROM active_skus)", [], transaction);
+      await runSql("DELETE FROM active_sku_withholdings WHERE sku_tag NOT IN (SELECT sku_tag FROM active_skus)", [], transaction);
+      await runSql(`
+        INSERT INTO active_sku_import_settings (id, selected_locations, source_file_name, imported_at)
+        VALUES (1, ?, ?, datetime('now'))
+        ON CONFLICT(id) DO UPDATE SET
+          selected_locations = excluded.selected_locations,
+          source_file_name = excluded.source_file_name,
+          imported_at = excluded.imported_at
+      `, [JSON.stringify(selectedLocations), pending.source_file], transaction);
+    });
+    pendingActiveSkuImports.delete(token);
+    res.json({ message: "Active SKUs imported", imported: importedRows.length, selected_locations: selectedLocations });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.get("/active-skus/deleted", async (req, res) => {
+  const search = normalizeRequiredText(req.query.search);
+  const pattern = `%${search.toLowerCase()}%`;
+  try {
+    const rows = await allSql(`
+      SELECT
+        sku_tag,
+        metrc_name,
+        COALESCE(item_name, '') AS item_name,
+        expiration_date,
+        location,
+        quantity,
+        unit_of_measure,
+        source_file_name,
+        removed_at
+      FROM deleted_active_skus
+      WHERE ? = ''
+        OR lower(sku_tag) LIKE ?
+        OR lower(metrc_name) LIKE ?
+        OR lower(COALESCE(item_name, '')) LIKE ?
+      ORDER BY datetime(removed_at) DESC, sku_tag
+      LIMIT 1000
+    `, [search, pattern, pattern, pattern]);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.get("/active-skus", async (req, res) => {
+  try {
+    const [items, aliases, skus, selections, settings] = await Promise.all([
+      allSql("SELECT id, name FROM items ORDER BY name"),
+      allSql("SELECT item_id, metrc_name FROM item_metrc_names ORDER BY metrc_name"),
+      allSql(`SELECT sku.sku_tag, sku.metrc_name, sku.normalized_name, sku.expiration_date, sku.location,
+          sku.quantity, sku.unit_of_measure,
+          CASE WHEN withheld.sku_tag IS NULL THEN 0 ELSE 1 END AS is_withheld
+        FROM active_skus sku
+        LEFT JOIN active_sku_withholdings withheld ON withheld.sku_tag = sku.sku_tag
+        ORDER BY CASE WHEN sku.expiration_date IS NULL OR sku.expiration_date = '' THEN 1 ELSE 0 END,
+          sku.expiration_date, sku.sku_tag`),
+      allSql("SELECT item_id, sku_tag FROM active_sku_selections"),
+      getSql("SELECT selected_locations, source_file_name, imported_at FROM active_sku_import_settings WHERE id = 1")
+    ]);
+    const aliasesByItem = {};
+    aliases.forEach(alias => {
+      if (!aliasesByItem[alias.item_id]) aliasesByItem[alias.item_id] = [];
+      aliasesByItem[alias.item_id].push(alias.metrc_name);
+    });
+    const currentByItem = Object.fromEntries(selections.map(row => [String(row.item_id), row.sku_tag]));
+    res.json({
+      items: items.map(item => {
+        const metrcNames = aliasesByItem[item.id] || [];
+        const normalizedNames = new Set(metrcNames.map(normalizeMetrcName));
+        const matchedSkus = skus.filter(sku => normalizedNames.has(sku.normalized_name));
+        const currentTag = currentByItem[String(item.id)];
+        return {
+          ...item,
+          metrc_names: metrcNames,
+          current_sku_tag: matchedSkus.some(sku => sku.sku_tag === currentTag) ? currentTag : null,
+          skus: matchedSkus.map(({ normalized_name, ...sku }) => sku)
+        };
+      }),
+      import: settings ? {
+        selected_locations: JSON.parse(settings.selected_locations || "[]"),
+        source_file_name: settings.source_file_name,
+        imported_at: settings.imported_at
+      } : null,
+      unmatched_skus: skus.filter(sku => !aliases.some(alias => normalizeMetrcName(alias.metrc_name) === sku.normalized_name)).length,
+      total_skus: skus.length
+    });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.put("/active-skus/items/:id/metrc-names", async (req, res) => {
+  const itemId = Number(req.params.id);
+  const metrcNames = Array.isArray(req.body.metrc_names)
+    ? [...new Map(req.body.metrc_names.map(value => String(value || "").trim().replace(/\s+/g, " ")).filter(Boolean)
+      .map(name => [normalizeMetrcName(name), name])).values()]
+    : null;
+  if (!Number.isInteger(itemId) || itemId <= 0) return res.status(400).send("Invalid item.");
+  if (!metrcNames) return res.status(400).send("Metrc names must be a list.");
+  try {
+    if (!await getSql("SELECT id FROM items WHERE id = ?", [itemId])) return res.status(404).send("Item not found.");
+    if (metrcNames.length) {
+      const normalizedNames = metrcNames.map(normalizeMetrcName);
+      const placeholders = normalizedNames.map(() => "?").join(", ");
+      const duplicate = await getSql(`
+        SELECT names.metrc_name, items.name AS item_name
+        FROM item_metrc_names names
+        JOIN items ON items.id = names.item_id
+        WHERE names.item_id <> ? AND names.normalized_name IN (${placeholders})
+        LIMIT 1
+      `, [itemId, ...normalizedNames]);
+      if (duplicate) return res.status(409).send(`"${duplicate.metrc_name}" is already mapped to ${duplicate.item_name}.`);
+    }
+    await withTransaction(async transaction => {
+      await runSql("DELETE FROM item_metrc_names WHERE item_id = ?", [itemId], transaction);
+      for (const name of metrcNames) {
+        await runSql("INSERT INTO item_metrc_names (item_id, metrc_name, normalized_name) VALUES (?, ?, ?)",
+          [itemId, name, normalizeMetrcName(name)], transaction);
+      }
+      await runSql(`DELETE FROM active_sku_selections WHERE item_id = ? AND sku_tag NOT IN (
+        SELECT sku_tag FROM active_skus WHERE normalized_name IN (
+          SELECT normalized_name FROM item_metrc_names WHERE item_id = ?
+        )
+      )`, [itemId, itemId], transaction);
+    });
+    res.json({ item_id: itemId, metrc_names: metrcNames });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.put("/active-skus/items/:id/current", async (req, res) => {
+  const itemId = Number(req.params.id);
+  const skuTag = normalizeRequiredText(req.body.sku_tag);
+  if (!Number.isInteger(itemId) || itemId <= 0 || !skuTag) return res.status(400).send("Choose a valid item and SKU.");
+  try {
+    const match = await getSql(`
+      SELECT sku.sku_tag FROM active_skus sku
+      JOIN item_metrc_names names ON names.normalized_name = sku.normalized_name
+      LEFT JOIN active_sku_withholdings withheld ON withheld.sku_tag = sku.sku_tag
+      WHERE names.item_id = ? AND sku.sku_tag = ?
+        AND withheld.sku_tag IS NULL
+    `, [itemId, skuTag]);
+    if (!match) return res.status(400).send("That SKU is not mapped to this item.");
+    await runSql(`
+      INSERT INTO active_sku_selections (item_id, sku_tag, updated_at)
+      VALUES (?, ?, datetime('now'))
+      ON CONFLICT(item_id) DO UPDATE SET sku_tag = excluded.sku_tag, updated_at = excluded.updated_at
+    `, [itemId, skuTag]);
+    res.json({ item_id: itemId, sku_tag: skuTag });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.put("/active-skus/:skuTag/withheld", async (req, res) => {
+  const skuTag = normalizeRequiredText(req.params.skuTag);
+  const isWithheld = req.body.is_withheld === true;
+  if (!skuTag) return res.status(400).send("Choose a valid SKU.");
+  try {
+    if (!await getSql("SELECT sku_tag FROM active_skus WHERE sku_tag = ?", [skuTag])) {
+      return res.status(404).send("SKU not found.");
+    }
+    await withTransaction(async transaction => {
+      if (isWithheld) {
+        await runSql(`
+          INSERT INTO active_sku_withholdings (sku_tag, withheld_at)
+          VALUES (?, datetime('now'))
+          ON CONFLICT(sku_tag) DO UPDATE SET withheld_at = excluded.withheld_at
+        `, [skuTag], transaction);
+        await runSql("DELETE FROM active_sku_selections WHERE sku_tag = ?", [skuTag], transaction);
+      } else {
+        await runSql("DELETE FROM active_sku_withholdings WHERE sku_tag = ?", [skuTag], transaction);
+      }
+    });
+    res.json({ sku_tag: skuTag, is_withheld: isWithheld });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
 /* ---------- TASKS ---------- */
 app.get("/tasks", (req, res) => {
   db.all("SELECT id, name FROM tasks", [], (err, rows) => {
@@ -2212,6 +2640,10 @@ app.get("/admin/item-task-management", async (req, res) => {
           COALESCE(common_name, '') AS common_name,
           COALESCE(distru_name, '') AS distru_name,
           COALESCE(alternate_names, '') AS alternate_names,
+          COALESCE((
+            SELECT json_group_array(metrc_name)
+            FROM (SELECT metrc_name FROM item_metrc_names WHERE item_id = items.id ORDER BY metrc_name)
+          ), '[]') AS metrc_names,
           batch_size,
           COALESCE(master_source_file, '') AS master_source_file,
           master_imported_at

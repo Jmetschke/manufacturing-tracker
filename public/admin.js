@@ -2469,6 +2469,7 @@ function showAdminTab(tabName) {
   document.getElementById("batchTrackerPanel").classList.toggle("active", tabName === "batches");
   document.getElementById("calendarPanel").classList.toggle("active", tabName === "calendar");
   document.getElementById("orderedPanel").classList.toggle("active", tabName === "ordered");
+  document.getElementById("activeSkusPanel").classList.toggle("active", tabName === "activeSkus");
 
   document.querySelectorAll(".admin-tab-button").forEach(button => {
     const isActive =
@@ -2480,7 +2481,8 @@ function showAdminTab(tabName) {
       (tabName === "batches" && button.textContent === "Batch Tracker") ||
       (tabName === "calendar" && button.textContent === "Calendar") ||
       (tabName === "ordered" && button.textContent === "Ordered Items");
-    button.classList.toggle("active", isActive);
+    const activeSkuTab = tabName === "activeSkus" && button.textContent === "Active SKUs";
+    button.classList.toggle("active", isActive || activeSkuTab);
   });
 
   showMessage("");
@@ -2511,6 +2513,10 @@ function showAdminTab(tabName) {
 
   if (tabName === "ordered") {
     loadOrderedAdminData();
+  }
+
+  if (tabName === "activeSkus") {
+    ActiveSkus.load();
   }
 }
 
@@ -3666,6 +3672,10 @@ async function loadItemTaskManagement() {
 
   const data = await res.json();
   allItems = data.items || [];
+  allItems.forEach(item => {
+    if (Array.isArray(item.metrc_names)) return;
+    try { item.metrc_names = JSON.parse(item.metrc_names || "[]"); } catch (err) { item.metrc_names = []; }
+  });
   allTasks = data.tasks || [];
   itemTaskManagementAssignments = data.assignments || [];
   itemTaskOptionsByItemId = buildItemTaskOptionsByItemId(itemTaskManagementAssignments);
@@ -4082,6 +4092,30 @@ function renderItemTaskManagement() {
     header.appendChild(editButton);
     card.appendChild(header);
 
+    const metrcEditor = document.createElement("div");
+    metrcEditor.className = "metrc-name-editor";
+    const metrcLabel = document.createElement("label");
+    metrcLabel.textContent = "Metrc name(s)";
+    const metrcInput = document.createElement("textarea");
+    metrcInput.value = (item.metrc_names || []).join("\n");
+    metrcInput.placeholder = "One exact Metrc Item name per line";
+    metrcInput.setAttribute("aria-label", `Metrc names for ${item.name}`);
+    const metrcActions = document.createElement("div");
+    metrcActions.className = "metrc-name-editor-actions";
+    const metrcHelp = document.createElement("span");
+    metrcHelp.className = "metrc-name-editor-help";
+    metrcHelp.textContent = "Use separate lines for alternate Metrc names.";
+    const metrcSave = document.createElement("button");
+    metrcSave.type = "button";
+    metrcSave.textContent = "Save Metrc Names";
+    metrcSave.addEventListener("click", () => saveItemMetrcNames(item.id, metrcInput, metrcSave));
+    metrcActions.appendChild(metrcHelp);
+    metrcActions.appendChild(metrcSave);
+    metrcEditor.appendChild(metrcLabel);
+    metrcEditor.appendChild(metrcInput);
+    metrcEditor.appendChild(metrcActions);
+    card.appendChild(metrcEditor);
+
     const assignedTaskIds = itemTaskOptionsByItemId[String(item.id)] || [];
     if (!assignedTaskIds.length) {
       const empty = document.createElement("div");
@@ -4105,6 +4139,26 @@ function renderItemTaskManagement() {
 
     container.appendChild(card);
   });
+}
+
+async function saveItemMetrcNames(itemId, input, button) {
+  const metrcNames = String(input.value || "")
+    .split(/[\n,]+/)
+    .map(value => value.trim())
+    .filter(Boolean);
+  button.disabled = true;
+  const res = await adminFetch(`/active-skus/items/${itemId}/metrc-names`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ metrc_names: metrcNames })
+  });
+  button.disabled = false;
+  if (!res.ok) {
+    showMessage("Metrc names could not be saved: " + await res.text(), "error");
+    return;
+  }
+  showMessage("Metrc names saved.", "success");
+  await loadItemTaskManagement();
 }
 
 function renderMasterTaskList() {

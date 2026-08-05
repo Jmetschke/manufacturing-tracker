@@ -1975,6 +1975,7 @@ function showTab(tabName) {
   const scheduleTab = document.getElementById("scheduleTab");
   const dailyTab = document.getElementById("dailyTab");
   const orderedTab = document.getElementById("orderedTab");
+  const activeSkusTab = document.getElementById("activeSkusTab");
   const buttons = document.querySelectorAll(".tab-button");
 
   closeDailyReportFocus();
@@ -1986,6 +1987,7 @@ function showTab(tabName) {
   scheduleTab.classList.toggle("active", tabName === "schedule");
   dailyTab.classList.toggle("active", tabName === "daily");
   orderedTab.classList.toggle("active", tabName === "ordered");
+  activeSkusTab.classList.toggle("active", tabName === "activeSkus");
 
   buttons.forEach(button => {
     const labels = {
@@ -1994,7 +1996,8 @@ function showTab(tabName) {
       phCalculator: "Shooters pH Calculator",
       schedule: "Schedule",
       daily: "Daily Report",
-      ordered: "Ordered Items"
+      ordered: "Ordered Items",
+      activeSkus: "Active SKUs"
     };
     const isActive =
       button.textContent.trim() === labels[tabName];
@@ -2012,6 +2015,10 @@ function showTab(tabName) {
 
   if (tabName === "ordered") {
     loadOrderedTab();
+  }
+
+  if (tabName === "activeSkus") {
+    ActiveSkus.load();
   }
 
 }
