@@ -598,6 +598,7 @@ function normalizeEventList(value) {
       const times = Array.isArray(event && event.times) ? event.times : [];
 
       return {
+        ...(event && typeof event === "object" ? event : {}),
         date: String(event && event.date ? event.date : "").trim(),
         title: String(event && event.title ? event.title : "").trim(),
         days,
@@ -1696,6 +1697,7 @@ function buildActiveScheduleByDate(rows, visibleStart, visibleEnd) {
 
         const time = event.times[index] || { start: "", end: "" };
         activeSchedule.get(isoDate).events.push({
+          ...event,
           title: event.title,
           start: time.start,
           end: time.end,

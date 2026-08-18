@@ -1517,6 +1517,121 @@ function parseSchedulePayloadForCleanup(rawValue) {
   return empty;
 }
 
+const EVENT_EDITABLE_FIELDS = ["date", "title", "days", "times", "location", "company"];
+const EVENT_SERVER_METADATA_FIELDS = ["outlookEventId", "outlookLastSyncedAt", "outlookSyncStatus"];
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
+}
+
+function copyEditableEventFields(target, source) {
+  EVENT_EDITABLE_FIELDS.forEach(field => {
+    if (Object.prototype.hasOwnProperty.call(source, field)) target[field] = source[field];
+  });
+  return target;
+}
+
+async function getAllScheduleRows(database = calendarDb) {
+  return allSql(
+    "SELECT schedule_date, tasks, updated_at FROM schedule_days ORDER BY schedule_date",
+    [],
+    database
+  );
+}
+
+function collectStoredEvents(rows) {
+  const eventsById = new Map();
+  rows.forEach(row => {
+    const payload = parseSchedulePayloadForCleanup(row.tasks);
+    payload.events.forEach(event => {
+      if (event && isUuid(event.id) && !eventsById.has(event.id)) {
+        eventsById.set(event.id, { event, scheduleDate: row.schedule_date });
+      }
+    });
+  });
+  return eventsById;
+}
+
+function reconcileIncomingEvents(incomingEvents, storedEventsById, scheduleDate) {
+  const seenIds = new Set();
+
+  function newEventId() {
+    let id;
+    do id = crypto.randomUUID(); while (seenIds.has(id) || storedEventsById.has(id));
+    return id;
+  }
+
+  return incomingEvents.map(rawEvent => {
+    const incoming = rawEvent && typeof rawEvent === "object" ? rawEvent : {};
+    let id = isUuid(incoming.id) ? incoming.id : "";
+    if (id && seenIds.has(id)) throw new Error(`Duplicate calendar event ID: ${id}`);
+
+    const stored = id ? storedEventsById.get(id) : null;
+    if (stored && stored.scheduleDate !== scheduleDate) {
+      throw new Error(`Calendar event ID belongs to another schedule row: ${id}`);
+    }
+    // IDs and sync metadata are server-owned. Unknown client IDs are replaced.
+    if (id && !stored) id = "";
+
+    const event = stored ? { ...stored.event } : {};
+    copyEditableEventFields(event, incoming);
+    event.id = id || newEventId();
+
+    if (!stored) {
+      EVENT_SERVER_METADATA_FIELDS.forEach(field => delete event[field]);
+    }
+
+    seenIds.add(event.id);
+    return event;
+  });
+}
+
+async function ensureCalendarEventIds() {
+  const changedRows = await withTransaction(async transaction => {
+    const rows = await getAllScheduleRows(transaction);
+    const usedIds = new Set();
+    const changes = [];
+
+    for (const row of rows) {
+      const payload = parseSchedulePayloadForCleanup(row.tasks);
+      let changed = false;
+      payload.events = payload.events.map(rawEvent => {
+        const event = rawEvent && typeof rawEvent === "object" ? { ...rawEvent } : {};
+        if (!isUuid(event.id) || usedIds.has(event.id)) {
+          do event.id = crypto.randomUUID(); while (usedIds.has(event.id));
+          changed = true;
+        }
+        usedIds.add(event.id);
+        return event;
+      });
+
+      if (changed) {
+        const tasks = JSON.stringify(payload);
+        await runSql(
+          "UPDATE schedule_days SET tasks = ?, updated_at = datetime('now') WHERE schedule_date = ?",
+          [tasks, row.schedule_date],
+          transaction
+        );
+        changes.push({ scheduleDate: row.schedule_date, tasks });
+      }
+    }
+    return changes;
+  }, calendarDb);
+
+  if (hasSeparateCalendarDb) {
+    for (const row of changedRows) {
+      try {
+        await runSql(
+          "UPDATE schedule_days SET tasks = ?, updated_at = datetime('now') WHERE schedule_date = ?",
+          [row.tasks, row.scheduleDate]
+        );
+      } catch (err) {
+        console.error(`Could not mirror event IDs for ${row.scheduleDate} to the primary database:`, err.message);
+      }
+    }
+  }
+}
+
 function removeScheduleTasks(rawValue) {
   const payload = parseSchedulePayloadForCleanup(rawValue);
   payload.tasks = [];
@@ -1619,7 +1734,7 @@ function setScheduleTaskCompletion(rawValue, taskType, taskIndex, activeDate, co
 }
 
 async function clearWeekendScheduleTasks() {
-  const rows = await allSql("SELECT schedule_date, tasks FROM schedule_days");
+  const rows = await allSql("SELECT schedule_date, tasks FROM schedule_days", [], calendarDb);
 
   for (const row of rows) {
     if (!isWeekendIsoDate(row.schedule_date)) continue;
@@ -1628,23 +1743,7 @@ async function clearWeekendScheduleTasks() {
     if (!payload.tasks.length) continue;
 
     payload.tasks = [];
-    const updatePrimary = runSql(
-      "UPDATE schedule_days SET tasks = ?, updated_at = datetime('now') WHERE schedule_date = ?",
-      [JSON.stringify(payload), row.schedule_date]
-    );
-
-    if (hasSeparateCalendarDb) {
-      await Promise.all([
-        updatePrimary,
-        runSql(
-          "UPDATE schedule_days SET tasks = ?, updated_at = datetime('now') WHERE schedule_date = ?",
-          [JSON.stringify(payload), row.schedule_date],
-          calendarDb
-        )
-      ]);
-    } else {
-      await updatePrimary;
-    }
+    await writeScheduleDayToDatabases(row.schedule_date, JSON.stringify(payload));
 
     console.log(`Removed weekend calendar tasks from ${row.schedule_date}`);
   }
@@ -1660,11 +1759,13 @@ async function writeScheduleDayToDatabases(scheduleDate, tasks) {
   `;
 
   if (hasSeparateCalendarDb) {
-    const [primaryResult] = await Promise.all([
-      runSql(sql, [scheduleDate, tasks]),
-      runSql(sql, [scheduleDate, tasks], calendarDb)
-    ]);
-    return primaryResult;
+    const calendarResult = await runSql(sql, [scheduleDate, tasks], calendarDb);
+    try {
+      await runSql(sql, [scheduleDate, tasks]);
+    } catch (err) {
+      console.error(`Could not mirror calendar row ${scheduleDate} to the primary database:`, err.message);
+    }
+    return calendarResult;
   }
 
   return runSql(sql, [scheduleDate, tasks]);
@@ -1673,10 +1774,28 @@ async function writeScheduleDayToDatabases(scheduleDate, tasks) {
 async function reconcileCalendarDatabase() {
   if (!hasSeparateCalendarDb) return;
 
+  const [primaryRows, initialCalendarRows] = await Promise.all([
+    allSql("SELECT schedule_date, tasks, updated_at FROM schedule_days"),
+    allSql("SELECT schedule_date, tasks, updated_at FROM schedule_days", [], calendarDb)
+  ]);
+  const calendarDates = new Set(initialCalendarRows.map(row => row.schedule_date));
+  const seedSql = `
+    INSERT INTO schedule_days (schedule_date, tasks, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(schedule_date) DO NOTHING
+  `;
+
+  // Preserve primary-only rows when a shared calendar is first introduced, but
+  // never replace a row that already exists in the authoritative calendar.
+  for (const row of primaryRows) {
+    if (calendarDates.has(row.schedule_date)) continue;
+    await runSql(seedSql, [row.schedule_date, row.tasks || "", row.updated_at || null], calendarDb);
+  }
+
   const rows = await allSql(`
     SELECT schedule_date, tasks, updated_at
     FROM schedule_days
-  `);
+  `, [], calendarDb);
 
   const sql = `
     INSERT INTO schedule_days (schedule_date, tasks, updated_at)
@@ -1691,10 +1810,10 @@ async function reconcileCalendarDatabase() {
       row.schedule_date,
       row.tasks || "",
       row.updated_at || null
-    ], calendarDb);
+    ]);
   }
 
-  console.log(`Reconciled ${rows.length} calendar rows from primary database to calendar database.`);
+  console.log(`Reconciled ${rows.length} authoritative calendar rows to the primary database.`);
 }
 
 async function initializeDatabase() {
@@ -2007,6 +2126,7 @@ async function initializeDatabase() {
   await addMissingColumn("alert_recipients", "is_active", "INTEGER DEFAULT 1");
   await addMissingColumn("alert_recipients", "created_at", "TEXT");
   await reconcileCalendarDatabase();
+  await ensureCalendarEventIds();
   await clearWeekendScheduleTasks();
 
   // The database becomes the durable item master after first initialization. This
@@ -3143,27 +3263,30 @@ app.put("/admin/items/:id/tasks", async (req, res) => {
 });
 
 /* ---------- SCHEDULE ---------- */
-app.get("/schedule", (req, res) => {
+app.get("/schedule", async (req, res) => {
   const { from, to } = req.query;
 
   if (!isIsoDate(from) || !isIsoDate(to)) {
     return res.status(400).send("Valid from and to dates are required");
   }
 
-  db.all(
-    `SELECT schedule_date, tasks, updated_at
-     FROM schedule_days
-     WHERE schedule_date BETWEEN ? AND ?
-     ORDER BY schedule_date`,
-    [from, to],
-    (err, rows) => {
-      if (err) return res.status(500).send(err.message);
-      res.json(rows);
-    }
-  );
+  try {
+    await ensureCalendarEventIds();
+    const rows = await allSql(
+      `SELECT schedule_date, tasks, updated_at
+       FROM schedule_days
+       WHERE schedule_date BETWEEN ? AND ?
+       ORDER BY schedule_date`,
+      [from, to],
+      calendarDb
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
 });
 
-app.put("/admin/schedule/:date", (req, res) => {
+app.put("/admin/schedule/:date", async (req, res) => {
   const scheduleDate = req.params.date;
   const tasks = String(req.body.tasks || "").trim();
 
@@ -3175,13 +3298,18 @@ app.put("/admin/schedule/:date", (req, res) => {
     return res.status(400).send("Schedule payload is too large");
   }
 
-  const savedTasks = isWeekendIsoDate(scheduleDate) ? removeScheduleTasks(tasks) : tasks;
-
-  writeScheduleDayToDatabases(scheduleDate, savedTasks)
-    .then(() => {
-      res.json({ message: "Schedule updated", schedule_date: scheduleDate, tasks: savedTasks });
-    })
-    .catch(err => res.status(500).send(err.message));
+  try {
+    const incomingPayload = parseSchedulePayloadForCleanup(tasks);
+    const storedRows = await getAllScheduleRows(calendarDb);
+    incomingPayload.events = reconcileIncomingEvents(incomingPayload.events, collectStoredEvents(storedRows), scheduleDate);
+    const reconciledTasks = JSON.stringify(incomingPayload);
+    const savedTasks = isWeekendIsoDate(scheduleDate) ? removeScheduleTasks(reconciledTasks) : reconciledTasks;
+    await writeScheduleDayToDatabases(scheduleDate, savedTasks);
+    res.json({ message: "Schedule updated", schedule_date: scheduleDate, tasks: savedTasks });
+  } catch (err) {
+    const status = /^(Duplicate calendar event ID:|Calendar event ID belongs to another schedule row:)/.test(err.message) ? 400 : 500;
+    res.status(status).send(err.message);
+  }
 });
 
 app.put("/schedule/task-completion", async (req, res) => {
@@ -3205,7 +3333,8 @@ app.put("/schedule/task-completion", async (req, res) => {
   try {
     const rows = await allSql(
       "SELECT tasks FROM schedule_days WHERE schedule_date = ?",
-      [sourceDate]
+      [sourceDate],
+      calendarDb
     );
     const row = rows[0];
     if (!row) return res.status(404).send("Schedule day not found");

@@ -733,6 +733,7 @@ function normalizeEventList(value) {
       const times = Array.isArray(event && event.times) ? event.times : [];
 
       return {
+        ...(event && typeof event === "object" ? event : {}),
         date: String(event && event.date ? event.date : "").trim(),
         title: String(event && event.title ? event.title : "").trim(),
         days,
@@ -1117,6 +1118,7 @@ function buildAdminEventsByDate(rows, visibleStart, visibleEnd) {
 
         const time = event.times[index] || { start: "", end: "" };
         eventsByDate.get(isoDate).push({
+          ...event,
           title: event.title,
           start: time.start,
           end: time.end,
@@ -1325,6 +1327,7 @@ function buildAdminActiveScheduleByDate(rows, visibleStart, visibleEnd) {
 
         const time = event.times[index] || { start: "", end: "" };
         activeSchedule.get(isoDate).events.push({
+          ...event,
           title: event.title,
           start: time.start,
           end: time.end,
@@ -2004,6 +2007,7 @@ function addEventEntry(value = {}) {
   const rows = document.getElementById("eventRows");
   const row = document.createElement("div");
   row.className = "event-row";
+  row.eventMetadata = value && typeof value === "object" ? { ...value } : {};
 
   const heading = document.createElement("b");
   heading.className = "event-row-number";
@@ -2091,6 +2095,7 @@ function getEventTimesFromRow(row) {
 function getEventValues() {
   return Array.from(document.querySelectorAll(".event-row"))
     .map(row => ({
+      ...(row.eventMetadata || {}),
       date: row.querySelector(".event-date").value,
       title: row.querySelector(".event-title").value.trim(),
       days: Math.max(1, Number.parseInt(row.querySelector(".event-days").value, 10) || 1),
