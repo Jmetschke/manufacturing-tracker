@@ -4052,6 +4052,50 @@ async function deactivateAlertRecipient(id) {
   await loadAlertRecipients();
 }
 
+function createManagementNameEditor(record, kind) {
+  const form = document.createElement("form");
+  form.className = "management-name-editor";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.required = true;
+  input.value = record.name;
+  input.setAttribute("aria-label", `${kind} name: ${record.name}`);
+  const button = document.createElement("button");
+  button.type = "submit";
+  button.textContent = `Save ${kind} Name`;
+  const status = document.createElement("span");
+  status.setAttribute("role", "status");
+  form.append(input, button, status);
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    const name = input.value.trim();
+    if (!name) {
+      status.textContent = `${kind} name is required.`;
+      input.focus();
+      return;
+    }
+    button.disabled = true;
+    status.textContent = "Saving…";
+    try {
+      const body = { name };
+      if (kind === "Task") body.seconds_per_unit_alert_level = record.seconds_per_unit_alert_level;
+      const res = await adminFetch(`/admin/${kind === "Item" ? "items" : "tasks"}/${record.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) throw new Error(await res.text());
+      await loadItemTaskManagement();
+      showMessage(`${kind} name updated.`, "success");
+    } catch (err) {
+      status.textContent = `Save failed: ${err.message}`;
+    } finally {
+      button.disabled = false;
+    }
+  });
+  return form;
+}
+
 function renderItemTaskManagement() {
   const container = document.getElementById("itemTaskManagementList");
   if (!container) return;
@@ -4067,8 +4111,7 @@ function renderItemTaskManagement() {
     const titleWrap = document.createElement("div");
     titleWrap.className = "item-task-card-title";
 
-    const title = document.createElement("b");
-    title.textContent = item.name;
+    const title = createManagementNameEditor(item, "Item");
     titleWrap.appendChild(title);
 
     if (item.production_company) {
@@ -4092,7 +4135,7 @@ function renderItemTaskManagement() {
 
     const editButton = document.createElement("button");
     editButton.type = "button";
-    editButton.textContent = "Edit";
+    editButton.textContent = "Edit Task Assignments";
     editButton.addEventListener("click", () => editItemTaskAssignments(item.id));
     header.appendChild(editButton);
     card.appendChild(header);
@@ -4131,14 +4174,17 @@ function renderItemTaskManagement() {
       const list = document.createElement("ul");
       list.className = "item-task-list";
       assignedTaskIds
-        .map(getTaskName)
+        .map(taskId => allTasks.find(task => String(task.id) === String(taskId)))
         .filter(Boolean)
-        .sort((a, b) => a.localeCompare(b))
-        .forEach(taskName => {
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .forEach(task => {
           const itemNode = document.createElement("li");
-          itemNode.textContent = taskName;
+          itemNode.appendChild(createManagementNameEditor(task, "Task"));
           list.appendChild(itemNode);
         });
+      const help = document.createElement("p");
+      help.textContent = "Task names are shared. Renaming a task updates it for every item using it.";
+      card.appendChild(help);
       card.appendChild(list);
     }
 

@@ -3190,6 +3190,26 @@ app.post("/admin/items", async (req, res) => {
   }
 });
 
+app.put("/admin/items/:id", async (req, res) => {
+  const itemId = Number(req.params.id);
+  const name = normalizeRequiredText(req.body.name);
+  if (!Number.isInteger(itemId) || itemId <= 0) return res.status(400).send("Invalid item");
+  if (!name) return res.status(400).send("Item name is required");
+
+  try {
+    const duplicate = await allSql(
+      "SELECT id FROM items WHERE lower(name) = lower(?) AND id <> ?",
+      [name, itemId]
+    );
+    if (duplicate.length) return res.status(409).send("Item already exists");
+    const result = await runSql("UPDATE items SET name = ? WHERE id = ?", [name, itemId]);
+    if (result.changes === 0) return res.status(404).send("Item not found");
+    res.json({ id: itemId, name });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
 app.put("/admin/tasks/:id", async (req, res) => {
   const name = normalizeRequiredText(req.body.name);
   const alertLevel = Number(req.body.seconds_per_unit_alert_level) || 0;
