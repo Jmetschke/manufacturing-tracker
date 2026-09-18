@@ -2104,6 +2104,10 @@ async function initializeDatabase() {
     item_name TEXT NOT NULL, quantity REAL NOT NULL, unit TEXT NOT NULL,
     notes TEXT, placed_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
+  await addMissingColumn("storage_locations", "deleted", "INTEGER NOT NULL DEFAULT 0");
+  await runSql(`CREATE TABLE IF NOT EXISTS storage_delivery_placements (
+    ordered_item_id INTEGER PRIMARY KEY, location_id INTEGER
+  )`);
   for (const name of ["Production Storage", "Kitchen Storage", "Garage Storage", "Fire Ally", "SB/Vape Area", "Topicals Storage", "Fire Cabinet", "Upper Deck", "Vault"]) {
     await runSql("INSERT OR IGNORE INTO storage_locations (name) VALUES (?)", [name]);
   }
@@ -5569,14 +5573,16 @@ app.get("/storage-locations", async (req, res) => {
     await runSql(`INSERT OR IGNORE INTO storage_locations (name)
       SELECT DISTINCT trim(received_location) FROM ordered_items
       WHERE received_date IS NOT NULL AND trim(coalesce(received_location, '')) <> ''`);
-    const locations = await allSql("SELECT * FROM storage_locations ORDER BY id");
+    const locations = await allSql("SELECT * FROM storage_locations WHERE deleted = 0 ORDER BY id");
     const items = await allSql(`SELECT s.id, s.location_id, s.item_name, s.quantity, s.unit,
       s.notes, s.placed_at, 'manual' AS source FROM storage_items s
       UNION ALL
       SELECT o.id, l.id, o.item_name, o.package_qty, 'packages',
       o.received_notes, o.received_date, 'delivery' FROM ordered_items o
-      JOIN storage_locations l ON l.name = trim(o.received_location) COLLATE NOCASE
-      WHERE o.received_date IS NOT NULL ORDER BY placed_at DESC`);
+      LEFT JOIN storage_delivery_placements p ON p.ordered_item_id = o.id
+      JOIN storage_locations l ON (CASE WHEN p.ordered_item_id IS NOT NULL
+        THEN l.id = p.location_id ELSE l.name = trim(o.received_location) COLLATE NOCASE END)
+      WHERE o.received_date IS NOT NULL AND l.deleted = 0 ORDER BY placed_at DESC`);
     res.json(locations.map(location => ({ ...location, items: items.filter(item => item.location_id === location.id) })));
   } catch (err) { res.status(500).json({ message: "Unable to load storage locations" }); }
 });
@@ -5585,6 +5591,7 @@ app.post("/storage-locations", async (req, res) => {
   if (!name || name.length > 120) return res.status(400).json({ message: "Location name must contain 1–120 characters" });
   try {
     await runSql("INSERT OR IGNORE INTO storage_locations (name) VALUES (?)", [name]);
+    await runSql("UPDATE storage_locations SET deleted = 0 WHERE name = ? COLLATE NOCASE", [name]);
     const rows = await allSql("SELECT * FROM storage_locations WHERE name = ? COLLATE NOCASE", [name]);
     res.status(201).json(rows[0]);
   } catch (err) { res.status(500).json({ message: "Unable to add location" }); }
@@ -5599,12 +5606,77 @@ app.post("/storage-items", async (req, res) => {
     return res.status(400).json({ message: "Choose a location and enter an item, positive quantity, and unit" });
   }
   try {
-    const locations = await allSql("SELECT id FROM storage_locations WHERE id = ?", [location_id]);
+    const locations = await allSql("SELECT id FROM storage_locations WHERE id = ? AND deleted = 0", [location_id]);
     if (!locations.length) return res.status(400).json({ message: "Location does not exist" });
     await runSql("INSERT INTO storage_items (location_id, item_name, quantity, unit, notes) VALUES (?, ?, ?, ?, ?)",
       [location_id, itemName, quantity, unit, notes]);
     res.status(201).json({ message: "Item added" });
   } catch (err) { res.status(500).json({ message: "Unable to add item" }); }
+});
+
+// A null delivery placement removes only its current storage listing, preserving receipt history.
+app.post("/storage-items/:source/:id/:action", async (req, res) => {
+  const { source, action } = req.params;
+  const id = Number(req.params.id);
+  const destination = req.body.location_id;
+  if (!["manual", "delivery"].includes(source) || !["move", "delete"].includes(action) ||
+      !Number.isSafeInteger(id) || id <= 0 || (action === "move" && !Number.isSafeInteger(destination))) {
+    return res.status(400).json({ message: "Invalid item or destination" });
+  }
+  try {
+    await withTransaction(async tx => {
+      if (action === "move" && !await getSql("SELECT id FROM storage_locations WHERE id = ? AND deleted = 0", [destination], tx)) {
+        throw Object.assign(new Error("Destination location does not exist"), { status: 400 });
+      }
+      const item = await getSql(source === "manual" ? "SELECT id FROM storage_items WHERE id = ?" :
+        "SELECT id FROM ordered_items WHERE id = ? AND received_date IS NOT NULL", [id], tx);
+      if (!item) throw Object.assign(new Error("Item no longer exists"), { status: 404 });
+      if (source === "delivery") {
+        await runSql(`INSERT INTO storage_delivery_placements (ordered_item_id, location_id) VALUES (?, ?)
+          ON CONFLICT(ordered_item_id) DO UPDATE SET location_id = excluded.location_id`,
+          [id, action === "move" ? destination : null], tx);
+      } else if (action === "move") {
+        await runSql("UPDATE storage_items SET location_id = ? WHERE id = ?", [destination, id], tx);
+      } else {
+        await runSql("DELETE FROM storage_items WHERE id = ?", [id], tx);
+      }
+    });
+    res.json({ message: action === "move" ? "Item moved" : "Item removed" });
+  } catch (err) { res.status(err.status || 500).json({ message: err.status ? err.message : "Unable to update item" }); }
+});
+app.post("/storage-locations/:id/delete", async (req, res) => {
+  const id = Number(req.params.id);
+  const destination = req.body.location_id || null;
+  if (!Number.isSafeInteger(id) || id <= 0 || (destination !== null && (!Number.isSafeInteger(destination) || destination === id))) {
+    return res.status(400).json({ message: "Choose a different destination" });
+  }
+  try {
+    await withTransaction(async tx => {
+      const location = await getSql("SELECT * FROM storage_locations WHERE id = ? AND deleted = 0", [id], tx);
+      if (!location) throw Object.assign(new Error("Location no longer exists"), { status: 404 });
+      if (destination !== null && !await getSql("SELECT id FROM storage_locations WHERE id = ? AND deleted = 0", [destination], tx)) {
+        throw Object.assign(new Error("Destination location does not exist"), { status: 400 });
+      }
+      const manual = await allSql("SELECT id FROM storage_items WHERE location_id = ?", [id], tx);
+      const deliveries = await allSql(`SELECT o.id FROM ordered_items o
+        LEFT JOIN storage_delivery_placements p ON p.ordered_item_id = o.id
+        WHERE o.received_date IS NOT NULL AND
+          ((p.ordered_item_id IS NULL AND trim(o.received_location) = ? COLLATE NOCASE)
+          OR (p.ordered_item_id IS NOT NULL AND p.location_id = ?))`, [location.name, id], tx);
+      if ((manual.length || deliveries.length) && destination === null) {
+        throw Object.assign(new Error("This room contains items. Choose a destination or remove its items first."), { status: 409 });
+      }
+      if (destination !== null) {
+        await runSql("UPDATE storage_items SET location_id = ? WHERE location_id = ?", [destination, id], tx);
+        for (const item of deliveries) {
+          await runSql(`INSERT INTO storage_delivery_placements (ordered_item_id, location_id) VALUES (?, ?)
+            ON CONFLICT(ordered_item_id) DO UPDATE SET location_id = excluded.location_id`, [item.id, destination], tx);
+        }
+      }
+      await runSql("UPDATE storage_locations SET deleted = 1 WHERE id = ?", [id], tx);
+    });
+    res.json({ message: "Location deleted" });
+  } catch (err) { res.status(err.status || 500).json({ message: err.status ? err.message : "Unable to delete location" }); }
 });
 
 /* ---------- START SERVER ---------- */

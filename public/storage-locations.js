@@ -52,6 +52,24 @@ const StorageLocations = (() => {
     if (text) node.textContent = text;
     return node;
   }
+  function destinationSelect(location, label) {
+    const select = element('select');
+    select.setAttribute('aria-label', label);
+    select.add(new Option('Choose destination room', ''));
+    locations.filter(other => other.id !== location.id).forEach(other => select.add(new Option(other.name, other.id)));
+    return select;
+  }
+  async function changeStorage(button, url, body, message) {
+    button.disabled = true;
+    const status = document.getElementById('storageStatus');
+    try {
+      await request(url, body);
+      await refresh();
+      render();
+      status.textContent = message;
+    } catch (error) { status.textContent = error.message; }
+    finally { button.disabled = false; }
+  }
   function render() {
     const container = document.getElementById('storageCards');
     if (!container) return;
@@ -60,11 +78,47 @@ const StorageLocations = (() => {
       const card = element('article');
       card.className = 'storage-card';
       card.append(element('h3', location.name), element('p', `${location.items.length} item records`));
+      const roomActions = element('div');
+      roomActions.className = 'storage-actions';
+      const roomDestination = destinationSelect(location, `Move all items from ${location.name} to`);
+      const deleteRoom = element('button', 'Delete room');
+      deleteRoom.type = 'button';
+      deleteRoom.addEventListener('click', () => {
+        if (location.items.length && !roomDestination.value) {
+          document.getElementById('storageStatus').textContent = 'Choose where to move this room’s items before deleting it.';
+          roomDestination.focus();
+          return;
+        }
+        const destination = roomDestination.selectedOptions[0].textContent;
+        if (!confirm(`Delete room "${location.name}"?${location.items.length ? ` All its items will move to "${destination}".` : ''}`)) return;
+        changeStorage(deleteRoom, `/storage-locations/${location.id}/delete`,
+          { location_id: roomDestination.value ? Number(roomDestination.value) : null }, 'Room deleted.');
+      });
+      if (location.items.length) roomActions.append(element('p', 'Consolidate this room by choosing where to move all its items:'), roomDestination);
+      roomActions.append(deleteRoom);
+      card.append(roomActions);
       const list = element('ul');
       location.items.forEach(item => {
         const row = element('li');
         row.append(element('strong', item.item_name), element('div', `${item.quantity ?? '—'} ${item.unit} · ${item.source === 'delivery' ? 'Received' : 'Manually placed'} ${item.placed_at || ''}`));
         if (item.notes) row.append(element('p', item.notes));
+        const actions = element('div');
+        actions.className = 'storage-actions';
+        const destination = destinationSelect(location, `Move ${item.item_name} to`);
+        const move = element('button', 'Move item');
+        move.type = 'button';
+        move.disabled = true;
+        destination.addEventListener('change', () => { move.disabled = !destination.value; });
+        move.addEventListener('click', () => changeStorage(move,
+          `/storage-items/${item.source}/${item.id}/move`, { location_id: Number(destination.value) }, 'Item moved.'));
+        const remove = element('button', 'Delete item');
+        remove.type = 'button';
+        remove.addEventListener('click', () => {
+          if (!confirm(`Remove "${item.item_name}" from "${location.name}"?${item.source === 'delivery' ? ' Its delivery history will be kept.' : ''}`)) return;
+          changeStorage(remove, `/storage-items/${item.source}/${item.id}/delete`, {}, 'Item removed.');
+        });
+        actions.append(destination, move, remove);
+        row.append(actions);
         list.append(row);
       });
       card.append(location.items.length ? list : element('p', 'No items placed here yet.'));
