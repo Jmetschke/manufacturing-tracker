@@ -2191,6 +2191,7 @@
   <button class="admin-tab-button" type="button" onclick="showAdminTab('batches')">Batch Tracker</button>
   <button class="admin-tab-button" type="button" onclick="showAdminTab('calendar')">Calendar</button>
   <button class="admin-tab-button" type="button" onclick="showAdminTab('ordered')">Ordered Items</button>
+  <button class="admin-tab-button" type="button" onclick="showAdminTab('storage')">Locations</button>
   <button class="admin-tab-button" type="button" onclick="showAdminTab('activeSkus')">Active SKUs</button>
   <button class="admin-tab-button" type="button" onclick="showAdminTab('alertRecipients')">Alert Recipients</button>
 </div>
@@ -2760,7 +2761,7 @@
           </div>
           <div class="ordered-field">
             <label for="admin_manual_received_location">Received Location</label>
-            <input type="text" id="admin_manual_received_location" required>
+            <select id="admin_manual_received_location" data-storage-location required></select>
           </div>
           <div class="ordered-field">
             <label for="admin_manual_received_notes">Notes</label>
@@ -2805,6 +2806,9 @@
 </section>
 
 <script src="employees.js"></script>
+<section id="storagePanel" class="admin-panel"><h2>Storage Locations</h2><p>Items placed in each location from received deliveries and manual entries.</p><button type="button" onclick="StorageLocations.addLocation()">Add location</button><button type="button" onclick="StorageLocations.load()">Refresh</button><p id="storageStatus" role="status"></p><div id="storageCards"></div></section>
+<link rel="stylesheet" href="storage-locations.css">
+<script src="storage-locations.js"></script>
 <script src="dispensary-locations.js"></script>
 <script src="pwa-install.js"></script>
 <script src="alerts.js"></script>

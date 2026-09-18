@@ -2096,6 +2096,18 @@ async function initializeDatabase() {
   await addMissingColumn("ordered_items", "import_needs_delivery_date", "INTEGER DEFAULT 0");
   await addMissingColumn("ordered_items", "created_at", "TEXT");
   await addMissingColumn("ordered_items", "updated_at", "TEXT");
+  await runSql(`CREATE TABLE IF NOT EXISTS storage_locations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL COLLATE NOCASE UNIQUE
+  )`);
+  await runSql(`CREATE TABLE IF NOT EXISTS storage_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, location_id INTEGER NOT NULL,
+    item_name TEXT NOT NULL, quantity REAL NOT NULL, unit TEXT NOT NULL,
+    notes TEXT, placed_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  for (const name of ["Production Storage", "Kitchen Storage", "Garage Storage", "Fire Ally", "SB/Vape Area", "Topicals Storage", "Fire Cabinet", "Upper Deck", "Vault"]) {
+    await runSql("INSERT OR IGNORE INTO storage_locations (name) VALUES (?)", [name]);
+  }
+
   await addMissingColumn("order_requests", "request_date", "TEXT");
   await addMissingColumn("order_requests", "requester_name", "TEXT");
   await addMissingColumn("order_requests", "department", "TEXT");
@@ -5549,6 +5561,50 @@ app.get("/report", (req, res) => {
 
     res.json(rows);
   });
+});
+
+// Shared storage endpoints are available to signed-in users and administrators.
+app.get("/storage-locations", async (req, res) => {
+  try {
+    await runSql(`INSERT OR IGNORE INTO storage_locations (name)
+      SELECT DISTINCT trim(received_location) FROM ordered_items
+      WHERE received_date IS NOT NULL AND trim(coalesce(received_location, '')) <> ''`);
+    const locations = await allSql("SELECT * FROM storage_locations ORDER BY id");
+    const items = await allSql(`SELECT s.id, s.location_id, s.item_name, s.quantity, s.unit,
+      s.notes, s.placed_at, 'manual' AS source FROM storage_items s
+      UNION ALL
+      SELECT o.id, l.id, o.item_name, o.package_qty, 'packages',
+      o.received_notes, o.received_date, 'delivery' FROM ordered_items o
+      JOIN storage_locations l ON l.name = trim(o.received_location) COLLATE NOCASE
+      WHERE o.received_date IS NOT NULL ORDER BY placed_at DESC`);
+    res.json(locations.map(location => ({ ...location, items: items.filter(item => item.location_id === location.id) })));
+  } catch (err) { res.status(500).json({ message: "Unable to load storage locations" }); }
+});
+app.post("/storage-locations", async (req, res) => {
+  const name = typeof req.body.name === "string" ? req.body.name.trim() : "";
+  if (!name || name.length > 120) return res.status(400).json({ message: "Location name must contain 1–120 characters" });
+  try {
+    await runSql("INSERT OR IGNORE INTO storage_locations (name) VALUES (?)", [name]);
+    const rows = await allSql("SELECT * FROM storage_locations WHERE name = ? COLLATE NOCASE", [name]);
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ message: "Unable to add location" }); }
+});
+app.post("/storage-items", async (req, res) => {
+  const { location_id, quantity } = req.body;
+  const itemName = typeof req.body.item_name === "string" ? req.body.item_name.trim() : "";
+  const unit = typeof req.body.unit === "string" ? req.body.unit.trim() : "";
+  const notes = typeof req.body.notes === "string" ? req.body.notes.trim() : "";
+  if (!Number.isInteger(location_id) || !itemName || itemName.length > 200 || !unit || unit.length > 60 ||
+      typeof quantity !== "number" || !Number.isFinite(quantity) || quantity <= 0 || notes.length > 4000) {
+    return res.status(400).json({ message: "Choose a location and enter an item, positive quantity, and unit" });
+  }
+  try {
+    const locations = await allSql("SELECT id FROM storage_locations WHERE id = ?", [location_id]);
+    if (!locations.length) return res.status(400).json({ message: "Location does not exist" });
+    await runSql("INSERT INTO storage_items (location_id, item_name, quantity, unit, notes) VALUES (?, ?, ?, ?, ?)",
+      [location_id, itemName, quantity, unit, notes]);
+    res.status(201).json({ message: "Item added" });
+  } catch (err) { res.status(500).json({ message: "Unable to add item" }); }
 });
 
 /* ---------- START SERVER ---------- */

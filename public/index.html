@@ -2111,6 +2111,7 @@
   <button class="tab-button" type="button" onclick="showTab('schedule')">Schedule</button>
   <button class="tab-button" type="button" onclick="showTab('daily')">Daily Report</button>
   <button class="tab-button" type="button" onclick="showTab('ordered')">Ordered Items</button>
+  <button class="tab-button" type="button" onclick="showTab('storage')">Locations</button>
   <button class="tab-button" type="button" onclick="showTab('activeSkus')">Active SKUs</button>
 </div>
 
@@ -2553,7 +2554,7 @@
         </div>
         <div class="request-field">
           <label for="manual_received_location">Received Location</label>
-          <input type="text" id="manual_received_location" required>
+          <select id="manual_received_location" data-storage-location required></select>
         </div>
         <div class="request-field">
           <label for="manual_received_notes">Notes</label>
@@ -2598,6 +2599,9 @@
 </section>
 
 <script src="employees.js"></script>
+<section id="storagePanel" class="tab-panel"><h2>Storage Locations</h2><p>Items placed in each location from received deliveries and manual entries.</p><button type="button" onclick="StorageLocations.addLocation()">Add location</button><button type="button" onclick="StorageLocations.load()">Refresh</button><p id="storageStatus" role="status"></p><div id="storageCards"></div></section>
+<link rel="stylesheet" href="storage-locations.css">
+<script src="storage-locations.js"></script>
 <script src="dispensary-locations.js"></script>
 <script src="pwa-install.js"></script>
 <script src="alerts.js"></script>

@@ -1,0 +1,12 @@
+#storageCards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-top: 20px; }
+.storage-card { border: 1px solid #ccd7df; border-radius: 12px; padding: 20px; background: #fff; color: #193047; overflow-wrap: anywhere; }
+.storage-card h3 { margin: 0 0 8px; font-size: 22px; }
+.storage-card ul { padding: 0; list-style: none; }
+.storage-card li { border-top: 1px solid #e0e6eb; padding: 12px 0; }
+.storage-card li div { margin-top: 6px; }
+.storage-card li p { white-space: pre-wrap; }
+.storage-card summary { cursor: pointer; padding: 12px 0; font-weight: bold; }
+.storage-card form { display: grid; gap: 12px; }
+.storage-card label { display: grid; gap: 6px; }
+.storage-card input, [data-storage-location] { box-sizing: border-box; max-width: 100%; min-width: 0; padding: 12px; font: inherit; border: 1px solid #aab9c5; border-radius: 6px; background: white; color: #193047; }
+@media (max-width: 760px) { #storageCards { grid-template-columns: minmax(0, 1fr); } }

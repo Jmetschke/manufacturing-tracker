@@ -1971,6 +1971,8 @@ async function load() {
 }
 
 function showTab(tabName) {
+  document.getElementById("storagePanel").classList.toggle("active", tabName === "storage");
+  if (tabName === "storage") StorageLocations.load();
   const trackerTab = document.getElementById("trackerTab");
   const calculatorTab = document.getElementById("calculatorTab");
   const phCalculatorTab = document.getElementById("phCalculatorTab");
@@ -1993,6 +1995,7 @@ function showTab(tabName) {
 
   buttons.forEach(button => {
     const labels = {
+      storage: "Locations",
       tracker: "Timer",
       calculator: "Qty Calculator",
       phCalculator: "Shooters pH Calculator",
@@ -3195,9 +3198,7 @@ function showReceivePrompt(card, itemId) {
   dateInput.setAttribute("aria-label", "Received Date");
   row.appendChild(dateInput);
 
-  const locationInput = document.createElement("input");
-  locationInput.type = "text";
-  locationInput.placeholder = "Received Location";
+  const locationInput = StorageLocations.createSelect();
   row.appendChild(locationInput);
 
   const timeInput = document.createElement("input");

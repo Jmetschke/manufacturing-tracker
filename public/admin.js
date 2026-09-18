@@ -2464,6 +2464,8 @@ function appendTaskFocusDetails(block, projectedTasks, emptyText) {
 }
 
 function showAdminTab(tabName) {
+  document.getElementById("storagePanel").classList.toggle("active", tabName === "storage");
+  if (tabName === "storage") StorageLocations.load();
   clearAdminPrintModes();
 
   document.getElementById("entriesPanel").classList.toggle("active", tabName === "entries");
@@ -2478,6 +2480,7 @@ function showAdminTab(tabName) {
 
   document.querySelectorAll(".admin-tab-button").forEach(button => {
     const isActive =
+      (tabName === "storage" && button.textContent === "Locations") ||
       (tabName === "entries" && button.textContent === "Entries") ||
       (tabName === "review" && button.textContent === "Entries for Review") ||
       (tabName === "itemTasks" && button.textContent === "Item & Task Management") ||
@@ -6603,8 +6606,7 @@ function showAdminReceiveForm(itemId, cell, checkbox) {
   });
   form.appendChild(createOrderField("Time", receivedTime));
 
-  const location = document.createElement("input");
-  location.type = "text";
+  const location = StorageLocations.createSelect();
   form.appendChild(createOrderField("Location", location));
 
   const notes = document.createElement("textarea");
