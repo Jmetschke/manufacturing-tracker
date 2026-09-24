@@ -2383,6 +2383,10 @@
 </section>
 
 <section id="orderedTab" class="tab-panel">
+  <div class="manual-order-entry-actions" style="display:flex;flex-wrap:wrap;gap:12px;margin:16px 0">
+    <button type="button" onclick="ManualOrderEntry.open()">Add ordered item</button>
+    <button type="button" onclick="openManualReceivedWindow()">Add received item</button>
+  </div>
   <div class="ordered-workspace">
     <div class="ordered-status-grid">
       <section class="ordered-section ordered-expected-list">
@@ -2603,6 +2607,7 @@
 <link rel="stylesheet" href="storage-locations.css">
 <link rel="stylesheet" href="equipment-inventory.css">
 <script src="equipment-inventory.js"></script>
+<script src="manual-order-entry.js"></script>
 <script src="storage-locations.js"></script>
 <script src="dispensary-locations.js"></script>
 <script src="pwa-install.js"></script>

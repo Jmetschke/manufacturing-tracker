@@ -4420,7 +4420,7 @@ app.put("/admin/order-requests/:id/order", (req, res) => {
   });
 });
 
-app.post("/admin/ordered-items", async (req, res) => {
+app.post(["/admin/ordered-items", "/ordered-items"], async (req, res) => {
   const dateOrdered = normalizeRequiredText(req.body.date_ordered);
   const expectedDeliveryDate = normalizeRequiredText(req.body.expected_delivery_date);
   const itemCompany = normalizeRequiredText(req.body.item_company) || "Manual Entry";
