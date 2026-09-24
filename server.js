@@ -4512,6 +4512,7 @@ app.put("/ordered-items/:id", (req, res) => {
     `UPDATE ordered_items
      SET date_ordered = ?,
          expected_delivery_date = ?,
+         import_needs_delivery_date = 0,
          item_name = ?,
          item_company = ?,
          package_qty = ?,
