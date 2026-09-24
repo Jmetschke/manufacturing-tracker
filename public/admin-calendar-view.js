@@ -131,4 +131,3 @@ function renderAdminCalendar(gridStart, options = {}) {
     calendar.appendChild(cell);
   }
 }
-
