@@ -12,6 +12,9 @@ const db = require("./db");
 const entryAlertThresholds = require("./entry-alert-thresholds.json");
 const calendarDb = db.calendar || db;
 const hasSeparateCalendarDb = calendarDb !== db;
+const { createCalendarStore, revision: calendarRevision } = require("./server/calendar-store");
+const calendarStore = createCalendarStore({ database: calendarDb,
+  mirrorDatabase: hasSeparateCalendarDb ? db : null, getSql, runSql });
 const app = express();
 
 app.use(express.json({ limit: "14mb" }));
@@ -1488,6 +1491,7 @@ function parseSchedulePayloadForCleanup(rawValue) {
     const parsed = JSON.parse(rawValue);
     if (parsed && !Array.isArray(parsed) && typeof parsed === "object") {
       return {
+        ...parsed,
         batchHijnx: Array.isArray(parsed.batchHijnx) ? parsed.batchHijnx : [],
         batchSb: Array.isArray(parsed.batchSb) ? parsed.batchSb : [],
         events: Array.isArray(parsed.events) ? parsed.events : [],
@@ -3307,8 +3311,7 @@ app.get("/schedule", async (req, res) => {
   }
 
   try {
-    await ensureCalendarEventIds();
-    const rows = await allSql(
+    let rows = await allSql(
       `SELECT schedule_date, tasks, updated_at
        FROM schedule_days
        WHERE schedule_date BETWEEN ? AND ?
@@ -3316,7 +3319,19 @@ app.get("/schedule", async (req, res) => {
       [from, to],
       calendarDb
     );
-    res.json(rows);
+    // Normal reads do not take a write transaction or scan unrelated dates.
+    const ids = new Set();
+    const needsRepair = rows.some(row => parseSchedulePayloadForCleanup(row.tasks).events.some(event => {
+      if (!event || !isUuid(event.id) || ids.has(event.id)) return true;
+      ids.add(event.id);
+      return false;
+    }));
+    if (needsRepair) {
+      await ensureCalendarEventIds();
+      rows = await allSql("SELECT schedule_date, tasks, updated_at FROM schedule_days WHERE schedule_date BETWEEN ? AND ? ORDER BY schedule_date", [from, to], calendarDb);
+    }
+    res.set("Cache-Control", "no-store");
+    res.json(rows.map(row => ({ ...row, revision: calendarRevision(row) })));
   } catch (err) {
     res.status(500).send(err.message);
   }
@@ -3335,15 +3350,20 @@ app.put("/admin/schedule/:date", async (req, res) => {
   }
 
   try {
-    const incomingPayload = parseSchedulePayloadForCleanup(tasks);
-    const storedRows = await getAllScheduleRows(calendarDb);
-    incomingPayload.events = reconcileIncomingEvents(incomingPayload.events, collectStoredEvents(storedRows), scheduleDate);
-    const reconciledTasks = JSON.stringify(incomingPayload);
-    const savedTasks = isWeekendIsoDate(scheduleDate) ? removeScheduleTasks(reconciledTasks) : reconciledTasks;
-    await writeScheduleDayToDatabases(scheduleDate, savedTasks);
-    res.json({ message: "Schedule updated", schedule_date: scheduleDate, tasks: savedTasks });
+    const saved = await calendarStore.save(scheduleDate, req.body.base_revision, async previous => {
+      const incomingPayload = parseSchedulePayloadForCleanup(tasks);
+      let storedEvents = collectStoredEvents(previous ? [previous] : []);
+      // Only unfamiliar client IDs require a cross-day ownership check.
+      if (incomingPayload.events.some(event => event && isUuid(event.id) && !storedEvents.has(event.id))) {
+        storedEvents = collectStoredEvents(await getAllScheduleRows(calendarDb));
+      }
+      incomingPayload.events = reconcileIncomingEvents(incomingPayload.events, storedEvents, scheduleDate);
+      const reconciledTasks = JSON.stringify(incomingPayload);
+      return isWeekendIsoDate(scheduleDate) ? removeScheduleTasks(reconciledTasks) : reconciledTasks;
+    });
+    res.json({ message: "Schedule updated", ...saved });
   } catch (err) {
-    const status = /^(Duplicate calendar event ID:|Calendar event ID belongs to another schedule row:)/.test(err.message) ? 400 : 500;
+    const status = err.status || (/^(Duplicate calendar event ID:|Calendar event ID belongs to another schedule row:)/.test(err.message) ? 400 : 500);
     res.status(status).send(err.message);
   }
 });
@@ -3367,21 +3387,27 @@ app.put("/schedule/task-completion", async (req, res) => {
   }
 
   try {
-    const rows = await allSql(
-      "SELECT tasks FROM schedule_days WHERE schedule_date = ?",
-      [sourceDate],
-      calendarDb
-    );
-    const row = rows[0];
-    if (!row) return res.status(404).send("Schedule day not found");
-
-    const updatedTasks = setScheduleTaskCompletion(row.tasks || "", taskType, taskIndex, activeDate, completed, fallbackTask);
-    if (!updatedTasks) return res.status(404).send("Task not found");
-
-    await writeScheduleDayToDatabases(sourceDate, updatedTasks);
+    let originalTaskStructure;
+    await calendarStore.update(sourceDate, previous => {
+      if (!previous) throw Object.assign(new Error("Schedule day not found"), { status: 404 });
+      // Do not retry an index-based operation against reordered or replaced tasks.
+      const taskList = parseSchedulePayloadForCleanup(previous.tasks)[taskType];
+      const structure = JSON.stringify(taskList.map(task => {
+        if (!task || typeof task !== "object") return task;
+        const { completedDates, ...identity } = task;
+        return identity;
+      }));
+      if (originalTaskStructure !== undefined && originalTaskStructure !== structure) {
+        throw Object.assign(new Error("These tasks changed while saving. Reload the calendar and try again."), { status: 409 });
+      }
+      originalTaskStructure = structure;
+      const updatedTasks = setScheduleTaskCompletion(previous.tasks || "", taskType, taskIndex, activeDate, completed, fallbackTask);
+      if (!updatedTasks) throw Object.assign(new Error("Task not found"), { status: 404 });
+      return updatedTasks;
+    });
     res.json({ message: "Task completion updated", sourceDate, activeDate, taskType, taskIndex, completed });
   } catch (err) {
-    res.status(500).send(err.message);
+    res.status(err.status || 500).send(err.message);
   }
 });
 

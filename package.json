@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
+    "test": "node --test tests/*.test.cjs",
     "start": "node server.js",
     "start:local": "ALLOW_LOCAL_SQLITE=true node server.js",
     "backup:sqlite-to-turso": "node scripts/backup-sqlite-to-turso.js"

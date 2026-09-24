@@ -12,6 +12,7 @@ let allOrderedItems = [];
 let allOrderRequests = [];
 let allAlertRecipients = [];
 let adminScheduleRows = new Map();
+let adminScheduleRevisions = new Map();
 let adminExpectedDeliveriesByDate = new Map();
 let adminActiveScheduleByDate = new Map();
 let adminCalendarStartDate = null;
@@ -770,6 +771,7 @@ function parseSchedulePayload(rawValue) {
     const parsed = JSON.parse(rawValue);
     if (parsed && !Array.isArray(parsed) && typeof parsed === "object") {
       return {
+        ...parsed,
         batchHijnx: normalizeBatchList(parsed.batchHijnx),
         batchSb: normalizeBatchList(parsed.batchSb),
         events: normalizeEventList(parsed.events),
@@ -4462,67 +4464,6 @@ function exportCSV() {
   URL.revokeObjectURL(url);
 }
 
-function setDefaultCalendarRange() {
-  adminCalendarStartDate = startOfWeek(new Date());
-}
-
-function updateCalendarRangeLabel(gridStart, gridEnd) {
-  document.getElementById("calendar_range_label").textContent =
-    `${formatDisplayDate(toIsoDate(gridStart))} - ${formatDisplayDate(toIsoDate(gridEnd))}`;
-}
-
-function changeAdminCalendarWeeks(offset) {
-  if (!adminCalendarStartDate) {
-    setDefaultCalendarRange();
-  }
-
-  adminCalendarStartDate = addDays(adminCalendarStartDate, offset * 14);
-  loadAdminCalendar();
-}
-
-function printAdminCalendarView() {
-  closeAdminCalendarDayFocus();
-  clearAdminPrintModes();
-  document.body.classList.add("printing-admin-calendar");
-  window.print();
-}
-
-async function loadAdminCalendar() {
-  if (!adminCalendarStartDate) {
-    setDefaultCalendarRange();
-  }
-
-  const gridStart = dateOnly(adminCalendarStartDate);
-  const gridEnd = addDays(gridStart, 41);
-  const from = toIsoDate(addDays(gridStart, -3650));
-  const to = toIsoDate(gridEnd);
-
-  updateCalendarRangeLabel(gridStart, gridEnd);
-  renderAdminCalendar(gridStart, { status: "Loading calendar..." });
-
-  try {
-    const [scheduleRes, orderedRes] = await Promise.all([
-      adminFetch(`/schedule?from=${from}&to=${to}`),
-      adminFetch("/ordered-items")
-    ]);
-
-    if (!scheduleRes.ok) {
-      throw new Error(await scheduleRes.text() || "Could not load calendar.");
-    }
-
-    const rows = await scheduleRes.json();
-    const deliveries = orderedRes.ok ? await orderedRes.json() : [];
-    adminScheduleRows = new Map(rows.map(row => [row.schedule_date, row.tasks || ""]));
-    adminExpectedDeliveriesByDate = buildAdminExpectedDeliveriesByDate(deliveries, gridStart, gridEnd);
-    adminActiveScheduleByDate = buildAdminActiveScheduleByDate(rows, gridStart, gridEnd);
-    renderAdminCalendar(gridStart);
-  } catch (err) {
-    showMessage("Could not load calendar.", "error");
-    renderAdminCalendar(gridStart, { status: "Calendar could not load. Try Refresh or open the tab again." });
-    console.error("Admin calendar load failed", err);
-  }
-}
-
 function countGroupedTasks(tasks) {
   return groupDailyTaskAssignments(tasks).length;
 }
@@ -4753,7 +4694,7 @@ async function updateBatchTrackerChecklist(batch, nextChecklist) {
   const saveRes = await adminFetch(`/admin/schedule/${batch.scheduleDate}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tasks: JSON.stringify(payload) })
+    body: JSON.stringify({ tasks: JSON.stringify(payload), base_revision: row ? row.revision : "missing" })
   });
 
   if (!saveRes.ok) {
@@ -4921,73 +4862,6 @@ async function loadDailyReport() {
 
   cards.forEach(card => grid.appendChild(card));
   renderDailyWorkingBatches(workingBatches);
-}
-
-function renderAdminCalendar(gridStart, options = {}) {
-  const calendar = document.getElementById("adminCalendar");
-  calendar.innerHTML = "";
-
-  dayNames.forEach(dayName => {
-    const header = document.createElement("div");
-    header.className = "admin-day-name";
-    header.textContent = dayName;
-    calendar.appendChild(header);
-  });
-
-  if (options.status) {
-    const status = document.createElement("div");
-    status.className = "calendar-focus-empty admin-calendar-status";
-    status.textContent = options.status;
-    calendar.appendChild(status);
-    return;
-  }
-
-  for (let index = 0; index < 42; index += 1) {
-    const date = addDays(gridStart, index);
-    const isoDate = toIsoDate(date);
-    const cell = document.createElement("div");
-    cell.className = "admin-calendar-day";
-    if (date.getDay() === 0 || date.getDay() === 6) {
-      cell.classList.add("weekend");
-    }
-    cell.tabIndex = 0;
-    cell.setAttribute("role", "button");
-    cell.setAttribute("aria-label", `View details for ${formatDisplayDate(isoDate)}`);
-
-    const dateLabel = document.createElement("div");
-    dateLabel.className = "admin-calendar-date";
-    dateLabel.textContent = `${date.getMonth() + 1}/${date.getDate()}`;
-    cell.appendChild(dateLabel);
-
-    const scheduleDay = adminActiveScheduleByDate.get(isoDate) || { batchHijnx: [], batchSb: [], events: [], tasks: [], testPickups: [], processingTasks: [] };
-    const activeEvents = scheduleDay.events || [];
-    const activeDeliveries = adminExpectedDeliveriesByDate.get(isoDate) || [];
-
-    appendEventList(cell, activeEvents);
-
-    appendBatchList(cell, scheduleDay);
-    appendTestPickupList(cell, scheduleDay);
-    cell.addEventListener("click", () => {
-      renderAdminFocusedScheduleDay(isoDate, scheduleDay, activeDeliveries);
-    });
-    cell.addEventListener("keydown", event => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        renderAdminFocusedScheduleDay(isoDate, scheduleDay, activeDeliveries);
-      }
-    });
-
-    const editButton = document.createElement("button");
-    editButton.type = "button";
-    editButton.textContent = "Edit";
-    editButton.addEventListener("click", event => {
-      event.stopPropagation();
-      editScheduleDay(isoDate);
-    });
-    cell.appendChild(editButton);
-
-    calendar.appendChild(cell);
-  }
 }
 
 function refreshScheduleTaskRows() {
@@ -5551,112 +5425,6 @@ function getScheduleTaskValues(selector) {
       };
     })
     .filter(task => task.text);
-}
-
-function buildSchedulePayload(includeTasks = true) {
-  const events = getEventValues();
-  validateEvents(events);
-
-  const tasks = includeTasks
-    ? getScheduleTaskValues("#scheduleTaskRows .schedule-task-row")
-    : [];
-  const processingTasks = includeTasks ? getProcessingTaskValues() : [];
-
-  const invalidTask = [...tasks, ...processingTasks].find(task =>
-    (!task.autoGenerated && task.totalHours <= 0) ||
-    task.assignments.reduce((sum, assignment) => sum + assignment.hours, 0) > task.totalHours
-  );
-  if (invalidTask) {
-    throw new Error("Each manually entered task needs total hours, and assigned person hours cannot exceed the task total.");
-  }
-
-  const testPickups = includeTasks ? getTestPickupValues() : [];
-  const invalidPickup = testPickups.find(pickup => !/^([01]\d|2[0-3]):[0-5]\d$/.test(pickup.time) || !pickup.items.length);
-  if (invalidPickup) {
-    throw new Error("Each Test Pick Up needs a valid HH:MM time and at least one selected item.");
-  }
-
-  return JSON.stringify({
-    batchHijnx: getBatchValues("hijnx"),
-    batchSb: getBatchValues("sb"),
-    events,
-    tasks,
-    testPickups,
-    processingTasks
-  });
-}
-
-function editScheduleDay(isoDate) {
-  const payload = parseSchedulePayload(adminScheduleRows.get(isoDate));
-  const isWeekendDay = isWeekendIsoDate(isoDate);
-  const taskSections = document.querySelectorAll(".schedule-task-section, .pickup-group, .processing-group");
-
-  document.getElementById("schedule_edit_date").value = isoDate;
-  document.getElementById("scheduleEditLabel").textContent = formatDisplayDate(isoDate);
-  populateEventRows(payload.events);
-  populateBatchRows("hijnx", payload.batchHijnx);
-  populateBatchRows("sb", payload.batchSb);
-  taskSections.forEach(section => {
-    section.hidden = isWeekendDay;
-  });
-  populateScheduleTaskRows(isWeekendDay ? "" : adminScheduleRows.get(isoDate) || "");
-  populateTestPickupRows(isWeekendDay ? [] : payload.testPickups);
-  populateScheduleTaskRows(isWeekendDay ? [] : payload.processingTasks, "processingTaskRows", false);
-  if (!isWeekendDay) {
-    syncGeneratedBatchTasksFromBatches();
-  }
-  document.getElementById("scheduleEditor").classList.add("active");
-  showMessage("");
-  getBatchRows("hijnx").querySelector(".batch-input").focus();
-}
-
-function cancelScheduleEdit() {
-  document.getElementById("scheduleEditor").classList.remove("active");
-  document.getElementById("schedule_edit_date").value = "";
-  document.getElementById("eventRows").innerHTML = "";
-  getBatchRows("hijnx").innerHTML = "";
-  getBatchRows("sb").innerHTML = "";
-  document.getElementById("scheduleTaskRows").innerHTML = "";
-  document.getElementById("testPickupRows").innerHTML = "";
-  document.getElementById("processingTaskRows").innerHTML = "";
-  const planner = document.getElementById("batchTaskPlanner");
-  if (planner) {
-    planner.innerHTML = "";
-    planner.hidden = true;
-  }
-  document.querySelectorAll(".schedule-task-section, .pickup-group, .processing-group").forEach(section => {
-    section.hidden = false;
-  });
-}
-
-async function saveScheduleDay() {
-  const scheduleDate = document.getElementById("schedule_edit_date").value;
-  let tasks;
-
-  try {
-    tasks = buildSchedulePayload(!isWeekendIsoDate(scheduleDate));
-  } catch (err) {
-    showMessage(err.message, "error");
-    return;
-  }
-
-  if (!scheduleDate) return;
-
-  const res = await adminFetch(`/admin/schedule/${scheduleDate}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tasks })
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    showMessage("Schedule save failed: " + text, "error");
-    return;
-  }
-
-  cancelScheduleEdit();
-  showMessage("Calendar day updated.", "success");
-  await loadAdminCalendar();
 }
 
 function resetOrderedForm() {

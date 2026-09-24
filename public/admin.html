@@ -2549,9 +2549,11 @@
       </section>
     </div>
     <div class="edit-actions">
-      <button type="button" onclick="saveScheduleDay()">Save Day</button>
+      <button id="scheduleSaveButton" type="button" onclick="saveScheduleDay()">Save Day</button>
       <button type="button" onclick="cancelScheduleEdit()">Cancel</button>
     </div>
+    <button id="scheduleReloadButton" type="button" hidden onclick="reloadScheduleEditor()">Reload saved day</button>
+    <p id="scheduleSaveStatus" class="message" role="status" aria-live="polite"></p>
   </section>
 </section>
 
@@ -2813,6 +2815,8 @@
 <script src="pwa-install.js"></script>
 <script src="alerts.js"></script>
 <script src="active-skus.js"></script>
+<script src="admin-calendar-view.js"></script>
+<script src="admin-calendar-editor.js"></script>
 <script src="admin.js"></script>
 
 </body>
