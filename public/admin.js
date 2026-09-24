@@ -4533,11 +4533,16 @@ function renderDailyWorkingBatches(batches) {
 
   workingBatches.forEach(batch => {
     const progress = getBatchProgress(batch);
-    const card = document.createElement("button");
-    card.type = "button";
+    const card = document.createElement("article");
+    card.tabIndex = 0;
     card.className = "daily-working-batch";
     card.addEventListener("click", () => showDailyReportFocus("Working Batch", body => appendBatchDetail(body, batch)));
 
+    card.addEventListener("keydown", event => {
+      if (event.target !== card || !["Enter", " "].includes(event.key)) return;
+      event.preventDefault();
+      showDailyReportFocus("Working Batch", body => appendBatchDetail(body, batch));
+    });
     const pie = document.createElement("div");
     pie.className = "daily-batch-pie";
     pie.style.setProperty("--progress", `${progress.percent}%`);
@@ -4562,6 +4567,7 @@ function renderDailyWorkingBatches(batches) {
     text.appendChild(note);
 
     card.appendChild(text);
+    appendDailyBatchCompletion(card, batch);
     container.appendChild(card);
   });
 }
@@ -4579,6 +4585,7 @@ function getBatchesFromScheduleRows(rows) {
         batchType: "hijnx",
         batchIndex: index,
         scheduleDate: row.schedule_date,
+        revision: row.revision,
         ...batch
       })),
       ...payload.batchSb.map((batch, index) => ({
@@ -4586,6 +4593,7 @@ function getBatchesFromScheduleRows(rows) {
         batchType: "sb",
         batchIndex: index,
         scheduleDate: row.schedule_date,
+        revision: row.revision,
         ...batch
       }))
     ];
@@ -4796,14 +4804,16 @@ async function loadDailyReport() {
   const rows = await scheduleRes.json();
   const scheduleMap = new Map(rows.map(row => [row.schedule_date, row.tasks || ""]));
   const payload = parseSchedulePayload(scheduleMap.get(today));
-  const projectedKitchenTasks = buildAdminProjectedTasksByDate(rows, todayDate, todayDate).get(today) || [];
-  const projectedProcessingTasks = buildAdminProjectedTasksByDate(rows, todayDate, todayDate, parsed => parsed.processingTasks).get(today) || [];
+  let projectedKitchenTasks = buildAdminProjectedTasksByDate(rows, todayDate, todayDate).get(today) || [];
+  let projectedProcessingTasks = buildAdminProjectedTasksByDate(rows, todayDate, todayDate, parsed => parsed.processingTasks).get(today) || [];
   const events = buildAdminEventsByDate(rows, todayDate, todayDate).get(today) || [];
   const batches = [
     ...payload.batchHijnx.map(batch => ({ label: "Hijnx", ...batch })),
     ...payload.batchSb.map(batch => ({ label: "SB", ...batch }))
-  ];
+  ].filter(isBatchInProgress);
   const workingBatches = getWorkingBatchesFromRows(rows);
+  projectedKitchenTasks = filterDailyIncompleteTasks(projectedKitchenTasks, workingBatches);
+  projectedProcessingTasks = filterDailyIncompleteTasks(projectedProcessingTasks, workingBatches);
 
   document.getElementById("dailyReportTitle").textContent = `Daily Report - ${formatDisplayDate(today)}`;
   closeDailyReportFocus();

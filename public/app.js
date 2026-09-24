@@ -1306,8 +1306,8 @@ function getBatchesFromScheduleRows(rows) {
   return rows.flatMap(row => {
     const payload = parseSchedulePayload(row.tasks);
     return [
-      ...payload.batchHijnx.map(batch => ({ label: "Hijnx", scheduleDate: row.schedule_date, ...batch })),
-      ...payload.batchSb.map(batch => ({ label: "SB", scheduleDate: row.schedule_date, ...batch }))
+      ...payload.batchHijnx.map((batch, batchIndex) => ({ ...batch, label: "Hijnx", scheduleDate: row.schedule_date, revision: row.revision, batchType: "hijnx", batchIndex })),
+      ...payload.batchSb.map((batch, batchIndex) => ({ ...batch, label: "SB", scheduleDate: row.schedule_date, revision: row.revision, batchType: "sb", batchIndex }))
     ];
   });
 }
@@ -1331,11 +1331,16 @@ function renderDailyWorkingBatches(batches) {
 
   workingBatches.forEach(batch => {
     const progress = getBatchProgress(batch);
-    const card = document.createElement("button");
-    card.type = "button";
+    const card = document.createElement("article");
+    card.tabIndex = 0;
     card.className = "daily-working-batch";
     card.addEventListener("click", () => showDailyReportFocus("Working Batch", body => appendBatchDetail(body, batch)));
 
+    card.addEventListener("keydown", event => {
+      if (event.target !== card || !["Enter", " "].includes(event.key)) return;
+      event.preventDefault();
+      showDailyReportFocus("Working Batch", body => appendBatchDetail(body, batch));
+    });
     const pie = document.createElement("div");
     pie.className = "daily-batch-pie";
     pie.style.setProperty("--progress", `${progress.percent}%`);
@@ -1360,6 +1365,7 @@ function renderDailyWorkingBatches(batches) {
     text.appendChild(note);
 
     card.appendChild(text);
+    appendDailyBatchCompletion(card, batch);
     container.appendChild(card);
   });
 }
@@ -1387,8 +1393,10 @@ async function loadDailyReport() {
   const batches = [
     ...(scheduleDay.batchHijnx || []).map(batch => ({ label: "Hijnx", ...batch })),
     ...(scheduleDay.batchSb || []).map(batch => ({ label: "SB", ...batch }))
-  ];
+  ].filter(isBatchInProgress);
   const workingBatches = getBatchesFromScheduleRows(rows);
+  scheduleDay.tasks = filterDailyIncompleteTasks(scheduleDay.tasks || [], workingBatches);
+  scheduleDay.processingTasks = filterDailyIncompleteTasks(scheduleDay.processingTasks || [], workingBatches);
 
   document.getElementById("dailyReportTitle").textContent = `Daily Report - ${formatDisplayDate(today)}`;
   closeDailyReportFocus();

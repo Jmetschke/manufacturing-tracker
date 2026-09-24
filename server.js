@@ -13,6 +13,7 @@ const entryAlertThresholds = require("./entry-alert-thresholds.json");
 const calendarDb = db.calendar || db;
 const hasSeparateCalendarDb = calendarDb !== db;
 const { createCalendarStore, revision: calendarRevision } = require("./server/calendar-store");
+const { completeBatch } = require("./server/complete-batch");
 const calendarStore = createCalendarStore({ database: calendarDb,
   mirrorDatabase: hasSeparateCalendarDb ? db : null, getSql, runSql });
 const app = express();
@@ -3366,6 +3367,22 @@ app.put("/admin/schedule/:date", async (req, res) => {
     const status = err.status || (/^(Duplicate calendar event ID:|Calendar event ID belongs to another schedule row:)/.test(err.message) ? 400 : 500);
     res.status(status).send(err.message);
   }
+});
+
+app.put("/schedule/batch-completion", async (req, res) => {
+  const { sourceDate, batchType, batchIndex, item, completedDate, base_revision } = req.body;
+  if (!isIsoDate(sourceDate) || !isIsoDate(completedDate) ||
+      !["hijnx", "sb"].includes(batchType) || !Number.isInteger(batchIndex) || batchIndex < 0 || typeof item !== "string") {
+    return res.status(400).send("Choose a valid batch and completion date");
+  }
+  try {
+    const saved = await calendarStore.save(sourceDate, base_revision, previous => {
+      if (!previous) throw Object.assign(new Error("Schedule day not found"), { status: 404 });
+      return JSON.stringify(completeBatch(parseSchedulePayloadForCleanup(previous.tasks),
+        { batchType, batchIndex, item, completedDate }));
+    });
+    res.json({ message: "All batch tasks completed", ...saved });
+  } catch (err) { res.status(err.status || 500).send(err.message); }
 });
 
 app.put("/schedule/task-completion", async (req, res) => {
