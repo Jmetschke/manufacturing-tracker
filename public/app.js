@@ -1498,7 +1498,7 @@ function renderFocusedScheduleDay(isoDate, scheduleDay, deliveries) {
   section("Kitchen Tasks", block => appendTaskFocusDetails(block, scheduleDay.tasks || [], "No kitchen tasks scheduled."), "focus-kitchen");
 
   section("Deliveries", block => appendFocusLines(block, deliveries, delivery =>
-    `${delivery.calendar_delivery_status}: ${delivery.item_name} - QTY ${delivery.package_qty || ""}`.trim(),
+    `${delivery.calendar_delivery_status}: ${delivery.standard_item_name || delivery.item_name} - QTY ${delivery.package_qty || ""}`.trim(),
   "No deliveries."), "focus-deliveries");
 
   section("Test Pick Ups", block => appendFocusLines(block, scheduleDay.testPickups || [], pickup =>
@@ -1653,7 +1653,7 @@ function appendExpectedDeliveries(container, deliveries) {
     group.forEach(delivery => {
       const item = document.createElement("div");
       item.className = "calendar-delivery";
-      item.textContent = `${delivery.item_name} - QTY ${delivery.package_qty}`;
+      item.textContent = `${delivery.standard_item_name || delivery.item_name} - QTY ${delivery.package_qty}`;
       section.appendChild(item);
     });
   });
@@ -2989,6 +2989,8 @@ function createDeliveryDetails(item) {
   const details = document.createElement("div");
   details.className = "delivery-details";
 
+  appendDeliveryDetail(details, "Original description", item.original_description || item.item_name);
+  appendDeliveryDetail(details, "Inventory mapping", item.standard_item_name || "Unmapped");
   appendDeliveryDetail(details, "Date Ordered", item.date_ordered);
   appendDeliveryDetail(details, "Expected", item.expected_delivery_date);
   appendDeliveryDetail(details, "Company", item.item_company);
@@ -3119,7 +3121,7 @@ function createDeliveryCard(item, isReceived) {
 
   const title = document.createElement("div");
   title.className = "delivery-title";
-  title.textContent = item.item_name;
+  title.textContent = item.standard_item_name || item.item_name;
   title.tabIndex = 0;
   title.setAttribute("role", "button");
   title.setAttribute("aria-expanded", "false");
@@ -3206,6 +3208,8 @@ function showReceivePrompt(card, itemId) {
   dateInput.setAttribute("aria-label", "Received Date");
   row.appendChild(dateInput);
 
+  const unitsInput = EquipmentInventory.unitsInput(orderedItems.find(item => item.id === itemId)?.units_per_package);
+  row.appendChild(unitsInput);
   const locationInput = StorageLocations.createSelect();
   row.appendChild(locationInput);
 
@@ -3253,7 +3257,8 @@ function showReceivePrompt(card, itemId) {
     timeInput.value,
     notesInput.value,
     imageInputOne,
-    imageInputTwo
+    imageInputTwo,
+    unitsInput.value
   ));
   row.appendChild(saveButton);
 
@@ -3271,7 +3276,7 @@ function showReceivePrompt(card, itemId) {
   locationInput.focus();
 }
 
-async function receiveOrderedItem(itemId, receivedDate, receivedLocation, receivedTime = "", receivedNotes = "", firstImageInput = null, secondImageInput = null) {
+async function receiveOrderedItem(itemId, receivedDate, receivedLocation, receivedTime = "", receivedNotes = "", firstImageInput = null, secondImageInput = null, unitsPerPackage = "") {
   if (!receivedDate || !receivedLocation.trim()) {
     alert("Received date and location are required");
     return;
@@ -3294,6 +3299,7 @@ async function receiveOrderedItem(itemId, receivedDate, receivedLocation, receiv
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      units_per_package: unitsPerPackage === "" ? null : Number(unitsPerPackage),
       received_date: receivedDate,
       received_location: receivedLocation,
       received_time: receivedTime.trim(),
@@ -3420,7 +3426,7 @@ function renderReceivedDeliveryGroups(container, items) {
       const itemButton = document.createElement("button");
       itemButton.type = "button";
       itemButton.className = "ordered-received-item-button";
-      itemButton.textContent = item.item_name || "Received item";
+      itemButton.textContent = item.standard_item_name || item.item_name || "Received item";
       itemButton.addEventListener("click", () => openReceivedDayFocusWindow(group.date, group.items));
       row.appendChild(itemButton);
       itemList.appendChild(row);

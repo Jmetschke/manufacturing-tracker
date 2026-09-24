@@ -2558,6 +2558,11 @@
 </section>
 
 <section id="orderedPanel" class="admin-panel">
+  <details id="inventoryMappingPanel"><summary>Equipment and Ingredient Inventory — Item Mapping</summary>
+    <p>Map vendor descriptions to standard inventory names. Original order descriptions are preserved.</p>
+    <button type="button" onclick="EquipmentInventory.loadMappings()">Refresh mappings</button>
+    <div id="inventoryMappingContent"></div>
+  </details>
   <div class="ordered-workspace">
     <div class="ordered-status-grid">
       <section class="ordered-section ordered-expected-list">
@@ -2810,6 +2815,8 @@
 <script src="employees.js"></script>
 <section id="storagePanel" class="admin-panel"><h2>Storage Locations</h2><p>Items placed in each location from received deliveries and manual entries.</p><button type="button" onclick="StorageLocations.addLocation()">Add location</button><button type="button" onclick="StorageLocations.load()">Refresh</button><p id="storageStatus" role="status"></p><div id="storageCards"></div></section>
 <link rel="stylesheet" href="storage-locations.css">
+<link rel="stylesheet" href="equipment-inventory.css">
+<script src="equipment-inventory.js"></script>
 <script src="storage-locations.js"></script>
 <script src="dispensary-locations.js"></script>
 <script src="pwa-install.js"></script>

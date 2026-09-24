@@ -1511,7 +1511,7 @@ function appendAdminExpectedDeliveries(container, deliveries) {
     group.forEach(delivery => {
       const item = document.createElement("div");
       item.className = "admin-calendar-delivery";
-      item.textContent = `${delivery.item_name} - QTY ${delivery.package_qty}`;
+      item.textContent = `${delivery.standard_item_name || delivery.item_name} - QTY ${delivery.package_qty}`;
       section.appendChild(item);
     });
   });
@@ -2361,7 +2361,7 @@ function renderAdminFocusedDay(isoDate, payload, projectedTasks, projectedProces
   section("Kitchen Tasks", block => appendTaskFocusDetails(block, projectedTasks, "No kitchen tasks scheduled."), "focus-kitchen");
 
   section("Deliveries", block => appendFocusLines(block, deliveries, delivery =>
-    `${delivery.calendar_delivery_status}: ${delivery.item_name} - QTY ${delivery.package_qty || ""}`.trim(),
+    `${delivery.calendar_delivery_status}: ${delivery.standard_item_name || delivery.item_name} - QTY ${delivery.package_qty || ""}`.trim(),
   "No deliveries."), "focus-deliveries");
 
   section("Test Pick Ups", block => appendFocusLines(block, payload.testPickups, pickup =>
@@ -6012,11 +6012,13 @@ function createAdminOrderedReviewCard(item, state) {
 
   const title = document.createElement("div");
   title.className = "ordered-review-title";
-  title.textContent = item.item_name;
+  title.textContent = item.standard_item_name || item.item_name;
   body.appendChild(title);
 
   const meta = document.createElement("div");
   meta.className = "ordered-review-meta";
+  appendOrderedReviewMeta(meta, "Original description", item.original_description || item.item_name);
+  appendOrderedReviewMeta(meta, "Inventory mapping", item.standard_item_name || "Unmapped");
   appendOrderedReviewMeta(meta, "Ordered", item.date_ordered);
   appendOrderedReviewMeta(meta, "Expected", item.expected_delivery_date);
   appendOrderedReviewMeta(meta, "QTY", item.package_qty);
@@ -6384,6 +6386,8 @@ function showAdminReceiveForm(itemId, cell, checkbox) {
   });
   form.appendChild(createOrderField("Time", receivedTime));
 
+  const unitsInput = EquipmentInventory.unitsInput(allOrderedItems.find(item => item.id === itemId)?.units_per_package);
+  form.appendChild(createOrderField("Items per package (optional)", unitsInput));
   const location = StorageLocations.createSelect();
   form.appendChild(createOrderField("Location", location));
 
@@ -6415,6 +6419,7 @@ function showAdminReceiveForm(itemId, cell, checkbox) {
     saveButton.disabled = true;
     try {
       await saveAdminReceivedItem(itemId, {
+        units_per_package: unitsInput.value === "" ? null : Number(unitsInput.value),
         received_date: receivedDate.value,
         received_time: receivedTime.value,
         received_location: location.value,
@@ -6561,7 +6566,7 @@ function renderReceivedDeliveriesTable() {
       const itemButton = document.createElement("button");
       itemButton.type = "button";
       itemButton.className = "ordered-received-item-button";
-      itemButton.textContent = item.item_name || "Received item";
+      itemButton.textContent = item.standard_item_name || item.item_name || "Received item";
       itemButton.addEventListener("click", () => openAdminReceivedDayFocusWindow(group.date, group.items));
       row.appendChild(itemButton);
       itemList.appendChild(row);

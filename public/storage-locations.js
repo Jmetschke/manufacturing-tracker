@@ -34,7 +34,8 @@ const StorageLocations = (() => {
     return select;
   }
   async function refresh() {
-    locations = await request('/storage-locations');
+    const results = await Promise.all([request('/storage-locations'), EquipmentInventory.refresh()]);
+    locations = results[0];
     document.querySelectorAll('[data-storage-location]').forEach(populate);
   }
   async function addLocation() {
@@ -100,8 +101,34 @@ const StorageLocations = (() => {
       const list = element('ul');
       location.items.forEach(item => {
         const row = element('li');
-        row.append(element('strong', item.item_name), element('div', `${item.quantity ?? '—'} ${item.unit} · ${item.source === 'delivery' ? 'Received' : 'Manually placed'} ${item.placed_at || ''}`));
+        row.append(element('strong', item.standard_item_name || item.item_name), element('div', `${item.quantity ?? '—'} ${item.unit} · ${item.source === 'delivery' ? 'Received' : 'Manually placed'} ${item.placed_at || ''}`));
+        if (item.original_description) row.append(element('p', `Original description: ${item.original_description}`));
+        const packageQuantity = item.source === 'delivery' || /^(packages?|boxes|box|cases?|packs?)$/i.test(item.unit);
+        row.append(element('p', item.units_per_package == null ? 'Items per package: not specified' : `Items per package: ${item.units_per_package}${packageQuantity ? ` · Total items: ${item.quantity * item.units_per_package}` : ''}`));
         if (item.notes) row.append(element('p', item.notes));
+        const inventoryEdit = element('details');
+        inventoryEdit.className = 'storage-inventory-editor';
+        inventoryEdit.append(element('summary', 'Edit room inventory'));
+        const inventoryForm = element('form');
+        const quantityLabel = element('label', `Current quantity (${item.unit})`);
+        const quantityInput = element('input'); quantityInput.type = 'number'; quantityInput.min = '0'; quantityInput.step = 'any'; quantityInput.required = true; quantityInput.value = item.quantity;
+        quantityLabel.append(quantityInput);
+        const unitsLabel = element('label', 'Items per package (optional)');
+        const unitsInput = EquipmentInventory.unitsInput(item.units_per_package); unitsLabel.append(unitsInput);
+        inventoryForm.append(quantityLabel, unitsLabel);
+        const standardSelect = EquipmentInventory.picker(item.standard_item_id);
+        if (item.source === 'manual') inventoryForm.append(standardSelect, EquipmentInventory.createButton(standardSelect));
+        const inventorySave = element('button', 'Save inventory'); inventorySave.type = 'submit';
+        const inventoryStatus = element('p'); inventoryStatus.setAttribute('role', 'status');
+        inventoryForm.append(inventorySave, inventoryStatus);
+        inventoryForm.addEventListener('submit', async event => {
+          event.preventDefault(); inventorySave.disabled = true; inventoryStatus.textContent = 'Saving…';
+          try {
+            await request(`/storage-items/${item.source}/${item.id}/inventory`, { quantity: Number(quantityInput.value), units_per_package: unitsInput.value === '' ? null : Number(unitsInput.value), standard_item_id: standardSelect.value ? Number(standardSelect.value) : null });
+            await refresh(); render();
+          } catch (err) { inventoryStatus.textContent = err.message; inventorySave.disabled = false; }
+        });
+        inventoryEdit.append(inventoryForm); row.append(inventoryEdit);
         const actions = element('div');
         actions.className = 'storage-actions';
         const destination = destinationSelect(location, `Move ${item.item_name} to`);
@@ -126,6 +153,10 @@ const StorageLocations = (() => {
       details.append(element('summary', 'Add item to this location'));
       const form = element('form');
       const inputs = {};
+      const standard = EquipmentInventory.picker();
+      standard.addEventListener('change', () => { if (standard.value) inputs.item_name.value = standard.selectedOptions[0].textContent; });
+      form.append(element('label', 'Equipment and Ingredient Inventory item'), standard,
+        EquipmentInventory.createButton(standard, item => { inputs.item_name.value = item.name; }));
       [['item_name', 'Item name', 'text'], ['quantity', 'Quantity', 'number'], ['unit', 'Unit (e.g. boxes, units, lbs)', 'text'], ['notes', 'Notes (optional)', 'text']].forEach(([key, label, type]) => {
         const wrapper = element('label', label);
         const input = element('input');
@@ -137,6 +168,8 @@ const StorageLocations = (() => {
         wrapper.append(input);
         form.append(wrapper);
       });
+      const unitsLabel = element('label', 'Items per package (optional)');
+      const unitsInput = EquipmentInventory.unitsInput(); unitsLabel.append(unitsInput); form.append(unitsLabel);
       const save = element('button', 'Add item');
       save.type = 'submit';
       const status = element('p');
@@ -146,7 +179,7 @@ const StorageLocations = (() => {
         event.preventDefault();
         save.disabled = true;
         try {
-          await request('/storage-items', { location_id: location.id, item_name: inputs.item_name.value, quantity: Number(inputs.quantity.value), unit: inputs.unit.value, notes: inputs.notes.value });
+          await request('/storage-items', { standard_item_id: standard.value ? Number(standard.value) : null, units_per_package: unitsInput.value === '' ? null : Number(unitsInput.value), location_id: location.id, item_name: inputs.item_name.value, quantity: Number(inputs.quantity.value), unit: inputs.unit.value, notes: inputs.notes.value });
           await load();
         } catch (error) { status.textContent = error.message; }
         finally { save.disabled = false; }

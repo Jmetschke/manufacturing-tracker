@@ -16,6 +16,7 @@ const { createCalendarStore, revision: calendarRevision } = require("./server/ca
 const { completeBatch } = require("./server/complete-batch");
 const calendarStore = createCalendarStore({ database: calendarDb,
   mirrorDatabase: hasSeparateCalendarDb ? db : null, getSql, runSql });
+const inventory = require("./server/equipment-inventory")({ runSql, allSql, getSql, addMissingColumn, withTransaction });
 const app = express();
 
 app.use(express.json({ limit: "14mb" }));
@@ -2113,6 +2114,7 @@ async function initializeDatabase() {
   await runSql(`CREATE TABLE IF NOT EXISTS storage_delivery_placements (
     ordered_item_id INTEGER PRIMARY KEY, location_id INTEGER
   )`);
+  await inventory.initialize();
   for (const name of ["Production Storage", "Kitchen Storage", "Garage Storage", "Fire Ally", "SB/Vape Area", "Topicals Storage", "Fire Cabinet", "Upper Deck", "Vault"]) {
     await runSql("INSERT OR IGNORE INTO storage_locations (name) VALUES (?)", [name]);
   }
@@ -3431,6 +3433,7 @@ app.put("/schedule/task-completion", async (req, res) => {
 function orderedItemsSelect(whereClause = "") {
   return `
     SELECT
+      ${inventory.orderColumns()},
       id,
       date_ordered,
       expected_delivery_date,
@@ -4829,6 +4832,10 @@ app.put("/ordered-items/:id/receive", (req, res) => {
   const receivedTime = normalizeRequiredText(req.body.received_time);
   const receivedLocation = normalizeRequiredText(req.body.received_location);
   const receivedNotes = normalizeOptionalText(req.body.received_notes);
+  let unitsPerPackage;
+  try { unitsPerPackage = inventory.count(req.body.units_per_package, true); }
+  catch (err) { return res.status(400).send(err.message); }
+  const hasUnits = Object.prototype.hasOwnProperty.call(req.body, "units_per_package");
   let receivedImages;
 
   try {
@@ -4851,7 +4858,8 @@ app.put("/ordered-items/:id/receive", (req, res) => {
 
   db.run(
     `UPDATE ordered_items
-     SET received_date = ?,
+     SET units_per_package = CASE WHEN ? THEN ? ELSE units_per_package END,
+         received_date = ?,
          received_time = ?,
          received_location = ?,
          received_notes = ?,
@@ -4860,7 +4868,7 @@ app.put("/ordered-items/:id/receive", (req, res) => {
          import_needs_delivery_date = 0,
          updated_at = datetime('now')
      WHERE id = ?`,
-    [receivedDate, receivedTime || null, receivedLocation, receivedNotes || null, receivedImages[0], receivedImages[1], req.params.id],
+    [hasUnits ? 1 : 0, unitsPerPackage, receivedDate, receivedTime || null, receivedLocation, receivedNotes || null, receivedImages[0], receivedImages[1], req.params.id],
     function (err) {
       if (err) return res.status(500).send(err.message);
       if (this.changes === 0) return res.status(404).send("Ordered item not found");
@@ -5611,6 +5619,8 @@ app.get("/report", (req, res) => {
   });
 });
 
+inventory.register(app);
+
 // Shared storage endpoints are available to signed-in users and administrators.
 app.get("/storage-locations", async (req, res) => {
   try {
@@ -5619,11 +5629,18 @@ app.get("/storage-locations", async (req, res) => {
       WHERE received_date IS NOT NULL AND trim(coalesce(received_location, '')) <> ''`);
     const locations = await allSql("SELECT * FROM storage_locations WHERE deleted = 0 ORDER BY id");
     const items = await allSql(`SELECT s.id, s.location_id, s.item_name, s.quantity, s.unit,
-      s.notes, s.placed_at, 'manual' AS source FROM storage_items s
+      s.notes, s.placed_at, 'manual' AS source, s.units_per_package, s.standard_item_id,
+      standard.name AS standard_item_name, s.item_name AS original_description
+      FROM storage_items s LEFT JOIN standard_items standard ON standard.id = s.standard_item_id
       UNION ALL
-      SELECT o.id, l.id, o.item_name, o.package_qty, 'packages',
-      o.received_notes, o.received_date, 'delivery' FROM ordered_items o
+      SELECT o.id, l.id, o.item_name, coalesce(q.quantity, o.package_qty), 'packages',
+      o.received_notes, o.received_date, 'delivery',
+      CASE WHEN q.ordered_item_id IS NOT NULL THEN q.units_per_package ELSE o.units_per_package END,
+      a.standard_item_id, standard.name, o.original_description FROM ordered_items o
       LEFT JOIN storage_delivery_placements p ON p.ordered_item_id = o.id
+      LEFT JOIN storage_delivery_quantities q ON q.ordered_item_id = o.id
+      LEFT JOIN item_aliases a ON a.vendor_key = lower(trim(o.original_supplier)) AND a.description_key = lower(trim(o.original_description))
+      LEFT JOIN standard_items standard ON standard.id = a.standard_item_id
       JOIN storage_locations l ON (CASE WHEN p.ordered_item_id IS NOT NULL
         THEN l.id = p.location_id ELSE l.name = trim(o.received_location) COLLATE NOCASE END)
       WHERE o.received_date IS NOT NULL AND l.deleted = 0 ORDER BY placed_at DESC`);
@@ -5642,6 +5659,10 @@ app.post("/storage-locations", async (req, res) => {
 });
 app.post("/storage-items", async (req, res) => {
   const { location_id, quantity } = req.body;
+  let unitsPerPackage;
+  try { unitsPerPackage = inventory.count(req.body.units_per_package, true); }
+  catch (err) { return res.status(400).json({ message: err.message }); }
+  const standardId = req.body.standard_item_id || null;
   const itemName = typeof req.body.item_name === "string" ? req.body.item_name.trim() : "";
   const unit = typeof req.body.unit === "string" ? req.body.unit.trim() : "";
   const notes = typeof req.body.notes === "string" ? req.body.notes.trim() : "";
@@ -5650,10 +5671,13 @@ app.post("/storage-items", async (req, res) => {
     return res.status(400).json({ message: "Choose a location and enter an item, positive quantity, and unit" });
   }
   try {
+    if (standardId !== null && (!Number.isSafeInteger(standardId) || !await getSql("SELECT id FROM standard_items WHERE id = ?", [standardId]))) {
+      return res.status(400).json({ message: "Choose a valid standard item" });
+    }
     const locations = await allSql("SELECT id FROM storage_locations WHERE id = ? AND deleted = 0", [location_id]);
     if (!locations.length) return res.status(400).json({ message: "Location does not exist" });
-    await runSql("INSERT INTO storage_items (location_id, item_name, quantity, unit, notes) VALUES (?, ?, ?, ?, ?)",
-      [location_id, itemName, quantity, unit, notes]);
+    await runSql("INSERT INTO storage_items (location_id, item_name, quantity, unit, notes, standard_item_id, units_per_package) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [location_id, itemName, quantity, unit, notes, standardId, unitsPerPackage]);
     res.status(201).json({ message: "Item added" });
   } catch (err) { res.status(500).json({ message: "Unable to add item" }); }
 });
