@@ -2115,6 +2115,7 @@ async function initializeDatabase() {
   await runSql(`CREATE TABLE IF NOT EXISTS storage_delivery_placements (
     ordered_item_id INTEGER PRIMARY KEY, location_id INTEGER
   )`);
+  await require("./server/reset-active-skus")({ runSql, getSql, withTransaction });
   await inventory.initialize();
   for (const name of ["Production Storage", "Kitchen Storage", "Garage Storage", "Fire Ally", "SB/Vape Area", "Topicals Storage", "Fire Cabinet", "Upper Deck", "Vault"]) {
     await runSql("INSERT OR IGNORE INTO storage_locations (name) VALUES (?)", [name]);

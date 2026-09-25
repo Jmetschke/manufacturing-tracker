@@ -6,7 +6,6 @@
   <!-- PWA install metadata for internal home-screen use on iOS and Android. -->
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/active-skus.css">
   <meta name="theme-color" content="#2364aa">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Tracker">
@@ -2351,35 +2350,8 @@
 </section>
 
 <section id="activeSkusTab" class="tab-panel">
-  <div class="active-skus-shell" data-active-skus-root>
-    <section class="active-sku-import">
-      <div class="active-sku-import-heading"><h3>Active SKU Report</h3><button type="button" onclick="ActiveSkus.load()">Refresh</button></div>
-      <p class="active-sku-import-note">Upload the Metrc Active Packages report, then choose the production rooms to include.</p>
-      <div class="active-sku-import-actions">
-        <input type="file" data-active-sku-file accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
-        <button type="button" data-active-sku-preview>Check Report</button>
-        <button type="button" data-active-sku-apply hidden>Import Selected Rooms</button>
-      </div>
-      <div class="active-sku-room-picker" data-active-sku-rooms></div>
-      <div class="active-sku-status" data-active-sku-status></div>
-    </section>
-    <div class="active-sku-summary" data-active-sku-summary></div>
-    <div class="active-sku-item-filter">
-      <label>Filter Items
-        <input type="search" data-active-sku-item-search placeholder="Search item name, Metrc name, or SKU #">
-      </label>
-      <span data-active-sku-item-count></span>
-    </div>
-    <div class="active-sku-grid" data-active-sku-grid></div>
-    <section class="deleted-sku-history">
-      <div class="deleted-sku-heading">
-        <div><h3>Deleted SKUs</h3><p>SKUs removed by a newer Active Packages import.</p></div>
-        <span class="active-sku-count" data-deleted-sku-count></span>
-      </div>
-      <input type="search" data-deleted-sku-search placeholder="Search SKU #, item name, or Metrc name" aria-label="Search deleted SKUs">
-      <div class="deleted-sku-scroll" data-deleted-sku-list></div>
-    </section>
-  </div>
+  <h2>Active SKUs</h2>
+  <p>This tab has been cleared and is ready to rebuild.</p>
 </section>
 
 <section id="orderedTab" class="tab-panel">
@@ -2618,7 +2590,6 @@
 <script src="dispensary-locations.js"></script>
 <script src="pwa-install.js"></script>
 <script src="alerts.js"></script>
-<script src="active-skus.js"></script>
 <script src="daily-batch-completion.js"></script>
 <script src="app.js"></script>
 

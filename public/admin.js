@@ -2525,9 +2525,6 @@ function showAdminTab(tabName) {
     loadOrderedAdminData();
   }
 
-  if (tabName === "activeSkus") {
-    ActiveSkus.load();
-  }
 }
 
 async function loadReport() {

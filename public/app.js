@@ -2030,9 +2030,6 @@ function showTab(tabName) {
     loadOrderedTab();
   }
 
-  if (tabName === "activeSkus") {
-    ActiveSkus.load();
-  }
 
 }
 
