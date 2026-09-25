@@ -4487,12 +4487,12 @@ app.post(["/admin/ordered-items", "/ordered-items"], async (req, res) => {
       return insertedIds;
     });
 
-    await Promise.all(ids.map(id => Promise.all([
-      createDeliveryAddedAlert(id),
-      createDeliveryScheduledAlert(id)
-    ]).catch(alertErr => console.error("Could not create ordered delivery alerts:", alertErr.message))));
-
     res.status(201).json({ message: "Ordered delivery added", ids });
+    // The order is committed. Notification delivery must not hold up its save response.
+    Promise.all(ids.map(id => Promise.all([
+      createDeliveryAddedAlert(id), createDeliveryScheduledAlert(id)
+    ]))).catch(err => console.error("Could not create ordered delivery alerts:", err.message));
+
   } catch (err) {
     res.status(500).send(err.message);
   }
@@ -4746,92 +4746,48 @@ app.post("/admin/production-needs/import-pdf", express.raw({ type: "application/
   }
 });
 
-app.post("/ordered-items/received", (req, res) => {
+app.post("/ordered-items/received", async (req, res) => {
   const dateOrdered = normalizeRequiredText(req.body.date_ordered);
   const expectedDeliveryDate = normalizeRequiredText(req.body.expected_delivery_date);
-  const itemName = normalizeRequiredText(req.body.item_name);
-  const itemCompany = normalizeRequiredText(req.body.item_company) || "Manual Received Entry";
-  const itemSupplier = normalizeRequiredText(req.body.item_supplier);
-  const department = normalizeRequiredText(req.body.department);
   const receivedDate = normalizeRequiredText(req.body.received_date);
   const receivedTime = normalizeRequiredText(req.body.received_time);
+  const itemSupplier = normalizeRequiredText(req.body.item_supplier);
+  const department = normalizeRequiredText(req.body.department);
   const receivedLocation = normalizeRequiredText(req.body.received_location);
-  const receivedNotes = normalizeOptionalText(req.body.received_notes);
-  const packageQty = Number(req.body.package_qty);
-  const unitsPerPackageRaw = normalizeRequiredText(req.body.units_per_package);
-  const unitsPerPackage = unitsPerPackageRaw ? Number(unitsPerPackageRaw) : null;
-  let receivedImages;
-
+  if (!isIsoDate(dateOrdered) || !isIsoDate(expectedDeliveryDate) || !isIsoDate(receivedDate)) return res.status(400).send("Valid ordered, expected delivery, and received dates are required");
+  if (receivedTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(receivedTime)) return res.status(400).send("Received time must use HH:MM format");
+  if (!itemSupplier || !department || !receivedLocation) return res.status(400).send("Supplier, department, and received location are required");
+  let images, items;
   try {
-    receivedImages = normalizeOrderedItemImages(req.body);
-  } catch (err) {
-    return res.status(err.statusCode || 400).send(err.message);
-  }
-
-  if (!isIsoDate(dateOrdered) || !isIsoDate(expectedDeliveryDate) || !isIsoDate(receivedDate)) {
-    return res.status(400).send("Valid ordered, expected delivery, and received dates are required");
-  }
-
-  if (receivedTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(receivedTime)) {
-    return res.status(400).send("Received time must use HH:MM format");
-  }
-
-  if (!itemName || !itemSupplier || !department || !receivedLocation) {
-    return res.status(400).send("Item name, supplier, department, and received location are required");
-  }
-
-  if (!Number.isInteger(packageQty) || packageQty < 0) {
-    return res.status(400).send("Package QTY must be a whole number zero or greater");
-  }
-
-  if (unitsPerPackage !== null && (!Number.isInteger(unitsPerPackage) || unitsPerPackage < 0)) {
-    return res.status(400).send("Units per package must be a whole number zero or greater");
-  }
-
-  db.run(
-    `INSERT INTO ordered_items (
-       date_ordered,
-       expected_delivery_date,
-       item_name,
-       item_company,
-       package_qty,
-       units_per_package,
-       item_supplier,
-       department,
-       requested_by,
-       received_date,
-       received_by,
-       received_time,
-       received_location,
-       received_notes,
-       received_image_1,
-       received_image_2,
-       updated_at
-     )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-    [
-      dateOrdered,
-      expectedDeliveryDate,
-      itemName,
-      itemCompany,
-      packageQty,
-      unitsPerPackage,
-      itemSupplier,
-      department,
-      itemCompany,
-      receivedDate,
-      normalizeOptionalText(req.body.received_by, 200) || null,
-      receivedTime || null,
-      receivedLocation,
-      receivedNotes || null,
-      receivedImages[0],
-      receivedImages[1]
-    ],
-    function (err) {
-      if (err) return res.status(500).send(err.message);
-      res.status(201).json({ message: "Received item added", id: this.lastID });
-    }
-  );
+    images = normalizeOrderedItemImages(req.body);
+    const rawItems = Array.isArray(req.body.items) ? req.body.items : [req.body];
+    if (!rawItems.length || rawItems.length > 200) throw new Error("Enter between 1 and 200 items");
+    items = rawItems.map(item => {
+      if (!item || !normalizeRequiredText(item.item_name)) throw new Error("Every item needs a description");
+      const quantity = Number(item.package_qty);
+      if (item.package_qty === '' || item.package_qty == null || !Number.isInteger(quantity) || quantity < 0) throw new Error("Every item needs a whole-number package quantity of zero or greater");
+      return { name: normalizeRequiredText(item.item_name), quantity, units: inventory.count(item.units_per_package, true) };
+    });
+  } catch (err) { return res.status(400).send(err.message); }
+  try {
+    const company = normalizeRequiredText(req.body.item_company) || "Manual Received Entry";
+    const ids = await withTransaction(async transaction => {
+      const ids = [];
+      for (const item of items) {
+        const result = await runSql(`INSERT INTO ordered_items (
+          date_ordered, expected_delivery_date, item_name, item_company, package_qty, units_per_package,
+          item_supplier, department, requested_by, received_date, received_by, received_time,
+          received_location, received_notes, received_image_1, received_image_2, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+        [dateOrdered, expectedDeliveryDate, item.name, company, item.quantity, item.units,
+          itemSupplier, department, company, receivedDate, normalizeOptionalText(req.body.received_by, 200) || null,
+          receivedTime || null, receivedLocation, normalizeOptionalText(req.body.received_notes) || null, images[0], images[1]], transaction);
+        ids.push(result.lastID);
+      }
+      return ids;
+    });
+    res.status(201).json({ message: "Received items added", id: ids[0], ids });
+  } catch (err) { res.status(500).send(err.message); }
 });
 
 app.put("/ordered-items/:id/receive", (req, res) => {

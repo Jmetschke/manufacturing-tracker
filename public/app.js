@@ -2643,7 +2643,9 @@ function setupTimeInput(id) {
   });
 }
 
-function resetManualReceivedForm() {
+function resetManualReceivedForm(force = false) {
+  if (!force && !document.getElementById("manualReceivedWindow").hidden) return;
+  ManualReceivedEntry.reset("manual_received");
   const dateOrdered = document.getElementById("manual_received_date_ordered");
   if (!dateOrdered) return;
 
@@ -2772,6 +2774,7 @@ function openManualReceivedWindow() {
   const modal = document.getElementById("manualReceivedWindow");
   if (!modal) return;
 
+  ManualReceivedEntry.prepare("manual_received", modal);
   modal.hidden = false;
   document.body.style.overflow = "hidden";
   const firstField = document.getElementById("manual_received_item_name");
@@ -2838,56 +2841,7 @@ async function saveOrderRequest() {
 }
 
 async function saveManualReceivedItem() {
-  const receivedTime = document.getElementById("manual_received_time").value.trim();
-  if (receivedTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(receivedTime)) {
-    alert("Received time must use HH:MM format");
-    return;
-  }
-
-  let receivedImages;
-  try {
-    receivedImages = await getOrderedReceiveImagesFromInputs(
-      document.getElementById("manual_received_image_1"),
-      document.getElementById("manual_received_image_2")
-    );
-  } catch (err) {
-    alert(err.message);
-    return;
-  }
-
-  const payload = {
-    date_ordered: document.getElementById("manual_received_date_ordered").value,
-    expected_delivery_date: document.getElementById("manual_received_expected_delivery_date").value,
-    item_name: document.getElementById("manual_received_item_name").value,
-    package_qty: document.getElementById("manual_received_package_qty").value,
-    units_per_package: document.getElementById("manual_received_units_per_package").value,
-    item_supplier: document.getElementById("manual_received_item_supplier").value,
-    department: document.getElementById("manual_received_department").value,
-    received_date: document.getElementById("manual_received_date").value,
-    received_time: receivedTime,
-    received_location: document.getElementById("manual_received_location").value,
-    received_by: document.getElementById("manual_received_by").value,
-    received_notes: document.getElementById("manual_received_notes").value,
-    ...receivedImages
-  };
-
-  const res = await fetch("/ordered-items/received", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    alert("Received item save failed: " + text);
-    return;
-  }
-
-  resetManualReceivedForm();
-  closeManualReceivedWindow();
-  await loadOrderedItems();
-  window.productionTrackerAlerts?.load();
-  alert("Received item added");
+  return ManualReceivedEntry.save(false);
 }
 
 async function importMainOrderedPdf() {

@@ -5437,7 +5437,10 @@ function getScheduleTaskValues(selector) {
     .filter(task => task.text);
 }
 
-function resetOrderedForm() {
+function resetOrderedForm(force = false) {
+  const card = document.querySelector(".ordered-add-action");
+  if (!force && card?.dataset.draftActive === "true") return;
+  if (card) card.dataset.draftActive = "false";
   document.getElementById("ordered_date_ordered").value = toIsoDate(new Date());
   document.getElementById("ordered_expected_delivery_date").value = "";
   document.getElementById("ordered_item_supplier").value = "";
@@ -5543,7 +5546,9 @@ function setupAdminTimeInput(id) {
   });
 }
 
-function resetAdminManualReceivedForm() {
+function resetAdminManualReceivedForm(force = false) {
+  if (!force && !document.getElementById("adminManualReceivedWindow").hidden) return;
+  ManualReceivedEntry.reset("admin_manual_received");
   const dateOrdered = document.getElementById("admin_manual_received_date_ordered");
   if (!dateOrdered) return;
 
@@ -5672,6 +5677,7 @@ function openAdminManualReceivedWindow() {
   const modal = document.getElementById("adminManualReceivedWindow");
   if (!modal) return;
 
+  ManualReceivedEntry.prepare("admin_manual_received", modal);
   modal.hidden = false;
   document.body.style.overflow = "hidden";
   const firstField = document.getElementById("admin_manual_received_item_name");
@@ -5775,56 +5781,7 @@ async function saveAdminOrderRequest() {
 }
 
 async function saveAdminManualReceivedItem() {
-  const receivedTime = document.getElementById("admin_manual_received_time").value.trim();
-  if (receivedTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(receivedTime)) {
-    showMessage("Received time must use HH:MM format.", "error");
-    return;
-  }
-
-  let receivedImages;
-  try {
-    receivedImages = await getAdminOrderedReceiveImagesFromInputs(
-      document.getElementById("admin_manual_received_image_1"),
-      document.getElementById("admin_manual_received_image_2")
-    );
-  } catch (err) {
-    showMessage(err.message, "error");
-    return;
-  }
-
-  const payload = {
-    date_ordered: document.getElementById("admin_manual_received_date_ordered").value,
-    expected_delivery_date: document.getElementById("admin_manual_received_expected_delivery_date").value,
-    item_name: document.getElementById("admin_manual_received_item_name").value,
-    package_qty: document.getElementById("admin_manual_received_package_qty").value,
-    units_per_package: document.getElementById("admin_manual_received_units_per_package").value,
-    item_supplier: document.getElementById("admin_manual_received_item_supplier").value,
-    department: document.getElementById("admin_manual_received_department").value,
-    received_date: document.getElementById("admin_manual_received_date").value,
-    received_time: receivedTime,
-    received_location: document.getElementById("admin_manual_received_location").value,
-    received_by: document.getElementById("admin_manual_received_by").value,
-    received_notes: document.getElementById("admin_manual_received_notes").value,
-    ...receivedImages
-  };
-
-  const res = await adminFetch("/ordered-items/received", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    showMessage("Received item save failed: " + text, "error");
-    return;
-  }
-
-  resetAdminManualReceivedForm();
-  closeAdminManualReceivedWindow();
-  showMessage("Received item added.", "success");
-  await loadOrderedItems();
-  window.productionTrackerAlerts?.load();
+  return ManualReceivedEntry.save(true);
 }
 
 function renderAdminOrderRequests() {
@@ -6663,6 +6620,8 @@ async function undoAdminReceivedItem(itemId) {
 }
 
 async function saveOrderedItem() {
+  const saveControl = document.querySelector(".ordered-add-action .ordered-actions button");
+  if (saveControl?.disabled) return;
   const items = getOrderedItemRows();
   const payload = {
     date_ordered: document.getElementById("ordered_date_ordered").value,
@@ -6682,6 +6641,11 @@ async function saveOrderedItem() {
   if (saveButton) saveButton.disabled = true;
   setOrderedAddStatus("Saving ordered delivery...");
 
+  let saved = false;
+  const controls = Array.from(document.querySelectorAll(".ordered-add-action input, .ordered-add-action button"))
+    .map(control => ({ control, disabled: control.disabled }));
+  controls.forEach(({control}) => { control.disabled = true; });
+  if (saveButton) saveButton.textContent = "Saving…";
   try {
     const res = await adminFetch("/admin/ordered-items", {
       method: "POST",
@@ -6697,18 +6661,20 @@ async function saveOrderedItem() {
       return;
     }
 
-    resetOrderedForm();
+    saved = true;
+    resetOrderedForm(true);
     showMessage("Ordered delivery added.", "success");
     setOrderedAddStatus("Ordered delivery added.", "success");
     await loadOrderedItems();
     await loadAdminCalendar();
     window.productionTrackerAlerts?.load();
   } catch (err) {
-    const message = "Ordered delivery save failed: " + err.message;
+    const message = saved ? "Items were saved, but the list could not refresh. Refresh Ordered Items before adding anything again." : "Ordered delivery save failed: " + err.message;
     setOrderedAddStatus(message, "error");
     showMessage(message, "error");
   } finally {
-    if (saveButton) saveButton.disabled = false;
+    controls.forEach(({control, disabled}) => { control.disabled = disabled; });
+    if (saveButton) { saveButton.disabled = false; saveButton.textContent = "Add Ordered Delivery"; }
   }
 }
 

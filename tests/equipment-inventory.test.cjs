@@ -16,7 +16,7 @@ async function setup() {
     INSERT INTO storage_locations VALUES(1,'Room A',0),(2,'Room B',0);
     INSERT INTO ordered_items(item_name,item_supplier,package_qty) VALUES('Existing description','Old vendor',2);
     INSERT INTO storage_items(location_id,item_name,quantity,unit) VALUES(1,'Legacy manual',3,'boxes');`);
-  const runSql = async (sql, args = []) => database.prepare(sql).run(...args);
+  const runSql = async (sql, args = []) => { const result = database.prepare(sql).run(...args); return { ...result, lastID: Number(result.lastInsertRowid) }; };
   const allSql = async (sql, args = []) => database.prepare(sql).all(...args);
   const getSql = async (sql, args = []) => database.prepare(sql).get(...args);
   const addMissingColumn = async (table, column, type) => {
@@ -105,5 +105,12 @@ test('import, mapping, receiving and room adjustments preserve source data and q
   assert.equal(db.prepare('SELECT item_name FROM storage_items WHERE id=1').get().item_name,'Legacy manual');
   response=await call('post /ordered-items/received',{date_ordered:'2026-09-25',expected_delivery_date:'2026-09-25',received_date:'2026-09-25',received_location:'Room A',received_by:'Alex',item_name:'Manual received',item_supplier:'Supplier',department:'Kitchen',package_qty:1});
   assert.equal(response.status,201);assert.equal(db.prepare('SELECT received_by FROM ordered_items WHERE id=?').get(response.data.id).received_by,'Alex');
+  const countBefore=db.prepare('SELECT count(*) n FROM ordered_items').get().n;
+  const receipt={date_ordered:'2026-09-25',expected_delivery_date:'2026-09-25',received_date:'2026-09-25',received_location:'Room A',received_by:'Alex',item_supplier:'Supplier',department:'Kitchen'};
+  response=await call('post /ordered-items/received',{...receipt,items:[{item_name:'Batch 1',package_qty:2,units_per_package:4},{item_name:'Batch 2',package_qty:3,units_per_package:null}]});
+  assert.equal(response.status,201);assert.equal(response.data.ids.length,2);
+  assert.equal(db.prepare('SELECT count(*) n FROM ordered_items').get().n,countBefore+2);
+  response=await call('post /ordered-items/received',{...receipt,items:[{item_name:'Valid',package_qty:1},{item_name:'Invalid',package_qty:-1}]});
+  assert.equal(response.status,400);assert.equal(db.prepare('SELECT count(*) n FROM ordered_items').get().n,countBefore+2);
   db.close();
 });
