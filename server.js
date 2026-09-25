@@ -2094,6 +2094,7 @@ async function initializeDatabase() {
   await addMissingColumn("ordered_items", "request_id", "INTEGER");
   await addMissingColumn("ordered_items", "requested_by", "TEXT");
   await addMissingColumn("ordered_items", "received_date", "TEXT");
+  await addMissingColumn("ordered_items", "received_by", "TEXT");
   await addMissingColumn("ordered_items", "received_time", "TEXT");
   await addMissingColumn("ordered_items", "received_location", "TEXT");
   await addMissingColumn("ordered_items", "received_notes", "TEXT");
@@ -3446,6 +3447,7 @@ function orderedItemsSelect(whereClause = "") {
       request_id,
       requested_by,
       received_date,
+      received_by,
       received_time,
       received_location,
       received_notes,
@@ -4530,7 +4532,8 @@ app.put("/ordered-items/:id", (req, res) => {
 
   db.run(
     `UPDATE ordered_items
-     SET date_ordered = ?,
+     SET received_by = CASE WHEN ? THEN ? ELSE received_by END,
+         date_ordered = ?,
          expected_delivery_date = ?,
          import_needs_delivery_date = 0,
          item_name = ?,
@@ -4542,6 +4545,8 @@ app.put("/ordered-items/:id", (req, res) => {
          updated_at = datetime('now')
      WHERE id = ?`,
     [
+      Object.prototype.hasOwnProperty.call(req.body, "received_by") ? 1 : 0,
+      normalizeOptionalText(req.body.received_by, 200) || null,
       dateOrdered,
       expectedDeliveryDate,
       itemName,
@@ -4795,6 +4800,7 @@ app.post("/ordered-items/received", (req, res) => {
        department,
        requested_by,
        received_date,
+       received_by,
        received_time,
        received_location,
        received_notes,
@@ -4802,7 +4808,7 @@ app.post("/ordered-items/received", (req, res) => {
        received_image_2,
        updated_at
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
     [
       dateOrdered,
       expectedDeliveryDate,
@@ -4814,6 +4820,7 @@ app.post("/ordered-items/received", (req, res) => {
       department,
       itemCompany,
       receivedDate,
+      normalizeOptionalText(req.body.received_by, 200) || null,
       receivedTime || null,
       receivedLocation,
       receivedNotes || null,
@@ -4859,6 +4866,7 @@ app.put("/ordered-items/:id/receive", (req, res) => {
   db.run(
     `UPDATE ordered_items
      SET units_per_package = CASE WHEN ? THEN ? ELSE units_per_package END,
+         received_by = CASE WHEN ? THEN ? ELSE received_by END,
          received_date = ?,
          received_time = ?,
          received_location = ?,
@@ -4868,7 +4876,7 @@ app.put("/ordered-items/:id/receive", (req, res) => {
          import_needs_delivery_date = 0,
          updated_at = datetime('now')
      WHERE id = ?`,
-    [hasUnits ? 1 : 0, unitsPerPackage, receivedDate, receivedTime || null, receivedLocation, receivedNotes || null, receivedImages[0], receivedImages[1], req.params.id],
+    [hasUnits ? 1 : 0, unitsPerPackage, Object.prototype.hasOwnProperty.call(req.body, "received_by") ? 1 : 0, normalizeOptionalText(req.body.received_by, 200) || null, receivedDate, receivedTime || null, receivedLocation, receivedNotes || null, receivedImages[0], receivedImages[1], req.params.id],
     function (err) {
       if (err) return res.status(500).send(err.message);
       if (this.changes === 0) return res.status(404).send("Ordered item not found");
@@ -4881,6 +4889,7 @@ app.put("/ordered-items/:id/undo-receive", (req, res) => {
   db.run(
     `UPDATE ordered_items
      SET received_date = NULL,
+         received_by = NULL,
          received_time = NULL,
          received_location = NULL,
          received_notes = NULL,

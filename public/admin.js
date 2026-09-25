@@ -5558,6 +5558,7 @@ function resetAdminManualReceivedForm() {
   document.getElementById("admin_manual_received_date").value = today;
   document.getElementById("admin_manual_received_time").value = "";
   document.getElementById("admin_manual_received_location").value = "";
+  document.getElementById("admin_manual_received_by").value = "";
   document.getElementById("admin_manual_received_notes").value = "";
   document.getElementById("admin_manual_received_image_1").value = "";
   document.getElementById("admin_manual_received_image_2").value = "";
@@ -5802,6 +5803,7 @@ async function saveAdminManualReceivedItem() {
     received_date: document.getElementById("admin_manual_received_date").value,
     received_time: receivedTime,
     received_location: document.getElementById("admin_manual_received_location").value,
+    received_by: document.getElementById("admin_manual_received_by").value,
     received_notes: document.getElementById("admin_manual_received_notes").value,
     ...receivedImages
   };
@@ -6028,6 +6030,7 @@ function createAdminOrderedReviewCard(item, state) {
   appendOrderedReviewMeta(meta, "Department", item.department);
   appendOrderedReviewMeta(meta, "Requested By", item.requested_by);
   if (item.received_date) {
+    appendOrderedReviewMeta(meta, "Received by", item.received_by || "Not recorded");
     appendOrderedReviewMeta(meta, "Received", item.received_date);
     appendOrderedReviewMeta(meta, "Time", item.received_time);
     appendOrderedReviewMeta(meta, "Location", item.received_location);
@@ -6092,6 +6095,8 @@ function showAdminOrderedEditForm(card, item) {
   form.appendChild(createAdminOrderedEditField("Supplier", supplier));
   form.appendChild(createAdminOrderedEditField("Department", department));
 
+  const receivedBy = createAdminOrderedEditInput("text", item.received_by || ""); receivedBy.maxLength = 200;
+  if (item.received_date) form.appendChild(createAdminOrderedEditField("Received by", receivedBy));
   const actions = document.createElement("div");
   actions.className = "ordered-edit-actions";
 
@@ -6099,6 +6104,7 @@ function showAdminOrderedEditForm(card, item) {
   saveButton.type = "button";
   saveButton.textContent = "Save Changes";
   saveButton.addEventListener("click", () => saveAdminOrderedItemEdit(item.id, {
+    ...(item.received_date ? { received_by: receivedBy.value } : {}),
     date_ordered: dateOrdered.value,
     expected_delivery_date: expectedDate.value,
     item_name: itemName.value,
@@ -6388,6 +6394,8 @@ function showAdminReceiveForm(itemId, cell, checkbox) {
 
   const unitsInput = EquipmentInventory.unitsInput(allOrderedItems.find(item => item.id === itemId)?.units_per_package);
   form.appendChild(createOrderField("Items per package (optional)", unitsInput));
+  const receivedByInput = document.createElement("input"); receivedByInput.type = "text"; receivedByInput.maxLength = 200; receivedByInput.setAttribute("aria-label", "Received by");
+  form.appendChild(createOrderField("Received by", receivedByInput));
   const location = StorageLocations.createSelect();
   form.appendChild(createOrderField("Location", location));
 
@@ -6420,6 +6428,7 @@ function showAdminReceiveForm(itemId, cell, checkbox) {
     try {
       await saveAdminReceivedItem(itemId, {
         units_per_package: unitsInput.value === "" ? null : Number(unitsInput.value),
+        received_by: receivedByInput.value,
         received_date: receivedDate.value,
         received_time: receivedTime.value,
         received_location: location.value,

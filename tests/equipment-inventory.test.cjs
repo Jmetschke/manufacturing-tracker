@@ -8,7 +8,7 @@ async function setup() {
   const database = new DatabaseSync(':memory:');
   database.exec(`CREATE TABLE ordered_items (id INTEGER PRIMARY KEY AUTOINCREMENT, date_ordered TEXT,
     expected_delivery_date TEXT, item_name TEXT, item_company TEXT, package_qty INTEGER, units_per_package INTEGER,
-    item_supplier TEXT, department TEXT, received_date TEXT, received_time TEXT, received_location TEXT,
+    item_supplier TEXT, department TEXT, requested_by TEXT, received_by TEXT, received_date TEXT, received_time TEXT, received_location TEXT,
     received_notes TEXT, received_image_1 TEXT, received_image_2 TEXT, import_needs_delivery_date INTEGER DEFAULT 0, updated_at TEXT);
     CREATE TABLE storage_locations(id INTEGER PRIMARY KEY, name TEXT UNIQUE COLLATE NOCASE, deleted INTEGER DEFAULT 0);
     CREATE TABLE storage_items(id INTEGER PRIMARY KEY AUTOINCREMENT, location_id INTEGER, item_name TEXT, quantity REAL, unit TEXT, notes TEXT, placed_at TEXT DEFAULT (datetime('now')));
@@ -38,6 +38,7 @@ async function setup() {
   vm.createContext(context);
   vm.runInContext(source.slice(source.indexOf('async function importOrderedItemsPdf('), source.indexOf('app.post("/ordered-items/import-pdf"')), context);
   routes.import = context.importOrderedItemsPdf;
+  vm.runInContext(source.slice(source.indexOf('app.post("/ordered-items/received"'),source.indexOf('app.put("/ordered-items/:id/receive"')),context);
   vm.runInContext(source.slice(source.indexOf('app.put("/ordered-items/:id/receive"'),source.indexOf('app.put("/ordered-items/:id/undo-receive"')),context);
   vm.runInContext(source.slice(source.indexOf('app.get("/storage-locations"'),source.indexOf('// A null delivery placement')),context);
   async function call(route, body={}, params={}) {
@@ -64,7 +65,8 @@ test('import, mapping, receiving and room adjustments preserve source data and q
   db.prepare('INSERT INTO ordered_items(item_name,item_supplier,package_qty) VALUES(?,?,?)').run('Global Chrome Shelf','Global',1);
   await call('post /admin/inventory/mappings',{vendor:'Global',description:'Global Chrome Shelf',standard_item_id:standard.id});
   const id=mapped[0].id;
-  response=await call('put /ordered-items/:id/receive',{received_date:'2026-09-24',received_location:'Room A',units_per_package:4},{id});assert.equal(response.status,200);
+  response=await call('put /ordered-items/:id/receive',{received_date:'2026-09-24',received_location:'Room A',received_by:'Jennifer',units_per_package:4},{id});assert.equal(response.status,200);
+  assert.equal(db.prepare('SELECT received_by FROM ordered_items WHERE id=?').get(id).received_by,'Jennifer');
   let rooms=(await call('get /storage-locations')).data;
   let received=rooms[0].items.find(item=>item.source==='delivery'&&item.id===id);
   assert.equal(received.standard_item_name,'Wire Shelving Unit');assert.equal(received.quantity,5);assert.equal(received.units_per_package,4);
@@ -101,5 +103,7 @@ test('import, mapping, receiving and room adjustments preserve source data and q
   assert.equal(manualView.standard_item_name,'Standard Shelf');assert.equal(manualView.quantity,0);assert.equal(manualView.units_per_package,6);
   assert.throws(()=>db.prepare('UPDATE ordered_items SET original_supplier=? WHERE id=?').run('Changed vendor',id),/cannot be overwritten/);
   assert.equal(db.prepare('SELECT item_name FROM storage_items WHERE id=1').get().item_name,'Legacy manual');
+  response=await call('post /ordered-items/received',{date_ordered:'2026-09-25',expected_delivery_date:'2026-09-25',received_date:'2026-09-25',received_location:'Room A',received_by:'Alex',item_name:'Manual received',item_supplier:'Supplier',department:'Kitchen',package_qty:1});
+  assert.equal(response.status,201);assert.equal(db.prepare('SELECT received_by FROM ordered_items WHERE id=?').get(response.data.id).received_by,'Alex');
   db.close();
 });

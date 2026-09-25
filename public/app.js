@@ -2658,6 +2658,7 @@ function resetManualReceivedForm() {
   document.getElementById("manual_received_date").value = today;
   document.getElementById("manual_received_time").value = "";
   document.getElementById("manual_received_location").value = "";
+  document.getElementById("manual_received_by").value = "";
   document.getElementById("manual_received_notes").value = "";
   document.getElementById("manual_received_image_1").value = "";
   document.getElementById("manual_received_image_2").value = "";
@@ -2865,6 +2866,7 @@ async function saveManualReceivedItem() {
     received_date: document.getElementById("manual_received_date").value,
     received_time: receivedTime,
     received_location: document.getElementById("manual_received_location").value,
+    received_by: document.getElementById("manual_received_by").value,
     received_notes: document.getElementById("manual_received_notes").value,
     ...receivedImages
   };
@@ -3004,6 +3006,7 @@ function createDeliveryDetails(item) {
   }
 
   if (item.received_date) {
+    appendDeliveryDetail(details, "Received by", item.received_by || "Not recorded");
     appendDeliveryDetail(details, "Received", item.received_date);
     appendDeliveryDetail(details, "Time", item.received_time);
     appendDeliveryDetail(details, "Location", item.received_location);
@@ -3062,6 +3065,8 @@ function showOrderedEditForm(card, item) {
   form.appendChild(createOrderedEditField("Supplier", supplier));
   form.appendChild(createOrderedEditField("Department", department));
 
+  const receivedBy = createOrderedEditInput("text", item.received_by || ""); receivedBy.maxLength = 200;
+  if (item.received_date) form.appendChild(createOrderedEditField("Received by", receivedBy));
   const actions = document.createElement("div");
   actions.className = "ordered-edit-actions";
 
@@ -3069,6 +3074,7 @@ function showOrderedEditForm(card, item) {
   saveButton.type = "button";
   saveButton.textContent = "Save Changes";
   saveButton.addEventListener("click", () => saveOrderedItemEdit(item.id, {
+    ...(item.received_date ? { received_by: receivedBy.value } : {}),
     date_ordered: dateOrdered.value,
     expected_delivery_date: expectedDate.value,
     item_name: itemName.value,
@@ -3210,6 +3216,7 @@ function showReceivePrompt(card, itemId) {
 
   const unitsInput = EquipmentInventory.unitsInput(orderedItems.find(item => item.id === itemId)?.units_per_package);
   row.appendChild(unitsInput);
+  const receivedByInput = document.createElement("input"); receivedByInput.type = "text"; receivedByInput.maxLength = 200; receivedByInput.placeholder = "Received by"; receivedByInput.setAttribute("aria-label", "Received by"); row.appendChild(receivedByInput);
   const locationInput = StorageLocations.createSelect();
   row.appendChild(locationInput);
 
@@ -3258,7 +3265,8 @@ function showReceivePrompt(card, itemId) {
     notesInput.value,
     imageInputOne,
     imageInputTwo,
-    unitsInput.value
+    unitsInput.value,
+    receivedByInput.value
   ));
   row.appendChild(saveButton);
 
@@ -3276,7 +3284,7 @@ function showReceivePrompt(card, itemId) {
   locationInput.focus();
 }
 
-async function receiveOrderedItem(itemId, receivedDate, receivedLocation, receivedTime = "", receivedNotes = "", firstImageInput = null, secondImageInput = null, unitsPerPackage = "") {
+async function receiveOrderedItem(itemId, receivedDate, receivedLocation, receivedTime = "", receivedNotes = "", firstImageInput = null, secondImageInput = null, unitsPerPackage = "", receivedBy = "") {
   if (!receivedDate || !receivedLocation.trim()) {
     alert("Received date and location are required");
     return;
@@ -3300,6 +3308,7 @@ async function receiveOrderedItem(itemId, receivedDate, receivedLocation, receiv
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       units_per_package: unitsPerPackage === "" ? null : Number(unitsPerPackage),
+      received_by: receivedBy,
       received_date: receivedDate,
       received_location: receivedLocation,
       received_time: receivedTime.trim(),
