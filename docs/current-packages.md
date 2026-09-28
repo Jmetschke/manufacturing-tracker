@@ -60,3 +60,13 @@ All routes require the existing application session. All except the employee rea
 8. Upload malformed, empty, or incomplete files; verify current packages are unchanged. Open two previews, confirm one, and verify the other is rejected as stale.
 
 Run automated tests with `npm test`.
+
+## Verified Metrc example and visible upload pathway
+
+Verified against `Metrc-Illinois-IN00000008-Packages-Active-14.xlsx` supplied on September 28, 2026 (the workbook itself is not committed): 269 records, 51 parents across 36 normalized Items, 217 children, and one REVIEW record, Distillate. All 51 parents and all 217 children have `Source Processing Job(s)`, so that column cannot distinguish them. As confirmed by the user, `Production Batch Number` populated / `Source Production Batch` blank identifies parents; the reverse identifies children. Source processing jobs, harvests, original source package label, and strain are retained alongside the other report fields.
+
+Of the 51 parents, six sort by Expiration Date, five by Use-By Date, and 40 fall back to Packaged Date. Full Tags are strings and never converted to numeric SKU values or used to infer age. For example, Watermelon Lychee Tag `1A41503000006A5000012459` has 242 ea and Packaged Date July 22, 2026; it precedes Tag `1A41503000006A5000013783`, 1,603 ea, packaged August 24. Neither has an expiration date in this file. Child quantities do not contribute to either card quantity.
+
+The upload panel is now always expanded for administrators. An administrator session can upload from either the regular or administrator Current Packages tab. Other users see an explicit administrator sign-in link leading directly to `/admin.html?tab=current-packages`. `GET /current-packages/access` exposes only whether that session may import; write routes remain administrator-only. Preview shows Item-card counts and date-ordering coverage. Cards show lab status, source ordering dates, and exact quantities.
+
+`POST /current-packages/manual-parent` adds a previously unknown Tag as a parent with Item, quantity, units, location, and optional batch/dates. It creates the package, a MASTER override, and a manual history event in one transaction. Duplicate Tags must use the existing classification controls instead. Subsequent complete imports still retire missing manual Tags; the saved override applies when a Tag appears in a later report. Overrides are populated only by explicit administrator decisions, not by ordinary automatic classification. An ordinary confirmed upload writes imports, packages, and history; a manual decision writes the fourth table.

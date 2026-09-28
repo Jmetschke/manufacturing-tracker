@@ -18,3 +18,5 @@
 .current-packages [data-ack] { display:inline; }
 .current-packages [aria-busy=true], .current-packages button:disabled { opacity:0.65; }
 .current-packages pre { white-space:pre-wrap; }
+.cp-upload { border:2px solid #86bda5; background:#f0f8f5; }
+.cp-upload-link { display:inline-block; padding:12px 16px; background:#145d43; color:#fff; border-radius:6px; font-weight:bold; }

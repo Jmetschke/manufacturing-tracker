@@ -107,7 +107,7 @@ test('admin routes enforce access; employee route excludes split/review/ignored/
     const routes=[];
     const app=Object.fromEntries(['get','post'].map(method=>[method,(path,...handlers)=>routes.push({method,path,handler:handlers.at(-1)})]));
     service.register(app,()=>{},(req,res)=>{res.status(403);return false;});
-    for(const route of routes.filter(r=>r.path!=='/current-packages')){
+    for(const route of routes.filter(r=>!['/current-packages','/current-packages/access'].includes(r.path))){
       let code=200,json;
       await route.handler({}, {status(n){code=n;return this;},json(v){json=v;}});
       assert.equal(code,403,route.path);assert.equal(json,undefined);
@@ -133,5 +133,29 @@ test('administrator history resolves lineage and preserves earlier import quanti
     await routes['get /current-packages/imports/:id/packages']({params:{id:'1'}},response);
     assert.equal(result.find(p=>p.tag==='A').quantity,600);
     assert.equal((await service.list(true))[0].quantity,125);
+  }finally{db.close();}
+});
+
+test('Source Processing Job is retained but does not promote child packages',()=>{
+  const columns=[...headers,'Source Processing Job(s)'];
+  const data=create.parseRows([columns,[...row('parent'), 'Shared job'],[...row('child',40,'','Parent batch','','Item A','parent'),'Shared job']]);
+  assert.equal(data[0].source_processing_jobs,'Shared job');
+  assert.equal(data[0].automatic_classification,'MASTER');
+  assert.equal(data[1].automatic_classification,'SPLIT');
+});
+test('manual parent is transactional, unique, preserved as an override, and reconciled by the next report',async()=>{
+  const {db,service,apply}=await setup();try{
+    const input={tag:'MANUAL',item:'Item A',quantity:'160.6296',unit_of_measure:'g',location:'Room',packaged_date:'2026-07-22'};
+    const p=await service.manualParent(input);
+    assert.equal(p.quantity,160.6296);assert.equal(p.active,1);
+    assert.equal(db.prepare('SELECT classification FROM package_classification_overrides').get().classification,'MASTER');
+    assert.equal(db.prepare('SELECT event FROM package_history').get().event,'manual_parent_added');
+    await assert.rejects(service.manualParent(input),/already exists/);
+    await assert.rejects(service.manualParent({...input,tag:'bad',quantity:''}),/quantity/);
+    await apply([row('OTHER')]);assert.equal((await service.list()).find(p=>p.tag==='MANUAL').active,0);
+    await apply([row('MANUAL',20,'','source')]);
+    assert.equal((await service.list(true))[0].tag,'MANUAL');
+    assert.equal((await service.list(true))[0].classification,'MASTER');
+    assert.equal((await service.list(true))[0].automatic_classification,'SPLIT');
   }finally{db.close();}
 });

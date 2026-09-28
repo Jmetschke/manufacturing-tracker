@@ -5589,7 +5589,7 @@ app.get("/report", (req, res) => {
 });
 
 inventory.register(app);
-currentPackages.register(app, express.raw({ type: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/octet-stream"], limit: "14mb" }), requireAdminAccessRoute);
+currentPackages.register(app, express.raw({ type: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/octet-stream"], limit: "14mb" }), requireAdminAccessRoute, hasAdminAccess);
 
 // Shared storage endpoints are available to signed-in users and administrators.
 app.get("/storage-locations", async (req, res) => {

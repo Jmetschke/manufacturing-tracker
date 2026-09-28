@@ -3,7 +3,7 @@ const clean = value => String(value ?? '').trim().replace(/\s+/g, ' ');
 const key = value => clean(value).toLowerCase();
 const header = value => key(value).replace(/[^a-z0-9]/g, '');
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
-const fields = ['tag','item','category','quantity','unit_of_measure','location','sublocation','production_batch_number','source_production_batch','source_packages','lab_test_status','finished_goods','administrative_hold','administrative_recall','packaged_date','received','expiration_date','use_by_date','lab_test_expiration'];
+const fields = ['tag','item','category','quantity','unit_of_measure','location','sublocation','production_batch_number','source_production_batch','source_packages','source_processing_jobs','original_source_package_label','source_harvests','item_strain','lab_test_status','finished_goods','administrative_hold','administrative_recall','packaged_date','received','expiration_date','use_by_date','lab_test_expiration'];
 function date(value) {
   if (value === null || value === undefined || value === '') return null;
   if (value instanceof Date) { if (Number.isNaN(+value)) throw fail('Invalid workbook date.'); return value.toISOString().slice(0, 10); }
@@ -59,6 +59,7 @@ function parseRows(rows) {
   for (const p of result) [p.automatic_classification, p.classification_reason] = classify(p, result);
   return result;
 }
+function orderingBasis(p) { return p.expiration_date ? 'expiration_date' : p.use_by_date ? 'use_by_date' : p.packaged_date ? 'packaged_date' : 'none'; }
 function compare(a, b) {
   // Dated packages precede undated packages; packaged dates order the latter.
   const ad = a.expiration_date || a.use_by_date, bd = b.expiration_date || b.use_by_date;
@@ -99,8 +100,11 @@ module.exports = function service({ runSql, allSql, getSql, withTransaction, rea
       if (p.classification === 'REVIEW') changes.review.push(p);
     }
     for (const p of existing) if (p.active && (!tags.has(p.tag) || tags.get(p.tag).classification !== 'MASTER')) changes.retired.push({ ...p, retirement_reason: 'No longer present as an active master package in latest Metrc Active Packages report.' });
+    const masters = incoming.filter(p => p.classification === 'MASTER');
+    const ordering = { expiration_date: 0, use_by_date: 0, packaged_date: 0, none: 0 };
+    masters.forEach(p => ordering[orderingBasis(p)]++);
     const counts = Object.fromEntries(['MASTER','SPLIT','REVIEW','IGNORED'].map(c => [c, incoming.filter(p => p.classification === c).length]));
-    return { incoming, changes, summary: { total: incoming.length, ...counts, new_masters: changes.added.filter(p=>p.classification==='MASTER').length, updated_masters: changes.updated.filter(p=>p.classification==='MASTER').length, quantity_changes: quantityChanges, retired: changes.retired.length, reactivated: changes.reactivated.length } };
+    return { incoming, changes, summary: { total: incoming.length, item_count: new Set(masters.map(p=>p.item_key)).size, ordering, ...counts, new_masters: changes.added.filter(p=>p.classification==='MASTER').length, updated_masters: changes.updated.filter(p=>p.classification==='MASTER').length, quantity_changes: quantityChanges, retired: changes.retired.length, reactivated: changes.reactivated.length } };
   }
   async function preview(buffer, fileName) {
     let workbook;
@@ -112,7 +116,7 @@ module.exports = function service({ runSql, allSql, getSql, withTransaction, rea
     const result = await withTransaction(async tx => ({ ...(await plan(rows, tx)), revision: await revision(tx) }));
     const token = crypto.randomUUID();
     pending.set(token, { rows, fileName: clean(fileName).slice(0,255) || 'Active Packages.xlsx', revision: result.revision, expires: Date.now()+15*60*1000 });
-    return { token, summary: result.summary, changes: result.changes, all_masters_retiring: result.changes.retired.length > 0 && result.summary.MASTER === 0 };
+    return { token, file_name: clean(fileName), summary: result.summary, changes: result.changes, all_masters_retiring: result.changes.retired.length > 0 && result.summary.MASTER === 0 };
   }
   async function save(p, tx) {
     const meta = ['tag','item_key','classification','active','present_in_latest_import','first_seen_at','last_seen_at','retired_at','retirement_reason','last_import_id'];
@@ -165,11 +169,35 @@ module.exports = function service({ runSql, allSql, getSql, withTransaction, rea
       return p;
     });
   }
-  function register(app, raw, requireAdmin) {
+  async function manualParent(input) {
+    const tag = clean(input.tag), item = clean(input.item);
+    if (!tag || tag.length > 100 || /\s/.test(tag) || !item || item.length > 500) throw fail('Enter the full Tag and Item name.');
+    const quantity = Number(input.quantity);
+    if (input.quantity === '' || input.quantity == null || !Number.isFinite(quantity) || quantity < 0) throw fail('Enter a nonnegative quantity.');
+    if (!clean(input.unit_of_measure) || !clean(input.location)) throw fail('Enter the unit of measure and location.');
+    const report = Object.fromEntries(fields.map(field=>[field, clean(input[field])]));
+    for (const field of ['expiration_date','use_by_date','packaged_date','received','lab_test_expiration']) report[field] = date(input[field]);
+    return withTransaction(async tx => {
+      if (await getSql('SELECT tag FROM metrc_packages WHERE tag=?', [tag], tx)) throw fail('This Tag already exists. Find it in Package review and use Reactivate as master or Save classification.',409);
+      const now = new Date().toISOString();
+      const p = { ...report, tag, item, item_key: key(item), quantity,
+        automatic_classification: 'REVIEW', classification_reason: 'Entered manually; no Metrc report classification yet.',
+        classification: 'MASTER', manual_classification: 'MASTER', active: 1,
+        present_in_latest_import: 0, first_seen_at: now, last_seen_at: now,
+        retired_at: null, retirement_reason: null, last_import_id: null, entered_manually_at: now };
+      await runSql('INSERT INTO package_classification_overrides(tag,classification,updated_at) VALUES(?,?,?) ON CONFLICT(tag) DO UPDATE SET classification=excluded.classification,updated_at=excluded.updated_at', [tag,'MASTER',now],tx);
+      await save(p,tx);
+      await history(p,'manual_parent_added',null,tx);
+      return p;
+    });
+  }
+  function register(app, raw, requireAdmin, hasAdmin = () => false) {
     const route = (method,path,admin,fn,...middleware) => app[method](path,...middleware,async(req,res)=>{
       if (admin && !requireAdmin(req,res)) return;
       try { res.json(await fn(req)); } catch(err) { console.error('Current packages:',err.message); res.status(err.status || 500).json({message:err.status ? err.message : 'Package operation failed. No changes were committed. Please retry.'}); }
     });
+    route('get','/current-packages/access',false,req=>({can_import:hasAdmin(req)}));
+    route('post','/current-packages/manual-parent',true,req=>manualParent(req.body));
     route('get','/current-packages',false,()=>list(true));
     route('get','/current-packages/admin',true,()=>list());
     route('get','/current-packages/imports',true,()=>allSql('SELECT * FROM package_imports ORDER BY id DESC'));
@@ -192,7 +220,7 @@ module.exports = function service({ runSql, allSql, getSql, withTransaction, rea
       return { history: await allSql('SELECT * FROM package_history WHERE tag=? ORDER BY id DESC',[p.tag]), parents: all.filter(other=>sourceTags(p).includes(other.tag)), children: all.filter(other=>sourceTags(other).includes(p.tag)) };
     });
   }
-  return { initialize, preview, apply, list, change, register };
+  return { initialize, preview, apply, list, change, manualParent, register };
 };
 module.exports.parseRows = parseRows;
 module.exports.classify = classify;
