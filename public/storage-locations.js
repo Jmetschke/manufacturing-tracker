@@ -1,5 +1,8 @@
 const StorageLocations = (() => {
   let locations = [];
+  let archives = [];
+  const categories = ['Ingredients', 'Packaging', 'Equipment', 'Misc'];
+  const expanded = new Set();
   async function request(url, body) {
     const response = await fetch(url, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
     if (!response.ok) {
@@ -34,8 +37,9 @@ const StorageLocations = (() => {
     return select;
   }
   async function refresh() {
-    const results = await Promise.all([request('/storage-locations'), EquipmentInventory.refresh()]);
+    const results = await Promise.all([request('/storage-locations'), EquipmentInventory.refresh(), request('/storage-archives')]);
     locations = results[0];
+    archives = results[2];
     document.querySelectorAll('[data-storage-location]').forEach(populate);
   }
   async function addLocation() {
@@ -98,9 +102,32 @@ const StorageLocations = (() => {
       if (location.items.length) roomActions.append(element('p', 'Consolidate this room by choosing where to move all its items:'), roomDestination);
       roomActions.append(deleteRoom);
       card.append(roomActions);
-      const list = element('ul');
+      const lists = new Map();
+      [null, ...categories].forEach(category => {
+        const items = location.items.filter(item => (item.category || null) === category);
+        if (!category && !items.length) return;
+        const group = element('details');
+        group.className = category ? 'storage-category' : 'storage-category storage-unclassified';
+        const groupKey = `${location.id}:${category || 'unclassified'}`;
+        group.open = !category || expanded.has(groupKey);
+        group.addEventListener('toggle', () => { if(group.open) expanded.add(groupKey); else expanded.delete(groupKey); });
+        group.append(element('summary', `${category || 'Needs classification'} (${items.length})`));
+        const list = element('ul');
+        if (!items.length) list.append(element('li', 'No items in this category.'));
+        group.append(list); lists.set(category,list);card.append(group);
+      });
       location.items.forEach(item => {
         const row = element('li');
+        if (!item.category) { row.className='storage-unclassified-item'; row.append(element('strong','Needs classification')); }
+        const categoryLabel=element('label','Classification');
+        const categorySelect=element('select');
+        categorySelect.setAttribute('aria-label', `Classification for ${item.item_name}`);
+        categorySelect.add(new Option('Needs classification',''));
+        categories.forEach(category=>categorySelect.add(new Option(category,category)));
+        categorySelect.value=item.category || '';
+        categorySelect.addEventListener('change',()=>changeStorage(categorySelect,
+          `/storage-items/${item.source}/${item.id}/classification`,{category:categorySelect.value || null},'Classification saved.'));
+        categoryLabel.append(categorySelect);row.append(categoryLabel);
         row.append(element('strong', item.standard_item_name || item.item_name), element('div', `${item.quantity ?? '—'} ${item.unit} · ${item.source === 'delivery' ? 'Received' : 'Manually placed'} ${item.placed_at || ''}`));
         if (item.original_description) row.append(element('p', `Original description: ${item.original_description}`));
         const packageQuantity = item.source === 'delivery' || /^(packages?|boxes|box|cases?|packs?)$/i.test(item.unit);
@@ -144,11 +171,16 @@ const StorageLocations = (() => {
           if (!confirm(`Remove "${item.item_name}" from "${location.name}"?${item.source === 'delivery' ? ' Its delivery history will be kept.' : ''}`)) return;
           changeStorage(remove, `/storage-items/${item.source}/${item.id}/delete`, {}, 'Item removed.');
         });
-        actions.append(destination, move, remove);
+        const archive = element('button', 'Archive item'); archive.type='button';
+        archive.addEventListener('click',()=>{
+          if (!confirm(`Archive "${item.item_name}"? Its last location and dates will be kept in Archived items.`)) return;
+          changeStorage(archive, `/storage-items/${item.source}/${item.id}/archive`, {}, 'Item archived.');
+        });
+        actions.append(destination, move, archive, remove);
         row.append(actions);
-        list.append(row);
+        lists.get(item.category || null).append(row);
       });
-      card.append(location.items.length ? list : element('p', 'No items placed here yet.'));
+
       const details = element('details');
       details.append(element('summary', 'Add item to this location'));
       const form = element('form');
@@ -188,6 +220,27 @@ const StorageLocations = (() => {
       card.append(details);
       container.append(card);
     });
+    const archivePanel=element('details'); archivePanel.className='storage-card storage-archives';
+    archivePanel.open=expanded.has('archives');
+    archivePanel.addEventListener('toggle',()=>{if(archivePanel.open)expanded.add('archives');else expanded.delete('archives');});
+    archivePanel.append(element('summary', `Archived items (${archives.length})`));
+    const search=element('input');search.type='search';search.placeholder='Search archived items or locations';search.setAttribute('aria-label','Search archived items');
+    const archiveList=element('div');
+    const renderArchives=()=>{
+      archiveList.replaceChildren();
+      const term=search.value.trim().toLowerCase();
+      const matches=archives.filter(item=>`${item.item_name} ${item.last_location} ${item.category || ''}`.toLowerCase().includes(term));
+      if(!matches.length) archiveList.append(element('p','No archived items match.'));
+      matches.forEach(item=>{
+        const row=element('article');row.className='storage-archive-item';
+        row.append(element('h4',item.item_name),element('p',`Classification: ${item.category || 'Not classified'}`),
+          element('p',`Last location: ${item.last_location}`),element('p',`Received: ${item.received_at || 'Not recorded'}`),
+          element('p',`Archived: ${new Date(item.archived_at).toLocaleString()}`));
+        if(item.source==='manual') row.append(element('p',`Placed in inventory: ${item.placed_at || 'Not recorded'}`));
+        archiveList.append(row);
+      });
+    };
+    search.addEventListener('input',renderArchives);archivePanel.append(search,archiveList);renderArchives();container.append(archivePanel);
   }
   async function load() {
     const status = document.getElementById('storageStatus');

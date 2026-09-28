@@ -1,0 +1,8 @@
+.storage-category { border:1px solid #ccd7df; border-radius:8px; margin:12px 0; padding:10px; }
+.storage-category summary,.storage-archives>summary { cursor:pointer; font-weight:bold; padding:12px; }
+.storage-unclassified { background:#fff5d6; border:2px solid #ad7500; color:#493300; }
+.storage-unclassified-item>strong:first-child { display:block; color:#795000; margin-bottom:8px; }
+.storage-category label { display:block; margin:8px 0; }
+.storage-category select { padding:10px; max-width:100%; }
+.storage-archives { grid-column:1 / -1; }
+.storage-archive-item { padding:12px; border-bottom:1px solid #ccd7df; }

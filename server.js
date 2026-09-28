@@ -19,6 +19,7 @@ const calendarStore = createCalendarStore({ database: calendarDb,
 const inventory = require("./server/equipment-inventory")({ runSql, allSql, getSql, addMissingColumn, withTransaction });
 const currentPackages = require("./server/current-packages")({ runSql, allSql, getSql, withTransaction,
   readWorkbook: buffer => readXlsxFile(repairWorkbookDimensions(buffer)) });
+const storageOrganization = require("./server/storage-organization")({runSql,getSql,allSql,withTransaction});
 const app = express();
 
 app.use(express.json({ limit: "14mb" }));
@@ -2119,6 +2120,7 @@ async function initializeDatabase() {
   )`);
   await require("./server/reset-active-skus")({ runSql, getSql, withTransaction });
   await inventory.initialize();
+  await storageOrganization.initialize();
   await currentPackages.initialize();
   for (const name of ["Production Storage", "Kitchen Storage", "Garage Storage", "Fire Ally", "SB/Vape Area", "Topicals Storage", "Fire Cabinet", "Upper Deck", "Vault"]) {
     await runSql("INSERT OR IGNORE INTO storage_locations (name) VALUES (?)", [name]);
@@ -5589,6 +5591,7 @@ app.get("/report", (req, res) => {
 });
 
 inventory.register(app);
+storageOrganization.register(app);
 currentPackages.register(app, express.raw({ type: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/octet-stream"], limit: "14mb" }), requireAdminAccessRoute, hasAdminAccess);
 
 // Shared storage endpoints are available to signed-in users and administrators.
@@ -5614,7 +5617,8 @@ app.get("/storage-locations", async (req, res) => {
       JOIN storage_locations l ON (CASE WHEN p.ordered_item_id IS NOT NULL
         THEN l.id = p.location_id ELSE l.name = trim(o.received_location) COLLATE NOCASE END)
       WHERE o.received_date IS NOT NULL AND l.deleted = 0 ORDER BY placed_at DESC`);
-    res.json(locations.map(location => ({ ...location, items: items.filter(item => item.location_id === location.id) })));
+    const organized = await storageOrganization.enrich(items);
+    res.json(locations.map(location => ({ ...location, items: organized.filter(item => item.location_id === location.id) })));
   } catch (err) { res.status(500).json({ message: "Unable to load storage locations" }); }
 });
 app.post("/storage-locations", async (req, res) => {
