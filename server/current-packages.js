@@ -20,7 +20,10 @@ function date(value) {
   if (Number.isNaN(+parsed) || parsed.toISOString().slice(0,10) !== result) throw fail(`Invalid date: ${text}`);
   return result;
 }
+const excludedRoom = location => /(?:^| )concentrates? cabinet(?:$| )/.test(key(location));
+const exclusionReason = 'Excluded because Concentrate Cabinet packages are production inputs, not final products.';
 function classify(p, packages = []) {
+  if (excludedRoom(p.location)) return ['IGNORED', exclusionReason];
   if (p.production_batch_number && !p.source_production_batch) return ['MASTER', 'Production Batch Number is populated and Source Production Batch is blank.'];
   if (!p.production_batch_number && p.source_production_batch) {
     const linked = packages.some(other => other.tag !== p.tag && other.item_key === p.item_key && sourceTags(p).includes(other.tag));
@@ -74,6 +77,17 @@ module.exports = function service({ runSql, allSql, getSql, withTransaction, rea
     await runSql(`CREATE TABLE IF NOT EXISTS package_history(id INTEGER PRIMARY KEY AUTOINCREMENT, tag TEXT NOT NULL, import_id INTEGER, recorded_at TEXT NOT NULL, event TEXT NOT NULL, snapshot TEXT NOT NULL)`);
     await runSql('CREATE INDEX IF NOT EXISTS package_history_tag ON package_history(tag, id)');
     await runSql('CREATE INDEX IF NOT EXISTS metrc_packages_item ON metrc_packages(item_key, active)');
+    // Apply the room rule to already-imported data as well as future reports.
+    await withTransaction(async tx => {
+      for (const previous of await packages(tx)) {
+        if (!excludedRoom(previous.location) || (!previous.active && previous.classification === 'IGNORED' && previous.classification_reason === exclusionReason)) continue;
+        const p = {...previous, automatic_classification:'IGNORED', classification:'IGNORED',
+          classification_reason:exclusionReason, active:0,
+          retired_at:previous.retired_at || (previous.active ? new Date().toISOString() : null),
+          retirement_reason:exclusionReason};
+        await save(p,tx); await history(p,'excluded_room',null,tx);
+      }
+    });
   }
   const unpack = row => ({ ...JSON.parse(row.data), ...Object.fromEntries(Object.entries(row).filter(([k]) => k !== 'data')) });
   async function packages(tx) { return (await allSql('SELECT * FROM metrc_packages', [], tx)).map(unpack); }
@@ -85,7 +99,7 @@ module.exports = function service({ runSql, allSql, getSql, withTransaction, rea
   async function plan(rows, tx) {
     const existing = await packages(tx), old = new Map(existing.map(p => [p.tag,p]));
     const overrides = new Map((await allSql('SELECT * FROM package_classification_overrides', [], tx)).map(p => [p.tag,p.classification]));
-    const incoming = rows.map(p => ({ ...p, classification: overrides.get(p.tag) || p.automatic_classification, manual_classification: overrides.get(p.tag) || null }));
+    const incoming = rows.map(p => ({ ...p, classification: excludedRoom(p.location) ? 'IGNORED' : overrides.get(p.tag) || p.automatic_classification, manual_classification: overrides.get(p.tag) || null }));
     const tags = new Map(incoming.map(p => [p.tag,p]));
     const changes = { added: [], updated: [], retired: [], reactivated: [], review: [] };
     let quantityChanges = 0;
@@ -159,10 +173,11 @@ module.exports = function service({ runSql, allSql, getSql, withTransaction, rea
     return withTransaction(async tx => {
       const prev = (await packages(tx)).find(p=>p.tag===tag);
       if (!prev) throw fail('Package not found.',404);
+      if (excludedRoom(prev.location) && (classification === 'MASTER' || reactivate === true)) throw fail('Concentrate Cabinet packages are excluded from final products.');
       const now = new Date().toISOString();
       if (classification==='AUTO') await runSql('DELETE FROM package_classification_overrides WHERE tag=?',[tag],tx);
       else await runSql('INSERT INTO package_classification_overrides(tag,classification,updated_at) VALUES(?,?,?) ON CONFLICT(tag) DO UPDATE SET classification=excluded.classification,updated_at=excluded.updated_at',[tag,classification,now],tx);
-      const effective = classification==='AUTO' ? prev.automatic_classification : classification;
+      const effective = excludedRoom(prev.location) ? 'IGNORED' : classification==='AUTO' ? prev.automatic_classification : classification;
       const active = effective==='MASTER' && (prev.present_in_latest_import || reactivate===true) ? 1 : 0;
       const p = { ...prev, classification: effective, manual_classification: classification==='AUTO' ? null : classification, active, retired_at: active ? null : prev.retired_at || (prev.active ? now : null), retirement_reason: active ? null : prev.retirement_reason || (prev.active ? 'Administrator changed package classification.' : null) };
       await save(p,tx); await history(p,!prev.active && active ? 'manual_reactivation' : 'manual_classification',null,tx);
@@ -175,6 +190,7 @@ module.exports = function service({ runSql, allSql, getSql, withTransaction, rea
     const quantity = Number(input.quantity);
     if (input.quantity === '' || input.quantity == null || !Number.isFinite(quantity) || quantity < 0) throw fail('Enter a nonnegative quantity.');
     if (!clean(input.unit_of_measure) || !clean(input.location)) throw fail('Enter the unit of measure and location.');
+    if (excludedRoom(input.location)) throw fail('Concentrate Cabinet packages are excluded from final products.');
     const report = Object.fromEntries(fields.map(field=>[field, clean(input[field])]));
     for (const field of ['expiration_date','use_by_date','packaged_date','received','lab_test_expiration']) report[field] = date(input[field]);
     return withTransaction(async tx => {

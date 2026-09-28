@@ -159,3 +159,27 @@ test('manual parent is transactional, unique, preserved as an override, and reco
     assert.equal((await service.list(true))[0].automatic_classification,'SPLIT');
   }finally{db.close();}
 });
+test('Concentrate Cabinet inputs are ignored despite parent batch fields or prior overrides',async()=>{
+ const {db,service,apply}=await setup();try{
+ const cabinet=row('INPUT');cabinet[5]='  EO Concentrate   Cabinet  ';
+ assert.equal(create.parseRows([headers,cabinet])[0].automatic_classification,'IGNORED');
+ await apply([row('INPUT'),row('FINAL')]);await service.change('INPUT','MASTER',false);
+ await apply([cabinet,row('FINAL')]);
+ assert.deepEqual((await service.list(true)).map(p=>p.tag),['FINAL']);
+ assert.equal((await service.list()).find(p=>p.tag==='INPUT').classification,'IGNORED');
+ await assert.rejects(service.change('INPUT','MASTER',true),/excluded/);
+ await apply([row('INPUT'),row('FINAL')]);
+ assert.equal((await service.list(true)).length,2);
+ }finally{db.close();}
+});
+test('startup excludes already imported cabinet records once and preserves history',async()=>{
+ const {db,service,apply}=await setup();try{
+ await apply([row('INPUT')]);
+ const p=JSON.parse(db.prepare("SELECT data FROM metrc_packages WHERE tag='INPUT'").get().data);p.location='EO Concentrate Cabinet';
+ db.prepare("UPDATE metrc_packages SET data=? WHERE tag='INPUT'").run(JSON.stringify(p));
+ await service.initialize();await service.initialize();
+ assert.equal((await service.list(true)).length,0);
+ assert.equal(db.prepare("SELECT count(*) n FROM package_history WHERE event='excluded_room'").get().n,1);
+ assert.equal((await service.list()).length,1);
+ }finally{db.close();}
+});
