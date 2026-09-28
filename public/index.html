@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <link rel="stylesheet" href="/current-packages.css">
   <title>Production Tracker</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- PWA install metadata for internal home-screen use on iOS and Android. -->
@@ -2111,7 +2112,7 @@
   <button class="tab-button" type="button" onclick="showTab('daily')">Daily Report</button>
   <button class="tab-button" type="button" onclick="showTab('ordered')">Ordered Items</button>
   <button class="tab-button" type="button" onclick="showTab('storage')">Locations</button>
-  <button class="tab-button" type="button" onclick="showTab('activeSkus')">Active SKUs</button>
+  <button class="tab-button" type="button" onclick="showTab('activeSkus')">Current Packages</button>
 </div>
 
 <section id="trackerTab" class="tab-panel active">
@@ -2350,8 +2351,7 @@
 </section>
 
 <section id="activeSkusTab" class="tab-panel">
-  <h2>Active SKUs</h2>
-  <p>This tab has been cleared and is ready to rebuild.</p>
+  <div data-current-packages data-admin="false"></div>
 </section>
 
 <section id="orderedTab" class="tab-panel">
@@ -2593,5 +2593,6 @@
 <script src="daily-batch-completion.js"></script>
 <script src="app.js"></script>
 
+<script src="/current-packages.js"></script>
 </body>
 </html>

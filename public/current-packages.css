@@ -1,0 +1,20 @@
+.current-packages { color: #193047; }
+.current-packages .cp-tools { display:flex; flex-wrap:wrap; gap:12px; align-items:end; margin:12px 0; }
+.current-packages label { display:block; font-weight:600; }
+.current-packages input, .current-packages select { display:block; max-width:100%; padding:12px; border:1px solid #aabcca; border-radius:6px; }
+.current-packages button { min-height:44px; margin:6px 6px 6px 0; }
+.cp-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr)); gap:18px; }
+.cp-item,.cp-panel,.cp-admin-row { background:#fff; border:1px solid #ccd7df; border-radius:10px; padding:16px; margin:12px 0; overflow-wrap:anywhere; }
+.cp-item h3 { margin-top:0; }
+.cp-package { border-top:1px solid #dbe3e9; padding:14px 0; }
+.cp-first { background:#f0f8f5; border:1px solid #86bda5; border-radius:8px; padding:14px; }
+.cp-use { display:block; color:#145d43; letter-spacing:0.08em; }
+.cp-tag { font-size:1.15rem; font-family:monospace; font-weight:bold; overflow-wrap:anywhere; margin:10px 0; }
+.current-packages dl { display:grid; grid-template-columns:110px 1fr; gap:6px 10px; margin-bottom:0; }
+.current-packages dt { font-weight:600; }
+.current-packages dd { margin:0; }
+.current-packages summary { cursor:pointer; padding:12px 0; font-weight:600; }
+.current-packages .cp-error { color:#a12424; }
+.current-packages [data-ack] { display:inline; }
+.current-packages [aria-busy=true], .current-packages button:disabled { opacity:0.65; }
+.current-packages pre { white-space:pre-wrap; }

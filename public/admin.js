@@ -2466,6 +2466,7 @@ function appendTaskFocusDetails(block, projectedTasks, emptyText) {
 }
 
 function showAdminTab(tabName) {
+  if (tabName === "activeSkus") CurrentPackages.load();
   document.getElementById("storagePanel").classList.toggle("active", tabName === "storage");
   if (tabName === "storage") StorageLocations.load();
   clearAdminPrintModes();
@@ -2491,7 +2492,7 @@ function showAdminTab(tabName) {
       (tabName === "batches" && button.textContent === "Batch Tracker") ||
       (tabName === "calendar" && button.textContent === "Calendar") ||
       (tabName === "ordered" && button.textContent === "Ordered Items");
-    const activeSkuTab = tabName === "activeSkus" && button.textContent === "Active SKUs";
+    const activeSkuTab = tabName === "activeSkus" && button.textContent === "Current Packages";
     button.classList.toggle("active", isActive || activeSkuTab);
   });
 

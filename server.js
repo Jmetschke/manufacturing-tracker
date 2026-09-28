@@ -17,6 +17,8 @@ const { completeBatch } = require("./server/complete-batch");
 const calendarStore = createCalendarStore({ database: calendarDb,
   mirrorDatabase: hasSeparateCalendarDb ? db : null, getSql, runSql });
 const inventory = require("./server/equipment-inventory")({ runSql, allSql, getSql, addMissingColumn, withTransaction });
+const currentPackages = require("./server/current-packages")({ runSql, allSql, getSql, withTransaction,
+  readWorkbook: buffer => readXlsxFile(repairWorkbookDimensions(buffer)) });
 const app = express();
 
 app.use(express.json({ limit: "14mb" }));
@@ -2117,6 +2119,7 @@ async function initializeDatabase() {
   )`);
   await require("./server/reset-active-skus")({ runSql, getSql, withTransaction });
   await inventory.initialize();
+  await currentPackages.initialize();
   for (const name of ["Production Storage", "Kitchen Storage", "Garage Storage", "Fire Ally", "SB/Vape Area", "Topicals Storage", "Fire Cabinet", "Upper Deck", "Vault"]) {
     await runSql("INSERT OR IGNORE INTO storage_locations (name) VALUES (?)", [name]);
   }
@@ -5586,6 +5589,7 @@ app.get("/report", (req, res) => {
 });
 
 inventory.register(app);
+currentPackages.register(app, express.raw({ type: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/octet-stream"], limit: "14mb" }), requireAdminAccessRoute);
 
 // Shared storage endpoints are available to signed-in users and administrators.
 app.get("/storage-locations", async (req, res) => {

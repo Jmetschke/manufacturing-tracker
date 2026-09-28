@@ -1979,6 +1979,7 @@ async function load() {
 }
 
 function showTab(tabName) {
+  if (tabName === "activeSkus") CurrentPackages.load();
   document.getElementById("storagePanel").classList.toggle("active", tabName === "storage");
   if (tabName === "storage") StorageLocations.load();
   const trackerTab = document.getElementById("trackerTab");
@@ -2010,7 +2011,7 @@ function showTab(tabName) {
       schedule: "Schedule",
       daily: "Daily Report",
       ordered: "Ordered Items",
-      activeSkus: "Active SKUs"
+      activeSkus: "Current Packages"
     };
     const isActive =
       button.textContent.trim() === labels[tabName];

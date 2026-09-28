@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <link rel="stylesheet" href="/current-packages.css">
   <title>Admin Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- PWA install metadata for internal home-screen use on iOS and Android. -->
@@ -2191,7 +2192,7 @@
   <button class="admin-tab-button" type="button" onclick="showAdminTab('calendar')">Calendar</button>
   <button class="admin-tab-button" type="button" onclick="showAdminTab('ordered')">Ordered Items</button>
   <button class="admin-tab-button" type="button" onclick="showAdminTab('storage')">Locations</button>
-  <button class="admin-tab-button" type="button" onclick="showAdminTab('activeSkus')">Active SKUs</button>
+  <button class="admin-tab-button" type="button" onclick="showAdminTab('activeSkus')">Current Packages</button>
   <button class="admin-tab-button" type="button" onclick="showAdminTab('alertRecipients')">Alert Recipients</button>
 </div>
 
@@ -2343,8 +2344,7 @@
 </section>
 
 <section id="activeSkusPanel" class="admin-panel">
-  <h2>Active SKUs</h2>
-  <p>This tab has been cleared and is ready to rebuild.</p>
+  <div data-current-packages data-admin="true"></div>
 </section>
 
 <section id="reviewPanel" class="admin-panel">
@@ -2809,5 +2809,6 @@
 <script src="admin-calendar-editor.js"></script>
 <script src="admin.js"></script>
 
+<script src="/current-packages.js"></script>
 </body>
 </html>
