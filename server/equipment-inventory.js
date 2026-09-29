@@ -1,5 +1,5 @@
 // Equipment and ingredients intentionally use a different catalog from production items.
-module.exports = function inventoryService({ runSql, allSql, getSql, addMissingColumn, withTransaction }) {
+module.exports = function inventoryService({ runSql, allSql, getSql, addMissingColumn, withTransaction, getStock }) {
   const key = value => String(value || '').trim().toLowerCase();
   const fail = (message, status = 400) => Object.assign(new Error(message), { status });
   function count(value, optional = false) {
@@ -90,7 +90,7 @@ module.exports = function inventoryService({ runSql, allSql, getSql, addMissingC
       await runSql(`INSERT INTO item_aliases (vendor, description, vendor_key, description_key, standard_item_id)
         VALUES (?, ?, lower(trim(?)), lower(trim(?)), ?) ON CONFLICT(vendor_key, description_key) DO UPDATE SET standard_item_id = excluded.standard_item_id`,
       [vendor, description, vendor, description, standard_item_id]);
-      return { message: 'Mapping saved for existing and future occurrences' };
+      return { message: 'Mapping saved for unconverted and future receipts; credited stock keeps its existing item' };
     });
     route('delete', '/admin/inventory/mappings/:id', async req => {
       await runSql('DELETE FROM item_aliases WHERE id = ?', [req.params.id]);
@@ -99,6 +99,7 @@ module.exports = function inventoryService({ runSql, allSql, getSql, addMissingC
     route('post', '/storage-items/:source/:id/inventory', async req => {
       const { source, id } = req.params;
       if (!['manual', 'delivery'].includes(source) || !Number.isSafeInteger(Number(id)) || Number(id) <= 0) throw fail('Invalid inventory item.');
+      if (getStock && await getStock().isCredited(source,Number(id))) throw fail('This receipt is now standard-item stock. Refresh Locations and edit its current stock quantity.',409);
       const quantity = count(req.body.quantity);
       const units = count(req.body.units_per_package, true);
       await withTransaction(async tx => {

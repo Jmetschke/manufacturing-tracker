@@ -27,11 +27,13 @@ async function setup() {
   await inventory.initialize(); await inventory.initialize();
   const storageOrganization = require('../server/storage-organization')({runSql,allSql,getSql,withTransaction});
   await storageOrganization.initialize();
+  const storageStock=require('../server/storage-stock')({runSql,getSql,allSql,withTransaction});
+  await storageStock.initialize();
   const routes = {};
   const app = Object.fromEntries(['get','post','put','delete'].map(method => [method, (path, fn) => { routes[`${method} ${path}`] = fn; }]));
   inventory.register(app);
   const source = fs.readFileSync('server.js','utf8');
-  const context = { app, inventory, storageOrganization, runSql, allSql, getSql, withTransaction, Buffer, console,
+  const context = { app, inventory, storageOrganization, storageStock, runSql, allSql, getSql, withTransaction, Buffer, console,
     isIsoDate: value => /^\d{4}-\d{2}-\d{2}$/.test(value), normalizeRequiredText: value => String(value || '').trim(), normalizeOptionalText: value => String(value || '').trim(), normalizeOrderedItemImages: () => [null,null],
     parseAmazonOrderPdf: () => ({ date_ordered:'2026-09-24', item_company:'Invoice 123', items:[{item_name:'ULINE H-1045BL  WIRE SHELVING UNIT',item_supplier:'ULINE',package_qty:5,expected_delivery_date:'2026-09-25',import_needs_delivery_date:0}] }),
     createDeliveryAddedAlert: async()=>{}, createDeliveryScheduledAlert:async()=>{},

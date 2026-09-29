@@ -1,6 +1,7 @@
 const StorageLocations = (() => {
   let locations = [];
   let archives = [];
+  let stockReceipts = [];
   const categories = ['Ingredients', 'Packaging', 'Equipment', 'Misc'];
   const expanded = new Set();
   async function request(url, body) {
@@ -37,9 +38,11 @@ const StorageLocations = (() => {
     return select;
   }
   async function refresh() {
-    const results = await Promise.all([request('/storage-locations'), EquipmentInventory.refresh(), request('/storage-archives')]);
+    await request('/storage-stock/reconcile', {});
+    const results = await Promise.all([request('/storage-locations'), EquipmentInventory.refresh(), request('/storage-archives'), request('/storage-stock/receipts')]);
     locations = results[0];
     archives = results[2];
+    stockReceipts = results[3];
     document.querySelectorAll('[data-storage-location]').forEach(populate);
   }
   async function addLocation() {
@@ -74,6 +77,20 @@ const StorageLocations = (() => {
       status.textContent = message;
     } catch (error) { status.textContent = error.message; }
     finally { button.disabled = false; }
+  }
+  function receiptCard(receipt) {
+    const card=element('article');card.className='storage-archive-item';
+    card.append(element('h4',receipt.item_name),element('p',`Standard item: ${receipt.standard_item_name || 'Unknown'}`),
+      element('p',`Original quantity: ${receipt.original_quantity} ${receipt.original_unit}${receipt.original_units_per_package==null?'':` · ${receipt.original_units_per_package} items per package`}`),
+      element('p',`Stock added at conversion: ${receipt.credited_quantity} ${receipt.stock_unit}`),
+      element('p',`Location at conversion: ${receipt.last_location}`),
+      element('p',`${receipt.source==='delivery'?'Received':'Starting inventory recorded'}: ${receipt.received_at || 'Not recorded'}`),
+      element('p',`Archived: ${new Date(receipt.archived_at).toLocaleString()}`));
+    if(receipt.supplier) card.append(element('p',`Supplier: ${receipt.supplier}`));
+    if(receipt.received_by) card.append(element('p',`Received by: ${receipt.received_by}`));
+    if(receipt.order_reference) card.append(element('p',`Order reference: ${receipt.order_reference}`));
+    if(receipt.notes) card.append(element('p',receipt.notes));
+    return card;
   }
   function render() {
     const container = document.getElementById('storageCards');
@@ -128,10 +145,10 @@ const StorageLocations = (() => {
         categorySelect.addEventListener('change',()=>changeStorage(categorySelect,
           `/storage-items/${item.source}/${item.id}/classification`,{category:categorySelect.value || null},'Classification saved.'));
         categoryLabel.append(categorySelect);row.append(categoryLabel);
-        row.append(element('strong', item.standard_item_name || item.item_name), element('div', `${item.quantity ?? '—'} ${item.unit} · ${item.source === 'delivery' ? 'Received' : 'Manually placed'} ${item.placed_at || ''}`));
+        row.append(element('strong', item.standard_item_name || item.item_name), element('div', `${item.quantity ?? '—'} ${item.unit} · ${item.is_stock ? 'Current standard-item stock · created' : item.source === 'delivery' ? 'Received' : 'Manually placed'} ${item.placed_at || ''}`));
         if (item.original_description) row.append(element('p', `Original description: ${item.original_description}`));
         const packageQuantity = item.source === 'delivery' || /^(packages?|boxes|box|cases?|packs?)$/i.test(item.unit);
-        row.append(element('p', item.units_per_package == null ? 'Items per package: not specified' : `Items per package: ${item.units_per_package}${packageQuantity ? ` · Total items: ${item.quantity * item.units_per_package}` : ''}`));
+        if(!item.is_stock) row.append(element('p', item.units_per_package == null ? 'Items per package: not specified' : `Items per package: ${item.units_per_package}${packageQuantity ? ` · Total items: ${item.quantity * item.units_per_package}` : ''}`));
         if (item.notes) row.append(element('p', item.notes));
         const inventoryEdit = element('details');
         inventoryEdit.className = 'storage-inventory-editor';
@@ -142,20 +159,33 @@ const StorageLocations = (() => {
         quantityLabel.append(quantityInput);
         const unitsLabel = element('label', 'Items per package (optional)');
         const unitsInput = EquipmentInventory.unitsInput(item.units_per_package); unitsLabel.append(unitsInput);
-        inventoryForm.append(quantityLabel, unitsLabel);
+        inventoryForm.append(quantityLabel);
+        if(!item.is_stock) inventoryForm.append(unitsLabel);
+        else row.append(element('p','Adjust the current balance here. Original delivery quantities are preserved under Receipt history.'));
         const standardSelect = EquipmentInventory.picker(item.standard_item_id);
-        if (item.source === 'manual') inventoryForm.append(standardSelect, EquipmentInventory.createButton(standardSelect));
+        if (!item.is_stock && (item.source === 'manual' || typeof showAdminTab === 'function')) inventoryForm.append(standardSelect, EquipmentInventory.createButton(standardSelect));
         const inventorySave = element('button', 'Save inventory'); inventorySave.type = 'submit';
         const inventoryStatus = element('p'); inventoryStatus.setAttribute('role', 'status');
         inventoryForm.append(inventorySave, inventoryStatus);
         inventoryForm.addEventListener('submit', async event => {
           event.preventDefault(); inventorySave.disabled = true; inventoryStatus.textContent = 'Saving…';
           try {
-            await request(`/storage-items/${item.source}/${item.id}/inventory`, { quantity: Number(quantityInput.value), units_per_package: unitsInput.value === '' ? null : Number(unitsInput.value), standard_item_id: standardSelect.value ? Number(standardSelect.value) : null });
+            if(item.is_stock) await request(`/storage-stock/${item.id}/quantity`,{quantity:Number(quantityInput.value),expected_quantity:item.quantity});
+            else await request(`/storage-items/${item.source}/${item.id}/inventory`, { quantity: Number(quantityInput.value), units_per_package: unitsInput.value === '' ? null : Number(unitsInput.value), standard_item_id: standardSelect.value ? Number(standardSelect.value) : null });
+            if(item.source==='delivery' && standardSelect.value && Number(standardSelect.value)!==item.standard_item_id) {
+              await request('/admin/inventory/mappings',{vendor:item.original_supplier || '',description:item.original_description || item.item_name,standard_item_id:Number(standardSelect.value)});
+            }
             await refresh(); render();
           } catch (err) { inventoryStatus.textContent = err.message; inventorySave.disabled = false; }
         });
         inventoryEdit.append(inventoryForm); row.append(inventoryEdit);
+        if(item.is_stock){
+          const history=element('details');history.append(element('summary','Receipt history'));
+          const receipts=stockReceipts.filter(receipt=>receipt.stock_id===item.id);
+          receipts.forEach(receipt=>history.append(receiptCard(receipt)));
+          row.append(history);
+        }
+
         const actions = element('div');
         actions.className = 'storage-actions';
         const destination = destinationSelect(location, `Move ${item.item_name} to`);
@@ -225,6 +255,9 @@ const StorageLocations = (() => {
       card.append(details);
       container.append(card);
     });
+    const receiptsPanel=element('details');receiptsPanel.className='storage-card storage-archives';
+    receiptsPanel.append(element('summary',`Archived delivery / starting inventory records (${stockReceipts.length})`));
+    stockReceipts.forEach(receipt=>receiptsPanel.append(receiptCard(receipt)));container.append(receiptsPanel);
     const archivePanel=element('details'); archivePanel.className='storage-card storage-archives';
     archivePanel.open=expanded.has('archives');
     archivePanel.addEventListener('toggle',()=>{if(archivePanel.open)expanded.add('archives');else expanded.delete('archives');});
