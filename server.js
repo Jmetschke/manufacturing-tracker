@@ -5632,28 +5632,11 @@ app.post("/storage-locations", async (req, res) => {
   } catch (err) { res.status(500).json({ message: "Unable to add location" }); }
 });
 app.post("/storage-items", async (req, res) => {
-  const { location_id, quantity } = req.body;
-  let unitsPerPackage;
-  try { unitsPerPackage = inventory.count(req.body.units_per_package, true); }
-  catch (err) { return res.status(400).json({ message: err.message }); }
-  const standardId = req.body.standard_item_id || null;
-  const itemName = typeof req.body.item_name === "string" ? req.body.item_name.trim() : "";
-  const unit = typeof req.body.unit === "string" ? req.body.unit.trim() : "";
-  const notes = typeof req.body.notes === "string" ? req.body.notes.trim() : "";
-  if (!Number.isInteger(location_id) || !itemName || itemName.length > 200 || !unit || unit.length > 60 ||
-      typeof quantity !== "number" || !Number.isFinite(quantity) || quantity <= 0 || notes.length > 4000) {
-    return res.status(400).json({ message: "Choose a location and enter an item, positive quantity, and unit" });
-  }
   try {
-    if (standardId !== null && (!Number.isSafeInteger(standardId) || !await getSql("SELECT id FROM standard_items WHERE id = ?", [standardId]))) {
-      return res.status(400).json({ message: "Choose a valid standard item" });
-    }
-    const locations = await allSql("SELECT id FROM storage_locations WHERE id = ? AND deleted = 0", [location_id]);
-    if (!locations.length) return res.status(400).json({ message: "Location does not exist" });
-    await runSql("INSERT INTO storage_items (location_id, item_name, quantity, unit, notes, standard_item_id, units_per_package) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      [location_id, itemName, quantity, unit, notes, standardId, unitsPerPackage]);
-    res.status(201).json({ message: "Item added" });
-  } catch (err) { res.status(500).json({ message: "Unable to add item" }); }
+    const result = await storageOrganization.addItems(req.body);
+    res.status(201).json(result);
+  } catch (err) { res.status(err.status || 500).json({message:err.status ? err.message : "Unable to add items"}); }
+
 });
 
 // A null delivery placement removes only its current storage listing, preserving receipt history.

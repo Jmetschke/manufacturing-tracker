@@ -184,37 +184,42 @@ const StorageLocations = (() => {
       const details = element('details');
       details.append(element('summary', 'Add item to this location'));
       const form = element('form');
-      const inputs = {};
-      const standard = EquipmentInventory.picker();
-      standard.addEventListener('change', () => { if (standard.value) inputs.item_name.value = standard.selectedOptions[0].textContent; });
-      form.append(element('label', 'Equipment and Ingredient Inventory item'), standard,
-        EquipmentInventory.createButton(standard, item => { inputs.item_name.value = item.name; }));
-      [['item_name', 'Item name', 'text'], ['quantity', 'Quantity', 'number'], ['unit', 'Unit (e.g. boxes, units, lbs)', 'text'], ['notes', 'Notes (optional)', 'text']].forEach(([key, label, type]) => {
-        const wrapper = element('label', label);
-        const input = element('input');
-        input.type = type;
-        input.required = key !== 'notes';
-        input.maxLength = key === 'notes' ? 4000 : key === 'unit' ? 60 : 200;
-        if (type === 'number') { input.min = '0.000001'; input.step = 'any'; }
-        inputs[key] = input;
-        wrapper.append(input);
-        form.append(wrapper);
-      });
-      const unitsLabel = element('label', 'Items per package (optional)');
-      const unitsInput = EquipmentInventory.unitsInput(); unitsLabel.append(unitsInput); form.append(unitsLabel);
-      const save = element('button', 'Add item');
-      save.type = 'submit';
-      const status = element('p');
-      status.setAttribute('role', 'status');
-      form.append(save, status);
-      form.addEventListener('submit', async event => {
-        event.preventDefault();
-        save.disabled = true;
+      const rows=element('div');
+      const addRow=()=>{
+        const row=element('fieldset');row.className='storage-entry-row';row.append(element('legend','Item'));
+        const inputs={};
+        const standard=EquipmentInventory.picker();
+        row.append(element('label','Equipment and Ingredient Inventory item'),standard,
+          EquipmentInventory.createButton(standard,item=>{inputs.item_name.value=item.name;}));
+        standard.addEventListener('change',()=>{if(standard.value)inputs.item_name.value=standard.selectedOptions[0].textContent;});
+        [['item_name','Item name','text'],['quantity','Quantity','number'],['unit','Unit (e.g. boxes, units, lbs)','text'],['notes','Notes (optional)','text']].forEach(([key,label,type])=>{
+          const wrapper=element('label',label),input=element('input');input.type=type;input.required=key!=='notes';
+          input.maxLength=key==='notes'?4000:key==='unit'?60:200;
+          if(type==='number'){input.min='0.000001';input.step='any';}
+          inputs[key]=input;wrapper.append(input);row.append(wrapper);
+        });
+        const units=EquipmentInventory.unitsInput(),unitsLabel=element('label','Items per package (optional)');unitsLabel.append(units);row.append(unitsLabel);
+        const category=element('select'),categoryLabel=element('label','Classification');category.setAttribute('aria-label','Classification');category.add(new Option('Needs classification',''));
+        categories.forEach(value=>category.add(new Option(value,value)));categoryLabel.append(category);row.append(categoryLabel);
+        const remove=element('button','Remove row');remove.type='button';remove.addEventListener('click',()=>{if(rows.children.length>1)row.remove();});row.append(remove);
+        row.read=()=>({item_name:inputs.item_name.value,quantity:Number(inputs.quantity.value),unit:inputs.unit.value,notes:inputs.notes.value,
+          standard_item_id:standard.value?Number(standard.value):null,units_per_package:units.value===''?null:Number(units.value),category:category.value||null});
+        rows.append(row);
+      };
+      const another=element('button','Add another item');another.type='button';another.addEventListener('click',addRow);
+      const save=element('button','Add items');save.type='submit';
+      const status=element('p');status.setAttribute('role','status');form.append(rows,another,save,status);addRow();
+      let saving=false;
+      form.addEventListener('submit',async event=>{
+        event.preventDefault();if(saving)return;
+        const items=Array.from(rows.children,row=>row.read());saving=true;
+        form.querySelectorAll('input,select,button').forEach(control=>control.disabled=true);status.textContent='Saving items…';
         try {
-          await request('/storage-items', { standard_item_id: standard.value ? Number(standard.value) : null, units_per_package: unitsInput.value === '' ? null : Number(unitsInput.value), location_id: location.id, item_name: inputs.item_name.value, quantity: Number(inputs.quantity.value), unit: inputs.unit.value, notes: inputs.notes.value });
-          await load();
-        } catch (error) { status.textContent = error.message; }
-        finally { save.disabled = false; }
+          await request('/storage-items',{location_id:location.id,items});
+          rows.replaceChildren();addRow();status.textContent='Items saved.';
+          try {await refresh();render();}catch(error){status.textContent='Items saved. Use Refresh to reload the room.';}
+        }catch(error){status.textContent=error.message;}
+        finally{saving=false;form.querySelectorAll('input,select,button').forEach(control=>control.disabled=false);}
       });
       details.append(form);
       card.append(details);
@@ -250,5 +255,5 @@ const StorageLocations = (() => {
   }
   document.querySelectorAll('[data-storage-location]').forEach(bind);
   refresh().catch(error => { document.getElementById('storageStatus').textContent = error.message; });
-  return { load, addLocation, createSelect };
+  return { load, addLocation, createSelect, print: () => StoragePrint.open(locations) };
 })();

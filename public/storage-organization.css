@@ -6,3 +6,5 @@
 .storage-category select { padding:10px; max-width:100%; }
 .storage-archives { grid-column:1 / -1; }
 .storage-archive-item { padding:12px; border-bottom:1px solid #ccd7df; }
+.storage-entry-row { border:1px solid #ccd7df; border-radius:8px; padding:12px; margin:12px 0; min-width:0; }
+.storage-entry-row label { display:block; margin:8px 0; }

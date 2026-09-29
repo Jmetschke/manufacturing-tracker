@@ -116,3 +116,15 @@ test('import, mapping, receiving and room adjustments preserve source data and q
   assert.equal(response.status,400);assert.equal(db.prepare('SELECT count(*) n FROM ordered_items').get().n,countBefore+2);
   db.close();
 });
+test('manual room entry saves multiple categorized rows atomically and keeps single-entry compatibility',async()=>{
+ const {database,call}=await setup();
+ const before=database.prepare('SELECT count(*) n FROM storage_items').get().n;
+ const row={item_name:'Boxes',quantity:2,unit:'boxes',category:'Packaging',units_per_package:10};
+ let result=await call('post /storage-items',{location_id:1,items:[row,{...row,item_name:'Bad catalog',standard_item_id:99999}]});
+ assert.equal(result.status,400);assert.equal(database.prepare('SELECT count(*) n FROM storage_items').get().n,before);
+ result=await call('post /storage-items',{location_id:1,items:[row,{...row,item_name:'Mixer',category:'Equipment'}]});
+ assert.equal(result.status,201);assert.equal(result.data.ids.length,2);
+ assert.equal(database.prepare('SELECT count(*) n FROM storage_item_categories').get().n,2);
+ result=await call('post /storage-items',{location_id:1,...row});assert.equal(result.status,201);
+ database.close();
+});

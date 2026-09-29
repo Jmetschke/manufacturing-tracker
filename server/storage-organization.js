@@ -57,6 +57,31 @@ module.exports = function ({ runSql, getSql, allSql, withTransaction }) {
       return {message:'Item archived.'};
     });
   }
+  async function addItems(body) {
+    const locationId=body.location_id;
+    const rows=Array.isArray(body.items) ? body.items : [body];
+    if(!Number.isSafeInteger(locationId) || !rows.length || rows.length>100) throw fail('Choose a room and enter 1–100 items.');
+    const validated=rows.map((row,index)=>{
+      const name=String(row.item_name || '').trim(), unit=String(row.unit || '').trim(), notes=String(row.notes || '').trim();
+      const units=row.units_per_package==null || row.units_per_package==='' ? null : Number(row.units_per_package);
+      const standard=row.standard_item_id || null;
+      if(!name || name.length>200 || !unit || unit.length>60 || notes.length>4000 || typeof row.quantity!=='number' || !Number.isFinite(row.quantity) || row.quantity<=0 ||
+        (units!==null && (!Number.isSafeInteger(units) || units<0)) || (standard!==null && !Number.isSafeInteger(standard)) || (row.category && !categories.includes(row.category))) throw fail(`Check the name, quantity, unit, and classification for item ${index+1}.`);
+      return {name,unit,notes,quantity:row.quantity,units,standard,category:row.category || null};
+    });
+    return withTransaction(async tx=>{
+      if(!await getSql('SELECT id FROM storage_locations WHERE id=? AND deleted=0',[locationId],tx)) throw fail('Location does not exist.');
+      const ids=[];
+      for(const row of validated){
+        if(row.standard && !await getSql('SELECT id FROM standard_items WHERE id=?',[row.standard],tx)) throw fail('Choose a valid inventory item.');
+        const result=await runSql('INSERT INTO storage_items(location_id,item_name,quantity,unit,notes,standard_item_id,units_per_package) VALUES(?,?,?,?,?,?,?)',
+          [locationId,row.name,row.quantity,row.unit,row.notes,row.standard,row.units],tx);
+        const id=Number(result.lastID);ids.push(id);
+        if(row.category) await runSql('INSERT INTO storage_item_categories(source,item_id,category) VALUES(?,?,?)',['manual',id,row.category],tx);
+      }
+      return {message:'Items added',ids};
+    });
+  }
   const archives=()=>allSql('SELECT id,source,item_id,item_name,category,last_location,received_at,placed_at,archived_at FROM storage_item_archives ORDER BY archived_at DESC,id DESC');
   function register(app) {
     const route=(method,path,fn)=>app[method](path,async(req,res)=>{try {res.json(await fn(req));}catch(e){res.status(e.status||500).json({message:e.status?e.message:'Unable to update storage. Please retry.'});}});
@@ -64,5 +89,5 @@ module.exports = function ({ runSql, getSql, allSql, withTransaction }) {
     route('post','/storage-items/:source/:id/classification',req=>classify(req.params.source,Number(req.params.id),req.body.category));
     route('post','/storage-items/:source/:id/archive',req=>archive(req.params.source,Number(req.params.id)));
   }
-  return {initialize,enrich,classify,archive,archives,register};
+  return {addItems,initialize,enrich,classify,archive,archives,register};
 };
