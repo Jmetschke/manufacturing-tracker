@@ -3670,12 +3670,115 @@ function printLoggedConcernReport() {
   window.print();
 }
 
+function calculateProductionEstimate(itemId, quantity) {
+  if (!Number.isSafeInteger(quantity) || quantity <= 0) return null;
+  const taskIds = new Set((itemTaskOptionsByItemId[String(itemId)] || []).map(String));
+  const rows = allTasks.filter(task => taskIds.has(String(task.id))).map(task => {
+    const recorded = Number(task.average_seconds_per_unit);
+    const reference = taskAverageReferencesByName[normalizeTaskAverageReferenceName(task.name)];
+    const imported = Number(reference?.average_seconds_per_unit);
+    const hasRecorded = Number.isFinite(recorded) && recorded > 0;
+    const hasImported = Number.isFinite(imported) && imported > 0;
+    const average = hasRecorded ? recorded : hasImported ? imported : null;
+    return {
+      name: task.name,
+      average,
+      source: hasRecorded ? "Recorded average" : hasImported ? "Imported ghost average" : "Missing average",
+      seconds: average === null ? null : average * quantity
+    };
+  });
+  return {
+    rows,
+    missing: rows.filter(row => row.seconds === null).length,
+    totalSeconds: rows.reduce((total, row) => total + (row.seconds ?? 0), 0)
+  };
+}
+
+function formatProductionEstimateTime(seconds) {
+  const rounded = Math.ceil(seconds);
+  const hours = Math.floor(rounded / 3600);
+  const minutes = Math.floor((rounded % 3600) / 60);
+  return `${hours}h ${minutes}m ${rounded % 60}s`;
+}
+
+async function openProductionEstimate() {
+  const select = document.getElementById("productionEstimateItem");
+  const previous = select.value;
+  const results = document.getElementById("productionEstimateResults");
+  select.replaceChildren(new Option("Loading items…", ""));
+  select.disabled = true;
+  results.textContent = "Loading current tasks and averages…";
+  document.getElementById("productionEstimateDialog").showModal();
+  try {
+    if (!await loadItemTaskManagement()) throw new Error("Could not load production items and averages.");
+    select.replaceChildren(new Option("Select a production item", ""));
+    allItems.forEach(item => select.add(new Option(
+      `${item.name}${item.production_company ? ` — ${item.production_company}` : ""}`, String(item.id)
+    )));
+    if (allItems.some(item => String(item.id) === previous)) select.value = previous;
+    select.disabled = false;
+    renderProductionEstimate();
+  } catch (error) {
+    results.textContent = `${error.message} Close and reopen the estimator to try again.`;
+  }
+}
+
+function renderProductionEstimate() {
+  const results = document.getElementById("productionEstimateResults");
+  results.replaceChildren();
+  const itemId = document.getElementById("productionEstimateItem").value;
+  if (!itemId) {
+    results.textContent = "Select a production item to see its tasks.";
+    return;
+  }
+  const estimate = calculateProductionEstimate(itemId, Number(document.getElementById("productionEstimateQuantity").value));
+  if (!estimate) {
+    results.textContent = "Enter a positive whole-number quantity.";
+    return;
+  }
+  if (!estimate.rows.length) {
+    results.textContent = "This item has no assigned tasks. Assign tasks in Item & Task Management before estimating production time.";
+    return;
+  }
+  const wrapper = document.createElement("div");
+  wrapper.className = "production-estimate-table";
+  const table = document.createElement("table");
+  const header = table.createTHead().insertRow();
+  ["Task", "Average per unit", "Average source", "Estimated task time"].forEach(label => {
+    const cell = document.createElement("th");
+    cell.scope = "col";
+    cell.textContent = label;
+    header.appendChild(cell);
+  });
+  const body = table.createTBody();
+  estimate.rows.forEach(row => {
+    const tr = body.insertRow();
+    [row.name, row.average === null ? "Unavailable" : `${row.average.toLocaleString(undefined, { maximumFractionDigits: 2 })} sec/unit`,
+      row.source, row.seconds === null ? "Cannot estimate" : formatProductionEstimateTime(row.seconds)
+    ].forEach(value => { tr.insertCell().textContent = value; });
+  });
+  wrapper.appendChild(table);
+  results.appendChild(wrapper);
+  const total = document.createElement("p");
+  const label = document.createElement("strong");
+  label.textContent = estimate.missing === estimate.rows.length
+    ? "Total unavailable — all task averages are missing."
+    : `${estimate.missing ? "Partial" : "Total"} estimated production labor time: ${formatProductionEstimateTime(estimate.totalSeconds)}`;
+  total.appendChild(label);
+  results.appendChild(total);
+  if (estimate.missing) {
+    const warning = document.createElement("p");
+    warning.textContent = `${estimate.missing} of ${estimate.rows.length} tasks have no average and are excluded from the total. Record time or import averages to complete the estimate.`;
+    results.appendChild(warning);
+  }
+}
+
 async function loadItemTaskManagement() {
   const res = await adminFetch("/admin/item-task-management");
   if (!res.ok) {
     const text = await res.text();
     showMessage("Item and task management load failed: " + text, "error");
-    return;
+    return false;
   }
 
   const data = await res.json();
@@ -3694,6 +3797,7 @@ async function loadItemTaskManagement() {
 
   renderItemTaskManagement();
   renderMasterTaskList();
+  return true;
 }
 
 function setItemMasterImportStatus(text, type = "") {

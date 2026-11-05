@@ -342,6 +342,11 @@
       gap: 6px;
       align-items: center;
     }
+    #productionEstimateDialog { width: min(900px, 90vw); max-height: 85vh; overflow: auto; border: 1px solid #bfc8b8; padding: 20px; }
+    #productionEstimateDialog::backdrop { background: rgba(0,0,0,.35); }
+    .production-estimate-inputs { display: flex; flex-wrap: wrap; gap: 16px; margin: 16px 0; }
+    .production-estimate-inputs label { display: grid; gap: 6px; flex: 1; min-width: 180px; }
+    .production-estimate-table { overflow-x: auto; }
     .item-task-focus-window {
       position: fixed;
       inset: 0;
@@ -2244,6 +2249,24 @@
 </section>
 
 <section id="itemTaskManagementPanel" class="admin-panel">
+  <section class="item-task-section">
+    <h3>Production Time Estimator</h3>
+    <p>Choose a production item and quantity to estimate labor time for its assigned tasks.</p>
+    <button type="button" onclick="openProductionEstimate()">Estimate Production Time</button>
+  </section>
+  <dialog id="productionEstimateDialog" aria-labelledby="productionEstimateTitle">
+    <div class="item-task-focus-header">
+      <h3 id="productionEstimateTitle">Production Time Estimator</h3>
+      <button type="button" onclick="document.getElementById('productionEstimateDialog').close()">Close</button>
+    </div>
+    <div class="production-estimate-inputs">
+      <label>Production item<select id="productionEstimateItem" onchange="renderProductionEstimate()"></select></label>
+      <label>Quantity to make<input id="productionEstimateQuantity" type="number" min="1" step="1" value="1" oninput="renderProductionEstimate()"></label>
+    </div>
+    <p>Each task estimate = average seconds per unit × quantity. Recorded task averages are used first, with imported ghost averages as a fallback. These averages cover all items using that task.</p>
+    <div id="productionEstimateResults" aria-live="polite"></div>
+    <p>Estimates represent total labor time, not scheduled elapsed time. Staffing, parallel work, setup, and downtime can affect actual completion time.</p>
+  </dialog>
   <div class="item-task-management">
     <section class="item-task-section item-task-new-item-section">
       <h3>New Item</h3>
