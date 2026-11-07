@@ -105,7 +105,8 @@ function renderAdminCalendar(gridStart, options = {}) {
     const activeEvents = scheduleDay.events || [];
     const activeDeliveries = adminExpectedDeliveriesByDate.get(isoDate) || [];
 
-    appendEventList(cell, activeEvents);
+    setupCalendarDropTarget(cell, isoDate);
+    appendEventList(cell, activeEvents, true);
 
     appendBatchList(cell, scheduleDay);
     appendTestPickupList(cell, scheduleDay);
@@ -130,4 +131,82 @@ function renderAdminCalendar(gridStart, options = {}) {
 
     calendar.appendChild(cell);
   }
+}
+
+let calendarDraggedEvent = null;
+let calendarEventMovePending = false;
+
+function setupCalendarEventDrag(item, event) {
+  item.draggable = true;
+  item.tabIndex = 0;
+  item.title = "Drag to another day to move this event. For multiple days, the drop date becomes the new start date.";
+  item.addEventListener("dragstart", drag => {
+    if (calendarEventMovePending || scheduleDaySavePending) { drag.preventDefault(); return; }
+    calendarDraggedEvent = { id: event.id, sourceDate: event.sourceDate, date: event.date };
+    drag.dataTransfer.effectAllowed = "move";
+    drag.dataTransfer.setData("text/plain", event.id);
+    item.classList.add("calendar-event-dragging");
+  });
+  item.addEventListener("dragend", () => {
+    calendarDraggedEvent = null;
+    item.classList.remove("calendar-event-dragging");
+    document.querySelectorAll(".calendar-drop-target").forEach(cell => cell.classList.remove("calendar-drop-target"));
+  });
+}
+
+function setupCalendarDropTarget(cell, date) {
+  cell.addEventListener("dragover", event => {
+    if (!calendarDraggedEvent || calendarEventMovePending) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    cell.classList.add("calendar-drop-target");
+  });
+  cell.addEventListener("dragleave", event => {
+    if (!cell.contains(event.relatedTarget)) cell.classList.remove("calendar-drop-target");
+  });
+  cell.addEventListener("drop", event => {
+    if (!calendarDraggedEvent || calendarEventMovePending) return;
+    event.preventDefault();
+    event.stopPropagation();
+    cell.classList.remove("calendar-drop-target");
+    const moved = calendarDraggedEvent;
+    calendarDraggedEvent = null;
+    moveAdminCalendarEvent(moved, date);
+  });
+}
+
+async function moveAdminCalendarEvent(event, targetDate) {
+  if (calendarEventMovePending || event.date === targetDate) return;
+  // Keep unsaved day edits from being silently discarded by a move.
+  const editor = document.getElementById("scheduleEditor");
+  if (scheduleDaySavePending || editor.classList.contains("active")) {
+    showMessage("Save or cancel the open day editor before moving an event.", "error");
+    return;
+  }
+  calendarEventMovePending = true;
+  ++adminCalendarLoadSequence;
+  showMessage("Moving event…");
+  try {
+    const res = await adminFetch("/admin/calendar/move-event", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sourceDate: event.sourceDate, targetDate, eventId: event.id,
+        sourceRevision: adminScheduleRevisions.get(event.sourceDate) || "missing",
+        targetRevision: adminScheduleRevisions.get(targetDate) || "missing" })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    ++adminCalendarLoadSequence;
+    data.rows.forEach(row => {
+      adminScheduleRows.set(row.schedule_date, row.tasks);
+      adminScheduleRevisions.set(row.schedule_date, row.revision);
+    });
+    const start = dateOnly(adminCalendarStartDate);
+    adminActiveScheduleByDate = buildAdminActiveScheduleByDate(
+      [...adminScheduleRows].map(([schedule_date, tasks]) => ({ schedule_date, tasks })), start, addDays(start, 41));
+    closeAdminCalendarDayFocus();
+    renderAdminCalendar(start);
+    showMessage(`Event moved to ${formatDisplayDate(targetDate)}.`, "success");
+  } catch (err) {
+    showMessage(`Could not confirm the move: ${err.message} Refresh the calendar before retrying.`, "error");
+  } finally { calendarEventMovePending = false; }
 }

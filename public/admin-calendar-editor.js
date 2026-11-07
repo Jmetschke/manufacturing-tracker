@@ -45,7 +45,7 @@ function setScheduleSaveStatus(text, type = "") {
 }
 
 function editScheduleDay(isoDate) {
-  if (scheduleDaySavePending) return;
+  if (scheduleDaySavePending || calendarEventMovePending) return;
   setScheduleSaveStatus("");
   document.getElementById("scheduleReloadButton").hidden = true;
   scheduleEditorBaseRevision = adminScheduleRevisions.get(isoDate) || "missing";

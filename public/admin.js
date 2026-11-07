@@ -553,14 +553,85 @@ async function loadLookups() {
 }
 
 function loadEmployeeSelects() {
-  const employees = window.employeeNames.map(employee => ({
-    value: employee,
-    text: employee
-  }));
+  const names = window.employeeNames || [];
+  ["employee_filter", "edit_employee", "review_edit_employee"].forEach(id => {
+    const select = document.getElementById(id);
+    const previous = select.value;
+    const choices = id === "employee_filter"
+      ? [...new Set([...names, ...allEntries.map(entry => entry.employee).filter(Boolean)])]
+      : [...names];
+    if (previous && !choices.includes(previous)) choices.push(previous);
+    choices.sort((a, b) => a.localeCompare(b));
+    fillSelect(select, choices.map(name => ({ value: name, text: name })), id === "employee_filter" ? "All Employees" : "");
+    if (previous) select.value = previous;
+  });
+}
 
-  fillSelect(document.getElementById("employee_filter"), employees, "All Employees");
-  fillSelect(document.getElementById("edit_employee"), employees);
-  fillSelect(document.getElementById("review_edit_employee"), employees);
+function selectEntryEmployee(id, name) {
+  const select = document.getElementById(id);
+  fillSelect(select, (window.employeeNames || []).map(value => ({ value, text: value })));
+  if (name && !Array.from(select.options).some(option => option.value === name)) {
+    select.add(new Option(name, name));
+  }
+  select.value = name;
+}
+
+let employeeChoicesBusy = false;
+function renderEmployeeChoices(rows) {
+  window.employeeNames = rows.map(row => row.name);
+  loadEmployeeSelects();
+  const list = document.getElementById("employeeChoiceList");
+  list.replaceChildren();
+  if (!rows.length) list.textContent = "No employee choices. Add a name above.";
+  rows.forEach(row => {
+    const line = document.createElement("div");
+    line.className = "controls";
+    const label = document.createElement("span");
+    label.textContent = row.name;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "Delete";
+    button.setAttribute("aria-label", `Delete employee choice ${row.name}`);
+    button.onclick = () => saveEmployeeChoice(row.id);
+    line.append(label, button);
+    list.appendChild(line);
+  });
+}
+
+async function loadEmployeeChoices() {
+  if (employeeChoicesBusy) return;
+  try {
+    const res = await adminFetch("/admin/employees");
+    if (!res.ok) throw new Error(await res.text());
+    renderEmployeeChoices(await res.json());
+    document.getElementById("employeeChoiceStatus").textContent = "";
+  } catch (err) {
+    document.getElementById("employeeChoiceStatus").textContent = `Could not load names: ${err.message}`;
+  }
+}
+
+async function saveEmployeeChoice(id) {
+  if (employeeChoicesBusy) return;
+  employeeChoicesBusy = true;
+  const status = document.getElementById("employeeChoiceStatus");
+  const input = document.getElementById("newEmployeeName");
+  const buttons = [document.getElementById("addEmployeeChoice"), ...document.querySelectorAll("#employeeChoiceList button")];
+  buttons.forEach(button => { button.disabled = true; });
+  status.textContent = "Saving…";
+  try {
+    const res = await adminFetch(id ? `/admin/employees/${id}` : "/admin/employees", id
+      ? { method: "DELETE" }
+      : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: input.value }) });
+    if (!res.ok) throw new Error(await res.text());
+    renderEmployeeChoices(await res.json());
+    if (!id) input.value = "";
+    status.textContent = id ? "Employee choice deleted. Past entries are preserved." : "Employee choice saved.";
+  } catch (err) {
+    status.textContent = `Could not save: ${err.message}`;
+  } finally {
+    employeeChoicesBusy = false;
+    buttons.forEach(button => { button.disabled = false; });
+  }
 }
 
 function secondsToHMS(sec) {
@@ -1081,7 +1152,7 @@ function appendBatchDetail(container, batch) {
   container.appendChild(item);
 }
 
-function appendEventList(container, events) {
+function appendEventList(container, events, draggable = false) {
   if (!events.length) return;
 
   const eventList = document.createElement("div");
@@ -1090,6 +1161,7 @@ function appendEventList(container, events) {
   events.forEach(event => {
     const item = document.createElement("div");
     item.className = "admin-event-item";
+    if (draggable && event.id && event.sourceDate) setupCalendarEventDrag(item, event);
     const timeText = event.start && event.end ? ` ${event.start}-${event.end}` : "";
     item.textContent = `${event.title}${timeText} - ${event.location} - ${event.company}`;
     eventList.appendChild(item);
@@ -1330,6 +1402,7 @@ function buildAdminActiveScheduleByDate(rows, visibleStart, visibleEnd) {
         const time = event.times[index] || { start: "", end: "" };
         activeSchedule.get(isoDate).events.push({
           ...event,
+          sourceDate: row.schedule_date,
           title: event.title,
           start: time.start,
           end: time.end,
@@ -2547,6 +2620,7 @@ async function loadReport() {
   const task = document.getElementById("task_filter").value;
 
   allEntries = data;
+  loadEmployeeSelects();
   reportData = data.filter(entry => {
     if (from && entry.work_date < from) return false;
     if (to && entry.work_date > to) return false;
@@ -3075,7 +3149,7 @@ function editEntry(logId) {
 
   document.getElementById("edit_log_id").value = entry.log_id;
   document.getElementById("edit_work_date").value = entry.work_date;
-  document.getElementById("edit_employee").value = entry.employee;
+  selectEntryEmployee("edit_employee", entry.employee);
   document.getElementById("edit_item").value = String(entry.item_id);
   document.getElementById("edit_task").value = String(entry.task_id);
   document.getElementById("edit_dispensary_name").value = entry.dispensary_name || "";
@@ -3402,7 +3476,7 @@ function editReviewEntry(logId) {
 
   document.getElementById("review_edit_log_id").value = entry.log_id;
   document.getElementById("review_edit_work_date").value = entry.work_date;
-  document.getElementById("review_edit_employee").value = entry.employee;
+  selectEntryEmployee("review_edit_employee", entry.employee);
   document.getElementById("review_edit_item").value = String(entry.item_id);
   fillReviewTaskOptions(entry.item_id, entry.task_id);
   document.getElementById("review_edit_task").value = String(entry.task_id);
@@ -7001,7 +7075,7 @@ async function initAdmin() {
   if (!hasAccess) return;
 
   try {
-    loadEmployeeSelects();
+    await loadEmployeeChoices();
     await loadLookups();
     setDefaultCalendarRange();
     resetOrderedForm();

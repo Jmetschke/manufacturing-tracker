@@ -21,6 +21,7 @@ const currentPackages = require("./server/current-packages")({ runSql, allSql, g
   readWorkbook: buffer => readXlsxFile(repairWorkbookDimensions(buffer)) });
 const storageOrganization = require("./server/storage-organization")({runSql,getSql,allSql,withTransaction});
 const storageStock = require("./server/storage-stock")({runSql,getSql,allSql,withTransaction});
+const employees = require("./server/employees")({ runSql, allSql });
 const app = express();
 
 app.use(express.json({ limit: "14mb" }));
@@ -263,6 +264,27 @@ app.use((req, res, next) => {
   }
 
   return res.status(401).json({ message: "Access code required" });
+});
+
+// Retain the shared script interface so both portals use current database choices.
+app.get("/employees.js", async (req, res) => {
+  try {
+    const rows = await employees.list();
+    res.set("Cache-Control", "no-store").type("application/javascript")
+      .send(`window.employeeNames = ${JSON.stringify(rows.map(row => row.name))};`);
+  } catch (err) { res.status(500).send("Could not load employee names"); }
+});
+app.get("/admin/employees", async (req, res) => {
+  try { res.set("Cache-Control", "no-store").json(await employees.list()); }
+  catch (err) { res.status(500).send(err.message); }
+});
+app.post("/admin/employees", async (req, res) => {
+  try { await employees.add(req.body.name); res.json(await employees.list()); }
+  catch (err) { res.status(err.status || 500).send(err.message); }
+});
+app.delete("/admin/employees/:id", async (req, res) => {
+  try { await employees.remove(req.params.id); res.json(await employees.list()); }
+  catch (err) { res.status(err.status || 500).send(err.message); }
 });
 
 app.use(express.static("public", {
@@ -1827,6 +1849,7 @@ async function reconcileCalendarDatabase() {
 }
 
 async function initializeDatabase() {
+  await employees.initialize();
   await runSql(`
     CREATE TABLE IF NOT EXISTS items (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3347,6 +3370,16 @@ app.get("/schedule", async (req, res) => {
   } catch (err) {
     res.status(500).send(err.message);
   }
+});
+
+app.post("/admin/calendar/move-event", async (req, res) => {
+  try {
+    const rows = await require("./server/move-calendar-event")(req.body, {
+      database: calendarDb, mirrorDatabase: hasSeparateCalendarDb ? db : null,
+      withTransaction, getSql, runSql
+    });
+    res.json({ rows });
+  } catch (err) { res.status(err.status || 500).send(err.message); }
 });
 
 app.put("/admin/schedule/:date", async (req, res) => {

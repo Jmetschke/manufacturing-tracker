@@ -347,6 +347,9 @@
     .production-estimate-inputs { display: flex; flex-wrap: wrap; gap: 16px; margin: 16px 0; }
     .production-estimate-inputs label { display: grid; gap: 6px; flex: 1; min-width: 180px; }
     .production-estimate-table { overflow-x: auto; }
+    .admin-event-item[draggable="true"] { cursor: grab; }
+    .calendar-event-dragging { opacity: .45; }
+    .admin-calendar-day.calendar-drop-target { outline: 3px solid #527841; background: #edf5e8; }
     .item-task-focus-window {
       position: fixed;
       inset: 0;
@@ -2205,6 +2208,17 @@
 <div id="message" class="message"></div>
 
 <section id="entriesPanel" class="admin-panel active">
+  <details class="item-task-section" ontoggle="if (this.open) loadEmployeeChoices()">
+    <summary>Employee Names — Add / Delete</summary>
+    <p>Manage employee choices for entry forms and scheduling. Deleting a choice preserves past entries and their employee names.</p>
+    <form onsubmit="event.preventDefault(); saveEmployeeChoice()" class="controls">
+      <label for="newEmployeeName">Employee name</label>
+      <input id="newEmployeeName" type="text" maxlength="100" required placeholder="Enter employee name">
+      <button id="addEmployeeChoice" type="submit">Add Employee</button>
+    </form>
+    <p id="employeeChoiceStatus" role="status"></p>
+    <div id="employeeChoiceList"></div>
+  </details>
   <div class="controls">
     <input type="date" id="from_date">
     <input type="date" id="to_date">
@@ -2447,6 +2461,7 @@
   <div class="calendar-tools">
     <button type="button" onclick="changeAdminCalendarWeeks(-1)">Previous 2 Weeks</button>
     <span id="calendar_range_label"></span>
+    <span>Drag event cards to another day to reschedule. Multi-day events move together, starting on the drop date.</span>
     <button type="button" onclick="changeAdminCalendarWeeks(1)">Next 2 Weeks</button>
     <button type="button" onclick="printAdminCalendarView()">Print View</button>
   </div>
