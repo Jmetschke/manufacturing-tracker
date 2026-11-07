@@ -347,7 +347,8 @@
     .production-estimate-inputs { display: flex; flex-wrap: wrap; gap: 16px; margin: 16px 0; }
     .production-estimate-inputs label { display: grid; gap: 6px; flex: 1; min-width: 180px; }
     .production-estimate-table { overflow-x: auto; }
-    .admin-event-item[draggable="true"] { cursor: grab; }
+    .admin-event-item[draggable="true"], .admin-batch-item[draggable="true"] { cursor: grab; user-select: none; }
+    .calendar-card-selected { outline: 3px solid #527841; outline-offset: 1px; }
     .calendar-event-dragging { opacity: .45; }
     .admin-calendar-day.calendar-drop-target { outline: 3px solid #527841; background: #edf5e8; }
     .item-task-focus-window {
@@ -464,7 +465,6 @@
       min-height: 84px;
       padding: 6px 4px;
     }
-    .admin-calendar-day.weekend .admin-event-item,
     .admin-calendar-day.weekend .admin-batch-item,
     .admin-calendar-day.weekend .admin-test-pickup {
       display: none;
@@ -2461,7 +2461,7 @@
   <div class="calendar-tools">
     <button type="button" onclick="changeAdminCalendarWeeks(-1)">Previous 2 Weeks</button>
     <span id="calendar_range_label"></span>
-    <span>Drag event cards to another day to reschedule. Multi-day events move together, starting on the drop date.</span>
+    <span>Click a card to select it, then drag it to another day. Production batches move with their tasks to another weekday. Click empty space in a date for daily details.</span>
     <button type="button" onclick="changeAdminCalendarWeeks(1)">Next 2 Weeks</button>
     <button type="button" onclick="printAdminCalendarView()">Print View</button>
   </div>

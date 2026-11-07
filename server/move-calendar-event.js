@@ -6,25 +6,33 @@ function validDate(value) {
 }
 module.exports = async function moveCalendarEvent(input, { database, mirrorDatabase, withTransaction, getSql, runSql }) {
   const { sourceDate, targetDate, eventId, sourceRevision, targetRevision } = input;
-  if (!validDate(sourceDate) || !validDate(targetDate) || typeof eventId !== 'string') throw fail('Choose a valid event and destination date.');
+  if (!validDate(sourceDate) || !validDate(targetDate) || (input.kind !== 'batch' && typeof eventId !== 'string')) throw fail('Choose a valid event and destination date.');
   if (!sourceRevision || !targetRevision) throw fail('Refresh the calendar before moving an event.', 428);
   const saved = await withTransaction(async transaction => {
     const read = date => getSql('SELECT schedule_date, tasks FROM schedule_days WHERE schedule_date = ?', [date], transaction);
     const source = await read(sourceDate);
     const target = sourceDate === targetDate ? source : await read(targetDate);
     if (revision(source) !== sourceRevision || revision(target) !== targetRevision) throw fail('The calendar changed. Refresh it before moving this event again.', 409);
-    const parse = row => row ? JSON.parse(row.tasks) : { events: [] };
+    const parse = row => {
+      if (!row || !row.tasks) return { events: [] };
+      const payload = JSON.parse(row.tasks);
+      return Array.isArray(payload) ? { events: [], tasks: payload } : payload;
+    };
     const sourcePayload = parse(source);
-    const event = (sourcePayload.events || []).find(event => event.id === eventId);
-    if (!event) throw fail('This event no longer exists. Refresh the calendar.', 409);
     const targetPayload = sourceDate === targetDate ? sourcePayload : parse(target);
-    const moved = { ...event, date: targetDate };
-    if (sourceDate === targetDate) {
-      sourcePayload.events = sourcePayload.events.map(value => value.id === eventId ? moved : value);
+    if (input.kind === "batch") {
+      require("./move-calendar-batch")(sourcePayload, targetPayload, input);
     } else {
-      if ((targetPayload.events || []).some(value => value.id === eventId)) throw fail('This event already exists on the destination day.', 409);
-      sourcePayload.events = sourcePayload.events.filter(value => value.id !== eventId);
-      targetPayload.events = [...(targetPayload.events || []), moved];
+      const event = (sourcePayload.events || []).find(event => event.id === eventId);
+      if (!event) throw fail('This event no longer exists. Refresh the calendar.', 409);
+      const moved = { ...event, date: targetDate };
+      if (sourceDate === targetDate) {
+        sourcePayload.events = sourcePayload.events.map(value => value.id === eventId ? moved : value);
+      } else {
+        if ((targetPayload.events || []).some(value => value.id === eventId)) throw fail('This event already exists on the destination day.', 409);
+        sourcePayload.events = sourcePayload.events.filter(value => value.id !== eventId);
+        targetPayload.events = [...(targetPayload.events || []), moved];
+      }
     }
     const rows = sourceDate === targetDate ? [[sourceDate, sourcePayload]] : [[sourceDate, sourcePayload], [targetDate, targetPayload]];
     const result = [];

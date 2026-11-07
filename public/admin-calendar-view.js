@@ -108,12 +108,14 @@ function renderAdminCalendar(gridStart, options = {}) {
     setupCalendarDropTarget(cell, isoDate);
     appendEventList(cell, activeEvents, true);
 
-    appendBatchList(cell, scheduleDay);
+    appendBatchList(cell, scheduleDay, isoDate);
     appendTestPickupList(cell, scheduleDay);
-    cell.addEventListener("click", () => {
+    cell.addEventListener("click", event => {
+      if (event.target.closest("[draggable=true], button")) return;
       renderAdminFocusedScheduleDay(isoDate, scheduleDay, activeDeliveries);
     });
     cell.addEventListener("keydown", event => {
+      if (event.target !== cell) return;
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         renderAdminFocusedScheduleDay(isoDate, scheduleDay, activeDeliveries);
@@ -138,13 +140,29 @@ let calendarEventMovePending = false;
 
 function setupCalendarEventDrag(item, event) {
   item.draggable = true;
+  item.setAttribute("role", "button");
+  item.setAttribute("aria-pressed", "false");
+  const select = () => {
+    document.querySelectorAll(".calendar-card-selected").forEach(card => {
+      card.classList.remove("calendar-card-selected");
+      card.setAttribute("aria-pressed", "false");
+    });
+    item.classList.add("calendar-card-selected");
+    item.setAttribute("aria-pressed", "true");
+  };
+  item.addEventListener("click", click => { click.stopPropagation(); select(); });
+  item.addEventListener("keydown", key => {
+    key.stopPropagation();
+    if (key.key === "Enter" || key.key === " ") { key.preventDefault(); select(); }
+  });
   item.tabIndex = 0;
-  item.title = "Drag to another day to move this event. For multiple days, the drop date becomes the new start date.";
+  item.title = event.kind === "batch" ? "Select and drag this production batch to another weekday." : "Select and drag this event to another day. The drop date becomes the new start date.";
   item.addEventListener("dragstart", drag => {
     if (calendarEventMovePending || scheduleDaySavePending) { drag.preventDefault(); return; }
-    calendarDraggedEvent = { id: event.id, sourceDate: event.sourceDate, date: event.date };
+    select();
+    calendarDraggedEvent = { ...event };
     drag.dataTransfer.effectAllowed = "move";
-    drag.dataTransfer.setData("text/plain", event.id);
+    drag.dataTransfer.setData("text/plain", event.id || `${event.batchType}:${event.batchIndex}`);
     item.classList.add("calendar-event-dragging");
   });
   item.addEventListener("dragend", () => {
@@ -185,11 +203,13 @@ async function moveAdminCalendarEvent(event, targetDate) {
   }
   calendarEventMovePending = true;
   ++adminCalendarLoadSequence;
-  showMessage("Moving event…");
+  const label = event.kind === "batch" ? "Production batch" : "Event";
+  showMessage(`Moving ${label.toLowerCase()}…`);
   try {
     const res = await adminFetch("/admin/calendar/move-event", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sourceDate: event.sourceDate, targetDate, eventId: event.id,
+        kind: event.kind, batchType: event.batchType, batchIndex: event.batchIndex, item: event.item,
         sourceRevision: adminScheduleRevisions.get(event.sourceDate) || "missing",
         targetRevision: adminScheduleRevisions.get(targetDate) || "missing" })
     });
@@ -205,7 +225,7 @@ async function moveAdminCalendarEvent(event, targetDate) {
       [...adminScheduleRows].map(([schedule_date, tasks]) => ({ schedule_date, tasks })), start, addDays(start, 41));
     closeAdminCalendarDayFocus();
     renderAdminCalendar(start);
-    showMessage(`Event moved to ${formatDisplayDate(targetDate)}.`, "success");
+    showMessage(`${label} moved to ${formatDisplayDate(targetDate)}.`, "success");
   } catch (err) {
     showMessage(`Could not confirm the move: ${err.message} Refresh the calendar before retrying.`, "error");
   } finally { calendarEventMovePending = false; }

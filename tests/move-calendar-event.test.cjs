@@ -50,3 +50,27 @@ test('new empty date, same owner day and invalid dates', async () => {
     assert.equal(JSON.parse(result[1].tasks).events[0].date, '2026-11-20');
   } finally { c.db.close(); }
 });
+test('batch moves linked tasks, shifts planned dates, reindexes siblings, and preserves completed dates', async () => {
+  const c = setup();
+  try {
+    const source = { batchHijnx: [{ item: 'A', units: 100, checklist: { cooking: true } }, { item: 'B' }], processingTasks: [
+      { text: 'Cook', sourceBatchKey: 'hijnx:0:A:1:Cook', scheduleDate: '2026-11-10', completedDates: ['2026-11-09'], assignments: [{ employee: 'Wayne', hours: 2 }] },
+      { text: 'Pack', sourceBatchKey: 'hijnx:1:B', scheduleDate: '2026-11-12' },
+      { text: 'Unrelated', scheduleDate: '2026-11-09' }
+    ], events: [{ id: 'keep' }] };
+    c.db.prepare('UPDATE schedule_days SET tasks = ? WHERE schedule_date = ?').run(JSON.stringify(source), c.input.sourceDate);
+    const input = { kind: 'batch', sourceDate: c.input.sourceDate, targetDate: '2026-11-11', batchType: 'hijnx', batchIndex: 0, item: 'A', sourceRevision: revision(c.read(c.input.sourceDate)), targetRevision: 'missing' };
+    await move(input, c.deps);
+    const from = JSON.parse(c.read(input.sourceDate).tasks), to = JSON.parse(c.read(input.targetDate).tasks);
+    assert.equal(from.batchHijnx[0].item, 'B');
+    assert.equal(from.processingTasks[0].sourceBatchKey, 'hijnx:0:B');
+    assert.equal(from.processingTasks[1].text, 'Unrelated');
+    assert.deepEqual(to.batchHijnx[0], source.batchHijnx[0]);
+    assert.equal(to.processingTasks[0].scheduleDate, '2026-11-12');
+    assert.equal(to.processingTasks[0].sourceBatchKey, 'hijnx:0:A:1:Cook');
+    assert.deepEqual(to.processingTasks[0].assignments, source.processingTasks[0].assignments);
+    assert.deepEqual(to.processingTasks[0].completedDates, ['2026-11-09']);
+    assert.deepEqual(from.events, source.events);
+    await assert.rejects(move(input, c.deps), { status: 409 });
+  } finally { c.db.close(); }
+});

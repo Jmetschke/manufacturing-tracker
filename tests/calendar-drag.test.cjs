@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const code = fs.readFileSync('public/admin-calendar-view.js', 'utf8').split('let calendarDraggedEvent = null;')[1];
 function element() {
   const listeners = {}, classes = new Set();
-  return { listeners, classList: { add: name => classes.add(name), remove: name => classes.delete(name), contains: name => classes.has(name) }, addEventListener: (name, fn) => { listeners[name] = fn; }, contains: () => false };
+  return { listeners, setAttribute() {}, classList: { add: name => classes.add(name), remove: name => classes.delete(name), contains: name => classes.has(name) }, addEventListener: (name, fn) => { listeners[name] = fn; }, contains: () => false };
 }
 test('drag targets submit the event identity and both revisions, then apply saved rows', async () => {
   const item = element(), cell = element(), editor = element();

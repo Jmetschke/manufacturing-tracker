@@ -1058,10 +1058,10 @@ function applyBatchTaskColor(element, task) {
   element.title = task.sourceBatchLabel || "";
 }
 
-function appendBatchList(container, payload) {
+function appendBatchList(container, payload, sourceDate = "") {
   const batches = [
-    ...payload.batchHijnx.map(batch => ["Production Batch - Hijnx", batch]),
-    ...payload.batchSb.map(batch => ["Production Batch - SB", batch])
+    ...payload.batchHijnx.map((batch, index) => ["Production Batch - Hijnx", batch, "hijnx", index]),
+    ...payload.batchSb.map((batch, index) => ["Production Batch - SB", batch, "sb", index])
   ];
 
   if (!batches.length) return;
@@ -1069,9 +1069,10 @@ function appendBatchList(container, payload) {
   const batchList = document.createElement("div");
   batchList.className = "admin-batch-list";
 
-  batches.forEach(([label, batch]) => {
+  batches.forEach(([label, batch, batchType, batchIndex]) => {
     const item = document.createElement("div");
     item.className = "admin-batch-item";
+    if (sourceDate) setupCalendarEventDrag(item, { kind: "batch", batchType, batchIndex, item: batch.item, sourceDate, date: sourceDate });
     item.textContent = batch.units
       ? `${label}: ${batch.item} - ${batch.units} units - ${getBatchProgress(batch).percent}%`
       : `${label}: ${batch.item} - ${getBatchProgress(batch).percent}%`;
