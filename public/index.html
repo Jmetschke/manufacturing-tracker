@@ -2056,7 +2056,12 @@
         font-size: 10px;
       }
     }
-  </style>
+    .daily-batch-tracker { display: flex; flex-direction: column; align-items: stretch; cursor: default; }
+  .daily-batch-tracker h4, .daily-batch-tracker p { margin: 0 0 8px; }
+  .daily-batch-checklist { display: grid; gap: 10px; }
+  .daily-batch-checklist label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .daily-batch-checklist input { width: auto; margin: 0; }
+</style>
 </head>
 <body>
 
@@ -2338,7 +2343,13 @@
   <div id="dailyReportGrid" class="daily-report-grid"></div>
   <section class="daily-working-section">
     <h3>Working Batches</h3>
+    <p>Check or uncheck individual batch steps to update progress. Changes save automatically.</p>
     <div id="dailyWorkingBatches" class="daily-working-batches"></div>
+    <details style="margin-top: 20px">
+      <summary id="dailyCompletedBatchCount">Completed Batches</summary>
+      <p>Uncheck a step to return a batch to Working Batches.</p>
+      <div id="dailyCompletedBatches" class="daily-working-batches"></div>
+    </details>
   </section>
   <section id="dailyReportFocus" class="focus-window daily-report-focus" hidden>
     <div class="focus-dialog" role="dialog" aria-modal="true" aria-labelledby="dailyReportFocusTitle">

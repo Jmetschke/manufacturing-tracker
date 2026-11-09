@@ -3413,6 +3413,19 @@ app.put("/admin/schedule/:date", async (req, res) => {
   }
 });
 
+app.put("/schedule/batch-checklist", async (req, res) => {
+  const { sourceDate, base_revision } = req.body;
+  if (!isIsoDate(sourceDate)) return res.status(400).send("Choose a valid schedule date.");
+  try {
+    const saved = await calendarStore.save(sourceDate, base_revision, previous => {
+      if (!previous) throw Object.assign(new Error("Schedule day not found"), { status: 404 });
+      return JSON.stringify(require("./server/batch-checklist").updateBatchChecklist(
+        parseSchedulePayloadForCleanup(previous.tasks), req.body));
+    });
+    res.json({ message: "Batch step updated", ...saved });
+  } catch (err) { res.status(err.status || 500).send(err.message); }
+});
+
 app.put("/schedule/batch-completion", async (req, res) => {
   const { sourceDate, batchType, batchIndex, item, completedDate, base_revision } = req.body;
   if (!isIsoDate(sourceDate) || !isIsoDate(completedDate) ||

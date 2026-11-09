@@ -1313,61 +1313,89 @@ function getBatchesFromScheduleRows(rows) {
 }
 
 function renderDailyWorkingBatches(batches) {
-  const container = document.getElementById("dailyWorkingBatches");
-  container.innerHTML = "";
-
-  const workingBatches = batches.filter(batch => {
-    const progress = getBatchProgress(batch);
-    return progress.completed < progress.total;
-  });
-
-  if (!workingBatches.length) {
-    const empty = document.createElement("div");
-    empty.className = "calendar-focus-empty";
-    empty.textContent = "No working batches.";
-    container.appendChild(empty);
-    return;
-  }
-
-  workingBatches.forEach(batch => {
-    const progress = getBatchProgress(batch);
-    const card = document.createElement("article");
-    card.tabIndex = 0;
-    card.className = "daily-working-batch";
-    card.addEventListener("click", () => showDailyReportFocus("Working Batch", body => appendBatchDetail(body, batch)));
-
-    card.addEventListener("keydown", event => {
-      if (event.target !== card || !["Enter", " "].includes(event.key)) return;
-      event.preventDefault();
-      showDailyReportFocus("Working Batch", body => appendBatchDetail(body, batch));
-    });
-    const pie = document.createElement("div");
-    pie.className = "daily-batch-pie";
-    pie.style.setProperty("--progress", `${progress.percent}%`);
-    card.appendChild(pie);
-
-    const text = document.createElement("div");
-    const title = document.createElement("div");
-    title.className = "daily-working-batch-title";
-    title.textContent = `${batch.label}: ${batch.item}`;
-    text.appendChild(title);
-
-    if (batch.scheduleDate) {
-      const scheduled = document.createElement("div");
-      scheduled.className = "daily-working-batch-note";
-      scheduled.textContent = formatDisplayDate(batch.scheduleDate);
-      text.appendChild(scheduled);
+  const working = batches.filter(isBatchInProgress);
+  const completed = batches.filter(batch => !isBatchInProgress(batch));
+  document.getElementById("dailyCompletedBatchCount").textContent = `Completed Batches (${completed.length})`;
+  [["dailyWorkingBatches", working, "No working batches."],
+    ["dailyCompletedBatches", completed, "No completed batches."]].forEach(([id, list, emptyText]) => {
+    const container = document.getElementById(id);
+    container.replaceChildren();
+    if (!list.length) {
+      container.appendChild(createFocusEmpty(emptyText));
+      return;
     }
-
-    const note = document.createElement("div");
-    note.className = "daily-working-batch-note";
-    note.textContent = getBatchStatusText(batch);
-    text.appendChild(note);
-
-    card.appendChild(text);
-    appendDailyBatchCompletion(card, batch);
-    container.appendChild(card);
+    list.forEach(batch => container.appendChild(createDailyBatchTrackerCard(batch)));
   });
+}
+
+let dailyBatchStatusPending = false;
+let dailyReportBatchRows = [];
+function createDailyBatchTrackerCard(batch) {
+  const card = document.createElement("article");
+  card.className = "daily-working-batch daily-batch-tracker";
+  const title = document.createElement("h4");
+  title.textContent = `${batch.label}: ${batch.item}`;
+  const meta = document.createElement("p");
+  meta.textContent = `Scheduled: ${formatDisplayDate(batch.scheduleDate)} · ${batch.units || "Unspecified"} units`;
+  const progress = getBatchProgress(batch);
+  const summary = document.createElement("p");
+  summary.textContent = `${progress.completed} of ${progress.total} steps complete (${progress.percent}%) — ${getBatchStatusText(batch)}`;
+  card.append(title, meta, summary);
+  const status = document.createElement("p");
+  status.setAttribute("role", "status");
+  const list = document.createElement("div");
+  list.className = "daily-batch-checklist";
+  batchChecklistItems.forEach(check => {
+    const label = document.createElement("label");
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = Boolean(batch.checklist?.[check.key]);
+    const text = document.createElement("span");
+    text.textContent = `${check.label} — ${input.checked ? "Complete" : "Not complete"}`;
+    input.addEventListener("change", () => saveDailyBatchStep(batch, check.key, input, status));
+    label.append(input, text);
+    list.appendChild(label);
+  });
+  card.append(list, status);
+  if (isBatchInProgress(batch)) {
+    const complete = document.createElement("button");
+    complete.type = "button";
+    complete.textContent = "All tasks completed";
+    complete.addEventListener("click", () => {
+      if (!confirm(`Mark all tasks and checklist steps complete for ${batch.item}? This includes the final count entered in Metrc.`)) return;
+      saveDailyBatchStep(batch, null, { checked: true }, status);
+    });
+    card.appendChild(complete);
+  }
+  return card;
+}
+
+async function saveDailyBatchStep(batch, key, input, status) {
+  const previous = Boolean(batch.checklist?.[key]);
+  if (dailyBatchStatusPending) { input.checked = previous; return; }
+  dailyBatchStatusPending = true;
+  const controls = Array.from(document.querySelectorAll("#dailyWorkingBatches input, #dailyWorkingBatches button, #dailyCompletedBatches input, #dailyCompletedBatches button"));
+  controls.forEach(control => { control.disabled = true; });
+  status.textContent = "Saving step…";
+  try {
+    const res = await fetch(key ? "/schedule/batch-checklist" : "/schedule/batch-completion", {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sourceDate: batch.scheduleDate, batchType: batch.batchType,
+        batchIndex: batch.batchIndex, item: batch.item, base_revision: batch.revision,
+        key, completed: input.checked, completedDate: toIsoDate(new Date()) })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const saved = await res.json();
+    dailyReportBatchRows = dailyReportBatchRows.map(row => row.schedule_date === saved.schedule_date ? saved : row);
+    renderDailyWorkingBatches(getBatchesFromScheduleRows(dailyReportBatchRows));
+
+  } catch (err) {
+    input.checked = previous;
+    status.textContent = `Could not update this step: ${err.message} Refresh the Daily Report before retrying.`;
+  } finally {
+    dailyBatchStatusPending = false;
+    controls.forEach(control => { control.disabled = false; });
+  }
 }
 
 async function loadDailyReport() {
@@ -1394,6 +1422,7 @@ async function loadDailyReport() {
     ...(scheduleDay.batchHijnx || []).map(batch => ({ label: "Hijnx", ...batch })),
     ...(scheduleDay.batchSb || []).map(batch => ({ label: "SB", ...batch }))
   ].filter(isBatchInProgress);
+  dailyReportBatchRows = rows;
   const workingBatches = getBatchesFromScheduleRows(rows);
   scheduleDay.tasks = filterDailyIncompleteTasks(scheduleDay.tasks || [], workingBatches);
   scheduleDay.processingTasks = filterDailyIncompleteTasks(scheduleDay.processingTasks || [], workingBatches);
