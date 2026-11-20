@@ -1,12 +1,12 @@
 const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict');
 const source=fs.readFileSync('public/admin-calendar-editor.js','utf8');
-const code=source.slice(source.indexOf('async function saveScheduleDay() {'),source.length);
+const code=source.slice(source.indexOf('function calendarSaveContent('),source.length);
 async function scenario(failure=false){
  const button={disabled:false,textContent:'Save Day'},input={disabled:false},previouslyDisabled={disabled:true};
  const editor={querySelectorAll:()=>[button,input,previouslyDisabled],setAttribute(){this.busy=true},removeAttribute(){this.busy=false}};
  let resolve,requests=0,closed=false,renders=0,status='',message='';
  const pending=new Promise(r=>resolve=r);
- const ctx={scheduleDaySavePending:false,scheduleEditorBaseRevision:'base-version',adminCalendarLoadSequence:0,adminScheduleRevisions:new Map(),document:{getElementById:id=>({schedule_edit_date:{value:'2026-09-21'},scheduleEditor:editor,scheduleSaveButton:button,scheduleReloadButton:{hidden:true}}[id])},
+ const ctx={AbortSignal,scheduleDaySavePending:false,scheduleEditorBaseRevision:'base-version',adminCalendarLoadSequence:0,adminScheduleRevisions:new Map(),document:{getElementById:id=>({schedule_edit_date:{value:'2026-09-21'},scheduleEditor:editor,scheduleSaveButton:button,scheduleReloadButton:{hidden:true}}[id])},
  buildSchedulePayload:()=>'{"events":[]}',isWeekendIsoDate:()=>false,
  setScheduleSaveStatus:t=>status=t,adminFetch:(url,options)=>{assert.equal(JSON.parse(options.body).base_revision,'base-version');requests++;return pending},adminScheduleRows:new Map(),
  cancelScheduleEdit:()=>closed=true,showMessage:t=>message=t,dateOnly:d=>d,adminCalendarStartDate:new Date('2026-09-21'),

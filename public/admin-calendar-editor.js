@@ -136,6 +136,31 @@ async function verifyCalendarSave(date, tasks) {
   return row && calendarSaveContent(row.tasks) === calendarSaveContent(tasks) ? row : null;
 }
 
+async function submitCalendarDay(date, tasks, baseRevision) {
+  const body = JSON.stringify({ tasks, base_revision: baseRevision });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await adminFetch(`/admin/schedule/${date}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body,
+        signal: AbortSignal.timeout(30000)
+      });
+      if (!response.ok) throw Object.assign(new Error(await response.text() || `Request failed (${response.status})`), { status: response.status });
+      return await response.json();
+    } catch (error) {
+      const transient = !error.status || [408, 429, 500, 502, 503, 504].includes(error.status);
+      // A retry may conflict because the first request committed but its reply was lost.
+      if (!transient && !(attempt > 0 && error.status === 409)) throw error;
+      setScheduleSaveStatus("Waiting for save confirmation. Checking the saved day…");
+      try {
+        const confirmed = await verifyCalendarSave(date, tasks);
+        if (confirmed) return confirmed;
+      } catch (verificationError) { /* The original revision still protects a retry. */ }
+      if (!transient || attempt === 1) throw error;
+      setScheduleSaveStatus("Temporary connection problem. Retrying this save once…");
+    }
+  }
+}
+
 async function saveScheduleDay() {
   if (scheduleDaySavePending) return;
   const scheduleDate = document.getElementById("schedule_edit_date").value;
@@ -160,31 +185,13 @@ async function saveScheduleDay() {
   let saved = false;
 
   try {
-    const res = await adminFetch(`/admin/schedule/${scheduleDate}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tasks, base_revision: scheduleEditorBaseRevision })
-    });
-    if (!res.ok) throw Object.assign(new Error(await res.text() || `Request failed (${res.status})`), { status: res.status });
-    const result = await res.json();
+    const result = await submitCalendarDay(scheduleDate, tasks, scheduleEditorBaseRevision);
     // Use the authoritative response, including server-assigned event IDs.
     adminCalendarLoadSequence++; // Ignore an older in-flight calendar refresh.
     adminScheduleRows.set(scheduleDate, result.tasks);
     adminScheduleRevisions.set(scheduleDate, result.revision);
     saved = true;
   } catch (err) {
-    if (!err.status || err.status >= 500) {
-      setScheduleSaveStatus("Connection interrupted. Checking whether the day saved…");
-      try {
-        const confirmed = await verifyCalendarSave(scheduleDate, tasks);
-        if (confirmed) {
-          adminCalendarLoadSequence++;
-          adminScheduleRows.set(scheduleDate, confirmed.tasks);
-          adminScheduleRevisions.set(scheduleDate, confirmed.revision);
-          saved = true;
-        }
-      } catch (verificationError) { /* Keep the unsaved form intact if verification is unavailable. */ }
-    }
     if (!saved) {
       document.getElementById("scheduleReloadButton").hidden = false;
       setScheduleSaveStatus(`${err.message}. Your edits are still here. ${err.status === 409 || err.status === 428

@@ -351,9 +351,12 @@ async function checkProductionTrackerBuildVersion() {
     const storedBuildId = localStorage.getItem(productionTrackerBuildStorageKey);
     if (storedBuildId === buildId) return;
 
+    // A focus-triggered update must not navigate away from a calendar draft or save.
+    if (document.getElementById("scheduleEditor")?.classList.contains("active")) return;
     const reloadedBuildId = sessionStorage.getItem(productionTrackerReloadFlagKey);
-    localStorage.setItem(productionTrackerBuildStorageKey, buildId);
     await clearProductionTrackerStaticCaches();
+    if (document.getElementById("scheduleEditor")?.classList.contains("active")) return;
+    localStorage.setItem(productionTrackerBuildStorageKey, buildId);
 
     if (reloadedBuildId !== buildId) {
       reloadStarted = true;
