@@ -117,6 +117,25 @@ async function reloadScheduleEditor() {
   finally { scheduleDaySavePending = false; }
 }
 
+function calendarSaveContent(raw) {
+  const payload = JSON.parse(raw);
+  // Event IDs and sync metadata are assigned by the server, not edited in this form.
+  payload.events = (payload.events || []).map(event => Object.fromEntries(
+    ["date", "title", "days", "times", "location", "company"]
+      .filter(key => Object.prototype.hasOwnProperty.call(event, key)).map(key => [key, event[key]])
+  ));
+  const stable = value => Array.isArray(value) ? value.map(stable)
+    : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])])) : value;
+  return JSON.stringify(stable(payload));
+}
+
+async function verifyCalendarSave(date, tasks) {
+  const response = await adminFetch(`/schedule?from=${date}&to=${date}`, { cache: "no-store", signal: AbortSignal.timeout(15000) });
+  if (!response.ok) return null;
+  const row = (await response.json()).find(row => row.schedule_date === date);
+  return row && calendarSaveContent(row.tasks) === calendarSaveContent(tasks) ? row : null;
+}
+
 async function saveScheduleDay() {
   if (scheduleDaySavePending) return;
   const scheduleDate = document.getElementById("schedule_edit_date").value;
@@ -154,10 +173,24 @@ async function saveScheduleDay() {
     adminScheduleRevisions.set(scheduleDate, result.revision);
     saved = true;
   } catch (err) {
-    document.getElementById("scheduleReloadButton").hidden = false;
-    if (err.status === 409 || err.status === 428) {
-      setScheduleSaveStatus(`${err.message} Your unsaved edits remain below.`, "error");
-    } else setScheduleSaveStatus(`Could not confirm the save: ${err.message}. Your edits are still here. If the connection dropped, refresh the calendar before retrying.`, "error");
+    if (!err.status || err.status >= 500) {
+      setScheduleSaveStatus("Connection interrupted. Checking whether the day saved…");
+      try {
+        const confirmed = await verifyCalendarSave(scheduleDate, tasks);
+        if (confirmed) {
+          adminCalendarLoadSequence++;
+          adminScheduleRows.set(scheduleDate, confirmed.tasks);
+          adminScheduleRevisions.set(scheduleDate, confirmed.revision);
+          saved = true;
+        }
+      } catch (verificationError) { /* Keep the unsaved form intact if verification is unavailable. */ }
+    }
+    if (!saved) {
+      document.getElementById("scheduleReloadButton").hidden = false;
+      setScheduleSaveStatus(`${err.message}. Your edits are still here. ${err.status === 409 || err.status === 428
+        ? "The saved day changed; reload it before editing again."
+        : "The save could not be confirmed. Check your connection before retrying; do not reload unless you want to discard these edits."}`, "error");
+    }
   } finally {
     scheduleDaySavePending = false;
     controls.forEach(({ control, disabled }) => { control.disabled = disabled; });

@@ -9,6 +9,17 @@ function conflict() {
 }
 function createCalendarStore({ database, mirrorDatabase, getSql, runSql }) {
   const read = date => getSql('SELECT schedule_date, tasks, updated_at FROM schedule_days WHERE schedule_date = ?', [date], database);
+  const mirrors = new Map();
+  function queueMirror(date, tasks) {
+    // Serialize copies of the same day, but never hold the primary save response.
+    const pending = (mirrors.get(date) || Promise.resolve()).then(() => runSql(
+      `INSERT INTO schedule_days (schedule_date, tasks, updated_at) VALUES (?, ?, datetime('now'))
+        ON CONFLICT(schedule_date) DO UPDATE SET tasks = excluded.tasks, updated_at = excluded.updated_at`,
+      [date, tasks], mirrorDatabase
+    )).catch(err => { console.error(`Could not mirror calendar day ${date}:`, err.message); });
+    mirrors.set(date, pending);
+    pending.then(() => { if (mirrors.get(date) === pending) mirrors.delete(date); });
+  }
   async function commit(date, tasks, previous) {
     const result = previous
       ? await runSql(`UPDATE schedule_days SET tasks = ?, updated_at = datetime('now')
@@ -16,13 +27,7 @@ function createCalendarStore({ database, mirrorDatabase, getSql, runSql }) {
       : await runSql(`INSERT INTO schedule_days (schedule_date, tasks, updated_at) VALUES (?, ?, datetime('now'))
           ON CONFLICT(schedule_date) DO NOTHING`, [date, tasks], database);
     if (!result.changes) throw conflict();
-    if (mirrorDatabase) {
-      try {
-        await runSql(`INSERT INTO schedule_days (schedule_date, tasks, updated_at) VALUES (?, ?, datetime('now'))
-          ON CONFLICT(schedule_date) DO UPDATE SET tasks = excluded.tasks, updated_at = excluded.updated_at`,
-        [date, tasks], mirrorDatabase);
-      } catch (err) { console.error(`Could not mirror calendar day ${date}:`, err.message); }
-    }
+    if (mirrorDatabase) queueMirror(date, tasks);
     return { schedule_date: date, tasks, revision: revision({ tasks }) };
   }
   async function save(date, expectedRevision, transform) {

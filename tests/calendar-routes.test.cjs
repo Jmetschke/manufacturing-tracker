@@ -19,7 +19,7 @@ function setup() {
     runSql, getSql, allSql, MAX_SCHEDULE_TASKS_LENGTH: 100000,
     withTransaction: async fn => { db.exec('BEGIN'); try { const result = await fn(db); db.exec('COMMIT'); return result; } catch (err) { db.exec('ROLLBACK'); throw err; } },
     isIsoDate: value => /^\d{4}-\d{2}-\d{2}$/.test(value), isWeekendIsoDate: date => [0,6].includes(new Date(date).getUTCDay()),
-    app: { get: (path, fn) => routes['GET ' + path] = fn, put: (path, fn) => routes['PUT ' + path] = fn } };
+    app: { post: (path, fn) => routes['POST ' + path] = fn, get: (path, fn) => routes['GET ' + path] = fn, put: (path, fn) => routes['PUT ' + path] = fn } };
   vm.createContext(ctx);
   vm.runInContext(source.slice(source.indexOf('function parseSchedulePayloadForCleanup('), source.indexOf('function normalizeCompletionFallbackTask(')), ctx);
   vm.runInContext(source.slice(source.indexOf('app.get("/schedule"'), source.indexOf('app.put("/schedule/task-completion"')), ctx);

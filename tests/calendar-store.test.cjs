@@ -54,3 +54,25 @@ test('external writes are detected even when updated_at does not change', async 
   await assert.rejects(store.save('2026-09-21', first.revision, () => 'stale'), { status: 409 });
   database.close();
 });
+test('slow secondary copies do not delay primary saves and same-day copies remain ordered', async () => {
+  let current, release;
+  const copies = [];
+  const database = {}, mirrorDatabase = {};
+  const store = createCalendarStore({ database, mirrorDatabase,
+    getSql: async () => current,
+    runSql: async (sql, args, db) => {
+      if (db === mirrorDatabase) {
+        copies.push(args[1]);
+        if (copies.length === 1) await new Promise(resolve => { release = resolve; });
+      } else current = { tasks: args[0].startsWith('2026-') ? args[1] : args[0] };
+      return { changes: 1 };
+    }
+  });
+  const first = await store.save('2026-11-20', 'missing', () => 'first');
+  const second = await store.save('2026-11-20', first.revision, () => 'second');
+  assert.equal(second.tasks, 'second');
+  assert.deepEqual(copies, ['first']);
+  release();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(copies, ['first', 'second']);
+});

@@ -5243,6 +5243,27 @@ function formatEstimatedHours(value) {
   return String(Math.round(hours * 100) / 100);
 }
 
+const scheduleRateRequests = new Map();
+function loadScheduleTaskRate(item, task) {
+  const key = JSON.stringify([item, task]);
+  const cached = scheduleRateRequests.get(key);
+  if (cached && cached.expires > Date.now()) return cached.promise;
+  const entry = { expires: Date.now() + 60000 };
+  entry.promise = (async () => {
+    try {
+      const params = new URLSearchParams({ item, task });
+      const res = await adminFetch(`/admin/item-task-rate?${params.toString()}`);
+      if (!res.ok) throw new Error("Time estimate unavailable");
+      return await res.json();
+    } catch (error) {
+      if (scheduleRateRequests.get(key) === entry) scheduleRateRequests.delete(key);
+      return null;
+    }
+  })();
+  scheduleRateRequests.set(key, entry);
+  return entry.promise;
+}
+
 async function autoFillScheduleTaskHours(row, force = false) {
   if (!force && row.dataset.hoursOverridden === "true") return;
 
@@ -5257,14 +5278,11 @@ async function autoFillScheduleTaskHours(row, force = false) {
   const task = taskSelect.value;
   if (!Number.isFinite(units) || units <= 0 || !item || !task) return;
 
-  const requestId = String(Date.now());
+  const requestId = String((Number(row.dataset.rateRequestId) || 0) + 1);
   row.dataset.rateRequestId = requestId;
+  const rate = await loadScheduleTaskRate(item, task);
+  if (!rate || row.dataset.rateRequestId !== requestId || !row.isConnected || scheduleDaySavePending) return;
 
-  const params = new URLSearchParams({ item, task });
-  const res = await adminFetch(`/admin/item-task-rate?${params.toString()}`);
-  if (!res.ok || row.dataset.rateRequestId !== requestId) return;
-
-  const rate = await res.json();
   const unitsPerHour = Number(rate.units_per_hour) || 0;
   if (unitsPerHour <= 0) return;
 

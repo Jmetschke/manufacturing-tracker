@@ -39,23 +39,28 @@ async function loadAdminCalendar() {
   renderAdminCalendar(gridStart, { status: "Loading calendar..." });
 
   try {
-    const [scheduleRes, orderedRes] = await Promise.all([
-      adminFetch(`/schedule?from=${from}&to=${to}`),
-      adminFetch("/ordered-items")
-    ]);
+    // Delivery information must not delay or fail the editable calendar.
+    const deliveriesPromise = adminFetch("/ordered-items")
+      .then(async response => response.ok ? await response.json() : []).catch(() => []);
+    const scheduleRes = await adminFetch(`/schedule?from=${from}&to=${to}`);
+
 
     if (!scheduleRes.ok) {
       throw new Error(await scheduleRes.text() || "Could not load calendar.");
     }
 
     const rows = await scheduleRes.json();
-    const deliveries = orderedRes.ok ? await orderedRes.json() : [];
     if (loadSequence !== adminCalendarLoadSequence) return;
     adminScheduleRevisions = new Map(rows.map(row => [row.schedule_date, row.revision]));
     adminScheduleRows = new Map(rows.map(row => [row.schedule_date, row.tasks || ""]));
-    adminExpectedDeliveriesByDate = buildAdminExpectedDeliveriesByDate(deliveries, gridStart, gridEnd);
+    adminExpectedDeliveriesByDate = new Map();
     adminActiveScheduleByDate = buildAdminActiveScheduleByDate(rows, gridStart, gridEnd);
     renderAdminCalendar(gridStart);
+    deliveriesPromise.then(deliveries => {
+      if (loadSequence !== adminCalendarLoadSequence) return;
+      adminExpectedDeliveriesByDate = buildAdminExpectedDeliveriesByDate(deliveries, gridStart, gridEnd);
+      renderAdminCalendar(gridStart);
+    }).catch(err => console.error("Calendar delivery display failed", err));
   } catch (err) {
     if (loadSequence !== adminCalendarLoadSequence) return;
     showMessage("Could not load calendar.", "error");
