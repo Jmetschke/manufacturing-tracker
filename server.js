@@ -3413,6 +3413,19 @@ app.put("/admin/schedule/:date", async (req, res) => {
   }
 });
 
+app.put("/schedule/batch-metrc", async (req, res) => {
+  const { sourceDate, base_revision } = req.body;
+  if (!isIsoDate(sourceDate)) return res.status(400).send("Choose a valid schedule date.");
+  try {
+    const saved = await calendarStore.save(sourceDate, base_revision, previous => {
+      if (!previous) throw Object.assign(new Error("Schedule day not found"), { status: 404 });
+      return JSON.stringify(require("./server/batch-metrc").updateBatchMetrc(
+        parseSchedulePayloadForCleanup(previous.tasks), req.body));
+    });
+    res.json({ message: "Batch Metrc # saved", ...saved });
+  } catch (err) { res.status(err.status || 500).send(err.message); }
+});
+
 app.put("/schedule/batch-checklist", async (req, res) => {
   const { sourceDate, base_revision } = req.body;
   if (!isIsoDate(sourceDate)) return res.status(400).send("Choose a valid schedule date.");
@@ -4224,8 +4237,8 @@ function parseGenericInvoicePdfLines(lines) {
   };
 }
 
-function parseAmazonOrderPdf(buffer) {
-  const lines = extractPdfTextLines(buffer)
+function parseAmazonOrderPdf(buffer, extractedLines = null) {
+  const lines = (extractedLines || extractPdfTextLines(buffer))
     .filter(line =>
       !line.startsWith("https://") &&
       !line.startsWith("Page ") &&
@@ -4661,7 +4674,17 @@ async function importOrderedItemsPdf(req, res) {
     return res.status(400).send("Upload a PDF order details file");
   }
 
-  const parsed = parseAmazonOrderPdf(req.body);
+  let parsed;
+  try {
+    const { readOrderPdfLines, parseWebstaurantOrder } = require("./server/order-pdf");
+    let lines = extractPdfTextLines(req.body);
+    if (!lines.length || lines.some(line => /webstaurant\s*store/i.test(line))) {
+      lines = await readOrderPdfLines(req.body);
+    }
+    parsed = parseWebstaurantOrder(lines, parseAmazonDate) || parseAmazonOrderPdf(req.body, lines);
+  } catch (err) {
+    return res.status(400).send("Could not read this order PDF: " + err.message);
+  }
   if (!isIsoDate(parsed.date_ordered) || !parsed.items.length) {
     return res.status(400).send("Could not find ordered items in this PDF");
   }
@@ -4673,6 +4696,7 @@ async function importOrderedItemsPdf(req, res) {
        item_name,
        item_company,
        package_qty,
+       units_per_package,
        item_supplier,
        department,
        received_date,
@@ -4680,7 +4704,7 @@ async function importOrderedItemsPdf(req, res) {
        import_needs_delivery_date,
        updated_at
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`;
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`;
 
   try {
     const itemCompany = parsed.item_company || (parsed.order_number ? `Amazon Order ${parsed.order_number}` : "Imported PDF");
@@ -4696,6 +4720,7 @@ async function importOrderedItemsPdf(req, res) {
           item.item_name,
           itemCompany,
           item.package_qty,
+          item.units_per_package || 1,
           item.item_supplier,
           department,
           receivedDate,

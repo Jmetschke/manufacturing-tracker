@@ -763,6 +763,7 @@ function normalizeBatchList(value) {
         if (item && typeof item === "object") {
           const checklist = item.checklist && typeof item.checklist === "object" ? item.checklist : {};
           return {
+            metrc_number: String(item.metrc_number || "").trim(),
             item: String(item.item || "").trim(),
             units: String(item.units || "").trim(),
             checklist: Object.fromEntries(
@@ -1818,6 +1819,7 @@ function addBatchEntry(type, value = "", unitsValue = "") {
   const rows = getBatchRows(type);
   const row = document.createElement("div");
   row.className = "batch-row";
+  row.dataset.metrcNumber = value && typeof value === "object" ? String(value.metrc_number || "") : "";
 
   const batchValue = value && typeof value === "object" ? value.item : value;
   const batchUnits = value && typeof value === "object" ? value.units : unitsValue;
@@ -1928,6 +1930,7 @@ function populateBatchRows(type, values) {
 function getBatchValues(type) {
   return Array.from(getBatchRows(type).querySelectorAll(".batch-row"))
     .map(row => ({
+      metrc_number: row.dataset.metrcNumber || "",
       item: row.querySelector(".batch-input").value.trim(),
       units: row.querySelector(".batch-units").value.trim(),
       checklist: Object.fromEntries(
@@ -4692,6 +4695,7 @@ function closeDailyReportFocus() {
 }
 
 function renderDailyWorkingBatches(batches) {
+  dailyMetrcBatches = [];
   const container = document.getElementById("dailyWorkingBatches");
   container.innerHTML = "";
 
@@ -4744,6 +4748,7 @@ function renderDailyWorkingBatches(batches) {
     text.appendChild(note);
 
     card.appendChild(text);
+    appendBatchMetrc(card, batch);
     appendDailyBatchCompletion(card, batch);
     container.appendChild(card);
   });

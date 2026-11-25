@@ -13,6 +13,7 @@
     "express": "^4.19.2",
     "fflate": "^0.7.4",
     "nodemailer": "^9.0.3",
+    "pdfjs-dist": "^4.10.38",
     "read-excel-file": "^5.8.8",
     "sqlite3": "^5.1.7",
     "twilio": "^6.0.2"

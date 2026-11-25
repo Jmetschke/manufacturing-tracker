@@ -556,6 +556,7 @@ function normalizeBatchList(value) {
         if (item && typeof item === "object") {
           const checklist = item.checklist && typeof item.checklist === "object" ? item.checklist : {};
           return {
+            metrc_number: String(item.metrc_number || "").trim(),
             item: String(item.item || "").trim(),
             units: String(item.units || "").trim(),
             checklist: Object.fromEntries(
@@ -1313,6 +1314,7 @@ function getBatchesFromScheduleRows(rows) {
 }
 
 function renderDailyWorkingBatches(batches) {
+  dailyMetrcBatches = [];
   const working = batches.filter(isBatchInProgress);
   const completed = batches.filter(batch => !isBatchInProgress(batch));
   document.getElementById("dailyCompletedBatchCount").textContent = `Completed Batches (${completed.length})`;
@@ -1341,6 +1343,7 @@ function createDailyBatchTrackerCard(batch) {
   const summary = document.createElement("p");
   summary.textContent = `${progress.completed} of ${progress.total} steps complete (${progress.percent}%) — ${getBatchStatusText(batch)}`;
   card.append(title, meta, summary);
+  appendBatchMetrc(card, batch);
   const status = document.createElement("p");
   status.setAttribute("role", "status");
   const list = document.createElement("div");
