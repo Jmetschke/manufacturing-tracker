@@ -556,6 +556,7 @@ function normalizeBatchList(value) {
         if (item && typeof item === "object") {
           const checklist = item.checklist && typeof item.checklist === "object" ? item.checklist : {};
           return {
+            priority: [1, 2, 3].includes(item.priority) ? item.priority : 2,
             metrc_number: String(item.metrc_number || "").trim(),
             item: String(item.item || "").trim(),
             units: String(item.units || "").trim(),
@@ -1335,6 +1336,7 @@ let dailyReportBatchRows = [];
 function createDailyBatchTrackerCard(batch) {
   const card = document.createElement("article");
   card.className = "daily-working-batch daily-batch-tracker";
+  appendBatchPriority(card, batch);
   const title = document.createElement("h4");
   title.textContent = `${batch.label}: ${batch.item}`;
   const meta = document.createElement("p");
@@ -1377,7 +1379,7 @@ async function saveDailyBatchStep(batch, key, input, status) {
   const previous = Boolean(batch.checklist?.[key]);
   if (dailyBatchStatusPending) { input.checked = previous; return; }
   dailyBatchStatusPending = true;
-  const controls = Array.from(document.querySelectorAll("#dailyWorkingBatches input, #dailyWorkingBatches button, #dailyCompletedBatches input, #dailyCompletedBatches button"));
+  const controls = Array.from(document.querySelectorAll("#dailyWorkingBatches input, #dailyWorkingBatches button, #dailyCompletedBatches input, #dailyCompletedBatches button, #dailyWorkingBatches select, #dailyCompletedBatches select"));
   controls.forEach(control => { control.disabled = true; });
   status.textContent = "Saving step…";
   try {

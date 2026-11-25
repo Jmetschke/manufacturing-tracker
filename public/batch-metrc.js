@@ -28,7 +28,7 @@ function appendBatchMetrc(card, batch) {
     event.stopPropagation();
     if (dailyMetrcSavePending || (typeof dailyBatchStatusPending !== 'undefined' && dailyBatchStatusPending)) return;
     dailyMetrcSavePending = true;
-    const controls = Array.from(document.querySelectorAll('#dailyWorkingBatches input, #dailyWorkingBatches button, #dailyCompletedBatches input, #dailyCompletedBatches button'))
+    const controls = Array.from(document.querySelectorAll('#dailyWorkingBatches input, #dailyWorkingBatches button, #dailyCompletedBatches input, #dailyCompletedBatches button, #dailyWorkingBatches select, #dailyCompletedBatches select'))
       .map(control => ({ control, disabled: control.disabled }));
     controls.forEach(({ control }) => { control.disabled = true; });
     status.textContent = 'Saving…';
@@ -41,16 +41,7 @@ function appendBatchMetrc(card, batch) {
       });
       if (!response.ok) throw new Error(await response.text());
       const saved = await response.json();
-      const payload = JSON.parse(saved.tasks);
-      for (const entry of dailyMetrcBatches) {
-        if (entry.scheduleDate !== saved.schedule_date) continue;
-        entry.revision = saved.revision;
-        const value = payload[entry.batchType === 'hijnx' ? 'batchHijnx' : 'batchSb'][entry.batchIndex];
-        if (value) entry.metrc_number = value.metrc_number || '';
-      }
-      if (typeof dailyReportBatchRows !== 'undefined') {
-        dailyReportBatchRows = dailyReportBatchRows.map(row => row.schedule_date === saved.schedule_date ? saved : row);
-      }
+      applyDailyBatchMetadata(saved);
       input.value = batch.metrc_number;
       status.textContent = input.value ? 'Metrc # saved.' : 'Metrc # cleared.';
     } catch (error) {
@@ -61,4 +52,20 @@ function appendBatchMetrc(card, batch) {
     }
   });
   card.appendChild(form);
+}
+
+function applyDailyBatchMetadata(saved) {
+      const payload = JSON.parse(saved.tasks);
+      for (const entry of dailyMetrcBatches) {
+        if (entry.scheduleDate !== saved.schedule_date) continue;
+        entry.revision = saved.revision;
+        const value = payload[entry.batchType === 'hijnx' ? 'batchHijnx' : 'batchSb'][entry.batchIndex];
+        if (value) {
+          entry.metrc_number = value.metrc_number || '';
+          entry.priority = [1, 2, 3].includes(value.priority) ? value.priority : 2;
+        }
+      }
+      if (typeof dailyReportBatchRows !== 'undefined') {
+        dailyReportBatchRows = dailyReportBatchRows.map(row => row.schedule_date === saved.schedule_date ? saved : row);
+      }
 }

@@ -1,0 +1,10 @@
+.daily-working-batch.batch-age-neutral { background: #f7f7f5; color: #202620; }
+.daily-working-batch.batch-age-green { background: #dcefdc; color: #202620; }
+.daily-working-batch.batch-age-yellow { background: #fff1b8; color: #202620; }
+.daily-working-batch.batch-age-orange { background: #ffe0bd; color: #202620; }
+.daily-working-batch.batch-age-red { background: #f6d2d2; color: #202620; }
+.daily-batch-priority { grid-column: 1 / -1; display: grid; gap: 6px; align-self: stretch; margin-bottom: 12px; }
+.daily-batch-priority label { display: flex; align-items: center; gap: 12px; }
+.daily-working-batch .daily-batch-priority select { font-size: 2.75rem; font-weight: 800; line-height: 1.1; width: 100px; min-height: 64px; margin: 0; padding: 4px 10px; color: #172117; background: #fff; border: 2px solid #526052; border-radius: 6px; cursor: pointer; }
+.daily-batch-priority span { font-size: 14px; color: #303a30; }
+.daily-batch-priority select:focus-visible { outline: 3px solid #235f91; outline-offset: 2px; }

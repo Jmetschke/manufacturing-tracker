@@ -763,6 +763,7 @@ function normalizeBatchList(value) {
         if (item && typeof item === "object") {
           const checklist = item.checklist && typeof item.checklist === "object" ? item.checklist : {};
           return {
+            priority: [1, 2, 3].includes(item.priority) ? item.priority : 2,
             metrc_number: String(item.metrc_number || "").trim(),
             item: String(item.item || "").trim(),
             units: String(item.units || "").trim(),
@@ -1819,6 +1820,7 @@ function addBatchEntry(type, value = "", unitsValue = "") {
   const rows = getBatchRows(type);
   const row = document.createElement("div");
   row.className = "batch-row";
+  row.dataset.priority = value && [1, 2, 3].includes(value.priority) ? String(value.priority) : "2";
   row.dataset.metrcNumber = value && typeof value === "object" ? String(value.metrc_number || "") : "";
 
   const batchValue = value && typeof value === "object" ? value.item : value;
@@ -1930,6 +1932,7 @@ function populateBatchRows(type, values) {
 function getBatchValues(type) {
   return Array.from(getBatchRows(type).querySelectorAll(".batch-row"))
     .map(row => ({
+      priority: [1, 2, 3].includes(Number(row.dataset.priority)) ? Number(row.dataset.priority) : 2,
       metrc_number: row.dataset.metrcNumber || "",
       item: row.querySelector(".batch-input").value.trim(),
       units: row.querySelector(".batch-units").value.trim(),
@@ -4717,6 +4720,7 @@ function renderDailyWorkingBatches(batches) {
     const card = document.createElement("article");
     card.tabIndex = 0;
     card.className = "daily-working-batch";
+    appendBatchPriority(card, batch);
     card.addEventListener("click", () => showDailyReportFocus("Working Batch", body => appendBatchDetail(body, batch)));
 
     card.addEventListener("keydown", event => {
