@@ -593,7 +593,34 @@ function renderEmployeeChoices(rows) {
     button.textContent = "Delete";
     button.setAttribute("aria-label", `Delete employee choice ${row.name}`);
     button.onclick = () => saveEmployeeChoice(row.id);
-    line.append(label, button);
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.textContent = "Edit Name";
+    edit.setAttribute("aria-label", `Edit employee name ${row.name}`);
+    edit.onclick = () => {
+      if (employeeChoicesBusy) return;
+      const form = document.createElement("form");
+      form.className = "controls";
+      const name = document.createElement("input");
+      name.type = "text";
+      name.value = row.name;
+      name.maxLength = 100;
+      name.required = true;
+      name.setAttribute("aria-label", `New name for ${row.name}`);
+      const save = document.createElement("button");
+      save.type = "submit";
+      save.textContent = "Save Name";
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.textContent = "Cancel";
+      cancel.onclick = () => { line.replaceChildren(label, edit, button); };
+      form.onsubmit = event => { event.preventDefault(); saveEmployeeChoice(row.id, name.value); };
+      form.append(name, save, cancel);
+      line.replaceChildren(form);
+      name.focus();
+      name.select();
+    };
+    line.append(label, edit, button);
     list.appendChild(line);
   });
 }
@@ -610,7 +637,7 @@ async function loadEmployeeChoices() {
   }
 }
 
-async function saveEmployeeChoice(id) {
+async function saveEmployeeChoice(id, renamedName) {
   if (employeeChoicesBusy) return;
   employeeChoicesBusy = true;
   const status = document.getElementById("employeeChoiceStatus");
@@ -619,13 +646,14 @@ async function saveEmployeeChoice(id) {
   buttons.forEach(button => { button.disabled = true; });
   status.textContent = "Saving…";
   try {
-    const res = await adminFetch(id ? `/admin/employees/${id}` : "/admin/employees", id
-      ? { method: "DELETE" }
+    const res = await adminFetch(id ? `/admin/employees/${id}` : "/admin/employees", renamedName !== undefined
+      ? { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: renamedName }) }
+      : id ? { method: "DELETE" }
       : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: input.value }) });
     if (!res.ok) throw new Error(await res.text());
     renderEmployeeChoices(await res.json());
     if (!id) input.value = "";
-    status.textContent = id ? "Employee choice deleted. Past entries are preserved." : "Employee choice saved.";
+    status.textContent = renamedName !== undefined ? "Employee name updated. Past entries are preserved." : id ? "Employee choice deleted. Past entries are preserved." : "Employee choice saved.";
   } catch (err) {
     status.textContent = `Could not save: ${err.message}`;
   } finally {

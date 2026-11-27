@@ -2208,9 +2208,9 @@
 <div id="message" class="message"></div>
 
 <section id="entriesPanel" class="admin-panel active">
-  <details class="item-task-section" ontoggle="if (this.open) loadEmployeeChoices()">
-    <summary>Employee Names — Add / Delete</summary>
-    <p>Manage employee choices for entry forms and scheduling. Deleting a choice preserves past entries and their employee names.</p>
+  <section class="item-task-section" aria-labelledby="employeeNamesTitle">
+    <h3 id="employeeNamesTitle">Employee Names — Add / Edit / Delete</h3>
+    <p>Manage employee choices for entry forms and scheduling. Editing or deleting a choice changes the available names for future use. Past entries keep their original employee names.</p>
     <form onsubmit="event.preventDefault(); saveEmployeeChoice()" class="controls">
       <label for="newEmployeeName">Employee name</label>
       <input id="newEmployeeName" type="text" maxlength="100" required placeholder="Enter employee name">
@@ -2218,7 +2218,7 @@
     </form>
     <p id="employeeChoiceStatus" role="status"></p>
     <div id="employeeChoiceList"></div>
-  </details>
+  </section>
   <div class="controls">
     <input type="date" id="from_date">
     <input type="date" id="to_date">

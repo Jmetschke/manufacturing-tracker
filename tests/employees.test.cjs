@@ -34,3 +34,31 @@ test('employee choices persist deletion, allow reactivation, and leave history i
     assert.equal((await service.list()).length, 0);
   } finally { db.close(); }
 });
+test('renaming persists across restart, prevents duplicate names, and keeps historical entries', async () => {
+  const db = new DatabaseSync(':memory:');
+  const service = createEmployees({
+    runSql: async (sql, args = []) => db.prepare(sql).run(...args),
+    allSql: async (sql, args = []) => db.prepare(sql).all(...args),
+    withTransaction: async fn => { db.exec('BEGIN'); try { await fn(db); db.exec('COMMIT'); } catch (error) { db.exec('ROLLBACK'); throw error; } }
+  });
+  try {
+    await service.initialize();
+    db.exec("CREATE TABLE time_logs(employee TEXT); INSERT INTO time_logs VALUES ('Wayne')");
+    const original = (await service.list()).find(row => row.name === 'Wayne');
+    await service.rename(original.id, ' Wayne  Smith ');
+    await service.initialize();
+    let rows = await service.list();
+    assert.equal(rows.some(row => row.name === 'Wayne'), false);
+    const renamed = rows.find(row => row.name === 'Wayne Smith');
+    assert.ok(renamed);
+    assert.equal(db.prepare('SELECT employee FROM time_logs').get().employee, 'Wayne');
+    await assert.rejects(service.rename(renamed.id, 'Jenny'), { status: 409 });
+    assert.ok((await service.list()).some(row => row.id === renamed.id));
+    await service.rename(renamed.id, 'WAYNE SMITH');
+    assert.equal((await service.list()).find(row => row.id === renamed.id).name, 'WAYNE SMITH');
+    await service.rename(renamed.id, 'Wayne');
+    assert.equal((await service.list()).find(row => row.id === original.id).name, 'Wayne');
+    await assert.rejects(service.rename(999999, 'Missing'), { status: 404 });
+    for (const name of ['', '  ', 'x'.repeat(101), null]) await assert.rejects(service.rename(original.id, name), { status: 400 });
+  } finally { db.close(); }
+});

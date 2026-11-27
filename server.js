@@ -21,7 +21,7 @@ const currentPackages = require("./server/current-packages")({ runSql, allSql, g
   readWorkbook: buffer => readXlsxFile(repairWorkbookDimensions(buffer)) });
 const storageOrganization = require("./server/storage-organization")({runSql,getSql,allSql,withTransaction});
 const storageStock = require("./server/storage-stock")({runSql,getSql,allSql,withTransaction});
-const employees = require("./server/employees")({ runSql, allSql });
+const employees = require("./server/employees")({ runSql, allSql, withTransaction });
 const app = express();
 
 app.use(express.json({ limit: "14mb" }));
@@ -280,6 +280,10 @@ app.get("/admin/employees", async (req, res) => {
 });
 app.post("/admin/employees", async (req, res) => {
   try { await employees.add(req.body.name); res.json(await employees.list()); }
+  catch (err) { res.status(err.status || 500).send(err.message); }
+});
+app.put("/admin/employees/:id", async (req, res) => {
+  try { await employees.rename(req.params.id, req.body.name); res.json(await employees.list()); }
   catch (err) { res.status(err.status || 500).send(err.message); }
 });
 app.delete("/admin/employees/:id", async (req, res) => {
