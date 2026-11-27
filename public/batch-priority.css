@@ -8,3 +8,11 @@
 .daily-working-batch .daily-batch-priority select { font-size: 2.75rem; font-weight: 800; line-height: 1.1; width: 100px; min-height: 64px; margin: 0; padding: 4px 10px; color: #172117; background: #fff; border: 2px solid #526052; border-radius: 6px; cursor: pointer; }
 .daily-batch-priority span { font-size: 14px; color: #303a30; }
 .daily-batch-priority select:focus-visible { outline: 3px solid #235f91; outline-offset: 2px; }
+
+.daily-batch-notes { grid-column: 1 / -1; min-width: 0; border-top: 1px solid #8c998c; padding-top: 12px; margin-top: 8px; }
+.daily-batch-notes h4 { margin: 0 0 8px; }
+.daily-batch-notes label { display: grid; gap: 6px; }
+.daily-batch-notes textarea { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; padding: 8px; }
+.daily-batch-note { background: #ffffffb3; padding: 10px; margin: 8px 0; border-radius: 4px; }
+.daily-batch-note p { white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0; }
+.daily-batch-note time { font-size: 13px; color: #374037; }

@@ -3413,6 +3413,21 @@ app.put("/admin/schedule/:date", async (req, res) => {
   }
 });
 
+app.put("/schedule/batch-notes", async (req, res) => {
+  const { sourceDate, base_revision } = req.body;
+  if (!isIsoDate(sourceDate)) return res.status(400).send("Choose a valid schedule date.");
+  try {
+    const saved = await calendarStore.save(sourceDate, base_revision, previous => {
+      if (!previous) throw Object.assign(new Error("Schedule day not found"), { status: 404 });
+      const tasks = JSON.stringify(require("./server/batch-notes").updateBatchNotes(
+        parseSchedulePayloadForCleanup(previous.tasks), req.body));
+      if (tasks.length > MAX_SCHEDULE_TASKS_LENGTH) throw Object.assign(new Error("This calendar day is full. Remove old notes before adding more."), { status: 400 });
+      return tasks;
+    });
+    res.json({ message: "Batch notes updated", ...saved });
+  } catch (err) { res.status(err.status || 500).send(err.message); }
+});
+
 app.put("/schedule/batch-priority", async (req, res) => {
   const { sourceDate, base_revision } = req.body;
   if (!isIsoDate(sourceDate)) return res.status(400).send("Choose a valid schedule date.");

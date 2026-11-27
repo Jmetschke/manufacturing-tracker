@@ -61,6 +61,7 @@ function applyDailyBatchMetadata(saved) {
         entry.revision = saved.revision;
         const value = payload[entry.batchType === 'hijnx' ? 'batchHijnx' : 'batchSb'][entry.batchIndex];
         if (value) {
+          entry.notes = Array.isArray(value.notes) ? value.notes : [];
           entry.metrc_number = value.metrc_number || '';
           entry.priority = [1, 2, 3].includes(value.priority) ? value.priority : 2;
         }

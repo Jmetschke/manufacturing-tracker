@@ -556,6 +556,7 @@ function normalizeBatchList(value) {
         if (item && typeof item === "object") {
           const checklist = item.checklist && typeof item.checklist === "object" ? item.checklist : {};
           return {
+            notes: Array.isArray(item.notes) ? item.notes : [],
             priority: [1, 2, 3].includes(item.priority) ? item.priority : 2,
             metrc_number: String(item.metrc_number || "").trim(),
             item: String(item.item || "").trim(),
@@ -1346,6 +1347,7 @@ function createDailyBatchTrackerCard(batch) {
   summary.textContent = `${progress.completed} of ${progress.total} steps complete (${progress.percent}%) — ${getBatchStatusText(batch)}`;
   card.append(title, meta, summary);
   appendBatchMetrc(card, batch);
+  appendBatchNotes(card, batch);
   const status = document.createElement("p");
   status.setAttribute("role", "status");
   const list = document.createElement("div");

@@ -763,6 +763,7 @@ function normalizeBatchList(value) {
         if (item && typeof item === "object") {
           const checklist = item.checklist && typeof item.checklist === "object" ? item.checklist : {};
           return {
+            notes: Array.isArray(item.notes) ? item.notes : [],
             priority: [1, 2, 3].includes(item.priority) ? item.priority : 2,
             metrc_number: String(item.metrc_number || "").trim(),
             item: String(item.item || "").trim(),
@@ -1820,6 +1821,7 @@ function addBatchEntry(type, value = "", unitsValue = "") {
   const rows = getBatchRows(type);
   const row = document.createElement("div");
   row.className = "batch-row";
+  row.dataset.batchNotes = JSON.stringify(value && Array.isArray(value.notes) ? value.notes : []);
   row.dataset.priority = value && [1, 2, 3].includes(value.priority) ? String(value.priority) : "2";
   row.dataset.metrcNumber = value && typeof value === "object" ? String(value.metrc_number || "") : "";
 
@@ -1932,6 +1934,7 @@ function populateBatchRows(type, values) {
 function getBatchValues(type) {
   return Array.from(getBatchRows(type).querySelectorAll(".batch-row"))
     .map(row => ({
+      notes: JSON.parse(row.dataset.batchNotes || "[]"),
       priority: [1, 2, 3].includes(Number(row.dataset.priority)) ? Number(row.dataset.priority) : 2,
       metrc_number: row.dataset.metrcNumber || "",
       item: row.querySelector(".batch-input").value.trim(),
@@ -4753,6 +4756,7 @@ function renderDailyWorkingBatches(batches) {
 
     card.appendChild(text);
     appendBatchMetrc(card, batch);
+    appendBatchNotes(card, batch);
     appendDailyBatchCompletion(card, batch);
     container.appendChild(card);
   });
